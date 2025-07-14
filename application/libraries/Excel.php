@@ -38,7 +38,7 @@ class Excel
             $sheet->setCellValue($cell, $value);
         }
 
-        // Estilizar cabeçalho
+        // Estilizar caebeçalho
         $sheet->getStyle('A1:L1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '23345F']],
