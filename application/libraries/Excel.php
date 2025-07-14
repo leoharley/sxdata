@@ -1,6 +1,6 @@
 <?php
 // application/libraries/Excel.php
-defined('BASEPATH') OR exit('No direct script access allowed');
+defined('BASEPATH') or exit('No direct script access allowed');
 
 require_once FCPATH . 'vendor/autoload.php';
 
@@ -10,12 +10,14 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
-class Excel {
-    
-    public function create_export($responses, $format = 'xlsx') {
+class Excel
+{
+
+    public function create_export($responses, $format = 'xlsx')
+    {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        
+
         // Configurar cabeçalhos
         $headers = [
             'A1' => 'ID',
@@ -28,21 +30,27 @@ class Excel {
             'H1' => 'Localização',
             'I1' => 'Consentimento',
             'J1' => 'Data/Hora Conclusão',
-            'K1' => 'Status Sync',
+            'K1' => 'Status',
             'L1' => 'Foto'
         ];
-        
+
         foreach ($headers as $cell => $value) {
             $sheet->setCellValue($cell, $value);
         }
-        
+
         // Estilizar cabeçalho
         $sheet->getStyle('A1:L1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '23345F']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
         ]);
-        
+
+        $statusMap = [
+            'synced' => 'Sincronizado',
+            'pending' => 'Pendente',
+            'error' => 'Erro'
+        ];
+
         // Preencher dados
         $row = 2;
         foreach ($responses as $response) {
@@ -55,55 +63,56 @@ class Excel {
             $sheet->setCellValue('G' . $row, $response->longitude ?? '');
             $sheet->setCellValue('H' . $row, $response->location_name ?? 'N/A');
             $sheet->setCellValue('I' . $row, $response->consent_given ? 'Sim' : 'Não');
-            $sheet->setCellValue('J' . $row, $response->completed_at ? date('d/m/Y H:i:s', strtotime($response->completed_at)) : 'N/A');
-            $sheet->setCellValue('K' . $row, ucfirst($response->sync_status ?? 'N/A'));
-            $sheet->setCellValue('L' . $row, $response->photo_path ? 'Sim' : 'Não');
+            $sheet->setCellValue('J' . $row, $response->completed_at ? date('d/m/Y H:i:s', strtotime($response->completed_at)) : 'N/A');            
+            $sheet->setCellValue('K' . $row, $statusMap[$response->sync_status] ?? 'N/A');
+            $sheet->setCellValue('L' . $row, isset($response->photo_path) ? 'Sim' : 'Não');
             $row++;
         }
-        
+
         // Auto-ajustar colunas
         foreach (range('A', 'L') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-        
+
         // Gerar arquivo
         $filename = 'sxdata_export_' . date('Y-m-d_H-i-s') . '.xlsx';
-        
+
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment;filename="' . $filename . '"');
         header('Cache-Control: max-age=0');
-        
+
         $writer = new Xlsx($spreadsheet);
         $writer->save('php://output');
         exit;
     }
-    
-    public function create_detailed_export($questionnaire_id, $responses_with_answers) {
+
+    public function create_detailed_export($questionnaire_id, $responses_with_answers)
+    {
         $CI =& get_instance();
         $CI->load->model('Questionnaire_model');
         $CI->load->model('Question_model');
-        
+
         $questionnaire = $CI->Questionnaire_model->get_by_id($questionnaire_id);
         $questions = $CI->Question_model->get_by_questionnaire($questionnaire_id);
-        
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        
+
         // Cabeçalhos básicos
         $basic_headers = ['ID', 'Aplicador', 'Respondente', 'Email', 'Data/Hora', 'Localização', 'Latitude', 'Longitude', 'Consentimento'];
         $col = 1;
-        
+
         foreach ($basic_headers as $header) {
             $sheet->setCellValueByColumnAndRow($col, 1, $header);
             $col++;
         }
-        
+
         // Cabeçalhos das perguntas
         foreach ($questions as $question) {
             $sheet->setCellValueByColumnAndRow($col, 1, 'P' . $question->order_index . ': ' . substr($question->question_text, 0, 50));
             $col++;
         }
-        
+
         // Estilizar cabeçalho
         $lastCol = $col - 1;
         $range = 'A1:' . chr(64 + $lastCol) . '1';
@@ -112,12 +121,12 @@ class Excel {
             'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '8fae5d']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
         ]);
-        
+
         // Preencher dados
         $row = 2;
         foreach ($responses_with_answers as $response) {
             $col = 1;
-            
+
             // Dados básicos
             $sheet->setCellValueByColumnAndRow($col++, $row, $response->id);
             $sheet->setCellValueByColumnAndRow($col++, $row, $response->applied_by_name);
@@ -128,7 +137,7 @@ class Excel {
             $sheet->setCellValueByColumnAndRow($col++, $row, $response->latitude ?? '');
             $sheet->setCellValueByColumnAndRow($col++, $row, $response->longitude ?? '');
             $sheet->setCellValueByColumnAndRow($col++, $row, $response->consent_given ? 'Sim' : 'Não');
-            
+
             // Respostas das perguntas
             foreach ($questions as $question) {
                 $answer = '';
@@ -147,22 +156,22 @@ class Excel {
                 }
                 $sheet->setCellValueByColumnAndRow($col++, $row, $answer);
             }
-            
+
             $row++;
         }
-        
+
         // Auto-ajustar colunas
         for ($i = 1; $i < $col; $i++) {
             $sheet->getColumnDimensionByColumn($i)->setAutoSize(true);
         }
-        
+
         // Gerar arquivo
         $filename = 'sxdata_' . strtolower(str_replace(' ', '_', $questionnaire->title)) . '_' . date('Y-m-d_H-i-s') . '.xlsx';
-        
+
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment;filename="' . $filename . '"');
         header('Cache-Control: max-age=0');
-        
+
         $writer = new Xlsx($spreadsheet);
         $writer->save('php://output');
         exit;
