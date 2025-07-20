@@ -46,7 +46,7 @@
                 <i class="fas fa-sync-alt"></i>
             </div>
             <h3 class="stat-number"><?= $stats['pending_sync'] ?></h3>
-            <p class="stat-label">Pendentes Sync</p>
+            <p class="stat-label">Pendentes de Sincronizar</p>
             <small class="text-warning">
                 <i class="fas fa-clock me-1"></i>
                 Aguardando
