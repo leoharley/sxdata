@@ -9,9 +9,10 @@ class Questionnaire_model extends CI_Model {
     }
 
     public function get_all() {
-        $this->db->select('q.*, u.full_name as created_by_name');
+        $this->db->select('q.*, u.full_name as created_by_name, p.name as project_name');
         $this->db->from('questionnaires q');
         $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->order_by('q.created_at', 'DESC');
         return $this->db->get()->result();
     }
@@ -40,13 +41,15 @@ class Questionnaire_model extends CI_Model {
     }
 
     public function get_by_id($id) {
-        // CORREÇÃO: Incluir explicitamente os campos de checkbox
+        // CORREÇÃO: Incluir explicitamente os campos de checkbox e project_id
         $this->db->select('q.id, q.title, q.description, q.status, q.version, 
                           q.requires_consent, q.requires_location, q.requires_photo,
                           q.estimated_time, q.aplicadores, q.created_by, q.created_at, q.updated_at,
+                          q.project_id, p.name as project_name,
                           u.full_name as created_by_name');
         $this->db->from('questionnaires q');
         $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->where('q.id', $id);
         
         $result = $this->db->get()->row();
@@ -61,9 +64,38 @@ class Questionnaire_model extends CI_Model {
     }
 
     public function get_active() {
-        $this->db->where('status', 'active');
-        $this->db->order_by('title', 'ASC');
-        return $this->db->get('questionnaires')->result();
+        $this->db->select('q.*, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->order_by('q.title', 'ASC');
+        return $this->db->get()->result();
+    }
+
+    public function get_by_project($project_id) {
+        $this->db->select('q.*, u.full_name as created_by_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->where('q.project_id', $project_id);
+        $this->db->order_by('q.created_at', 'DESC');
+        
+        $questionnaires = $this->db->get()->result();
+        
+        // Adicionar contagem de perguntas e respostas
+        foreach ($questionnaires as &$questionnaire) {
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $questionnaire->question_count = $this->db->count_all_results('questions');
+            
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $questionnaire->response_count = $this->db->count_all_results('form_responses');
+        }
+        
+        return $questionnaires;
+    }
+
+    public function count_by_project($project_id) {
+        $this->db->where('project_id', $project_id);
+        return $this->db->count_all_results('questionnaires');
     }
 
     public function create($data) {
@@ -143,9 +175,10 @@ class Questionnaire_model extends CI_Model {
     }
 
     public function get_for_api($user_role = null) {
-        $this->db->select('q.*, COUNT(questions.id) as question_count');
+        $this->db->select('q.*, COUNT(questions.id) as question_count, p.name as project_name');
         $this->db->from('questionnaires q');
         $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->where('q.status', 'active');
         $this->db->group_by('q.id');
         $this->db->order_by('q.title', 'ASC');
@@ -211,9 +244,10 @@ class Questionnaire_model extends CI_Model {
      * @return array Lista de questionários disponíveis para o aplicador
      */
     public function get_for_aplicador($aplicador_id) {
-        $this->db->select('q.*, COUNT(questions.id) as question_count');
+        $this->db->select('q.*, COUNT(questions.id) as question_count, p.name as project_name');
         $this->db->from('questionnaires q');
         $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->where('q.status', 'active');
         $this->db->group_by('q.id');
         $this->db->order_by('q.title', 'ASC');
@@ -286,6 +320,49 @@ class Questionnaire_model extends CI_Model {
         
         $nomes = array_column($aplicadores, 'full_name');
         return implode(', ', $nomes);
+    }
+
+    /**
+     * Retorna estatísticas de questionários por projeto
+     * 
+     * @return array Estatísticas agrupadas por projeto
+     */
+    public function get_stats_by_project() {
+        $this->db->select('p.id, p.name, COUNT(q.id) as questionnaire_count, 
+                          SUM(CASE WHEN q.status = "active" THEN 1 ELSE 0 END) as active_count');
+        $this->db->from('projects p');
+        $this->db->join('questionnaires q', 'p.id = q.project_id', 'left');
+        $this->db->group_by('p.id, p.name');
+        $this->db->order_by('questionnaire_count', 'DESC');
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Buscar questionários por termo
+     * 
+     * @param string $term Termo de busca
+     * @param int $project_id ID do projeto (opcional)
+     * @return array Lista de questionários encontrados
+     */
+    public function search($term, $project_id = null) {
+        $this->db->select('q.*, u.full_name as created_by_name, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        
+        $this->db->group_start();
+            $this->db->like('q.title', $term);
+            $this->db->or_like('q.description', $term);
+        $this->db->group_end();
+        
+        if ($project_id) {
+            $this->db->where('q.project_id', $project_id);
+        }
+        
+        $this->db->order_by('q.created_at', 'DESC');
+        
+        return $this->db->get()->result();
     }
 
     /**

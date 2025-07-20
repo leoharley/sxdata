@@ -8,7 +8,8 @@ class Questionnaires extends CI_Controller {
         $this->load->library('session');
         $this->load->model('Questionnaire_model');
         $this->load->model('Question_model');
-        $this->load->model('User_model'); // Adicionar esta linha
+        $this->load->model('User_model');
+        $this->load->model('Project_model'); // NOVO: Carregar model de projetos
         $this->load->library('form_validation');
         $this->check_auth();
     }
@@ -16,6 +17,7 @@ class Questionnaires extends CI_Controller {
     public function index() {
         $data['title'] = 'Questionários - SXData';
         $data['questionnaires'] = $this->Questionnaire_model->get_all_with_stats();
+        $data['projects'] = $this->Project_model->get_for_select(); // NOVO: Carregar projetos para filtro
         
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/index', $data);
@@ -23,6 +25,9 @@ class Questionnaires extends CI_Controller {
     }
 
     public function create() {
+        // NOVO: Verificar se veio um project_id via GET
+        $preselected_project_id = $this->input->get('project_id');
+        
         if ($this->input->post()) {
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
@@ -49,7 +54,8 @@ class Questionnaires extends CI_Controller {
                     'requires_location' => $this->input->post('requires_location') ? TRUE : FALSE,
                     'requires_photo' => $this->input->post('requires_photo') ? TRUE : FALSE,
                     'estimated_time' => $this->input->post('estimated_time') ?: NULL,
-                    'aplicadores' => $aplicadores_json // Novo campo
+                    'aplicadores' => $aplicadores_json,
+                    'project_id' => $this->input->post('project_id') ?: NULL // NOVO: Vincular projeto
                 );
 
                 $questionnaire_id = $this->Questionnaire_model->create($questionnaire_data);
@@ -85,7 +91,13 @@ class Questionnaires extends CI_Controller {
                     }
 
                     $this->session->set_flashdata('success', 'Questionário criado com sucesso!');
-                    redirect('questionnaires');
+                    
+                    // NOVO: Redirecionar baseado na origem
+                    if ($this->input->post('project_id')) {
+                        redirect('projects/view/' . $this->input->post('project_id'));
+                    } else {
+                        redirect('questionnaires');
+                    }
                 } else {
                     $data['error'] = 'Erro ao criar questionário.';
                 }
@@ -93,7 +105,9 @@ class Questionnaires extends CI_Controller {
         }
 
         $data['title'] = 'Criar Questionário - SXData';
-        $data['aplicadores'] = $this->User_model->get_aplicadores(); // Carregar aplicadores
+        $data['aplicadores'] = $this->User_model->get_aplicadores();
+        $data['projects'] = $this->Project_model->get_for_select(); // NOVO: Carregar projetos
+        $data['preselected_project_id'] = $preselected_project_id; // NOVO: Projeto pré-selecionado
         
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/create', $data);
@@ -145,12 +159,19 @@ class Questionnaires extends CI_Controller {
                     'requires_location' => $this->input->post('requires_location') ? TRUE : FALSE,
                     'requires_photo' => $this->input->post('requires_photo') ? TRUE : FALSE,
                     'estimated_time' => $this->input->post('estimated_time') ?: NULL,
-                    'aplicadores' => $aplicadores_json // Novo campo
+                    'aplicadores' => $aplicadores_json,
+                    'project_id' => $this->input->post('project_id') ?: NULL // NOVO: Atualizar projeto
                 );
 
                 if ($this->Questionnaire_model->update($id, $questionnaire_data)) {
                     $this->session->set_flashdata('success', 'Questionário atualizado com sucesso!');
-                    redirect('questionnaires');
+                    
+                    // NOVO: Redirecionar baseado no projeto
+                    if ($questionnaire_data['project_id']) {
+                        redirect('projects/view/' . $questionnaire_data['project_id']);
+                    } else {
+                        redirect('questionnaires');
+                    }
                 } else {
                     $data['error'] = 'Erro ao atualizar questionário.';
                 }
@@ -160,7 +181,8 @@ class Questionnaires extends CI_Controller {
         $data['title'] = 'Editar Questionário - SXData';
         $data['questionnaire'] = $questionnaire;
         $data['questions'] = $this->Question_model->get_by_questionnaire($id);
-        $data['aplicadores'] = $this->User_model->get_aplicadores(); // Carregar aplicadores
+        $data['aplicadores'] = $this->User_model->get_aplicadores();
+        $data['projects'] = $this->Project_model->get_for_select(); // NOVO: Carregar projetos
         
         // Decodificar aplicadores selecionados
         $data['aplicadores_selecionados'] = array();
@@ -208,7 +230,23 @@ class Questionnaires extends CI_Controller {
         return false;
     }
 
-    // Resto dos métodos permanecem iguais...
+    // NOVO: Método para filtrar questionários por projeto
+    public function by_project($project_id) {
+        $project = $this->Project_model->get_by_id($project_id);
+        if (!$project) {
+            show_404();
+        }
+
+        $data['title'] = 'Questionários - ' . $project->name . ' - SXData';
+        $data['questionnaires'] = $this->Questionnaire_model->get_by_project($project_id);
+        $data['project'] = $project;
+        $data['projects'] = $this->Project_model->get_for_select();
+        
+        $this->load->view('admin/header', $data);
+        $this->load->view('admin/questionnaires/by_project', $data);
+        $this->load->view('admin/footer');
+    }
+
     public function duplicate($id) {
         $original = $this->Questionnaire_model->get_by_id($id);
         if (!$original) {
@@ -228,7 +266,8 @@ class Questionnaires extends CI_Controller {
             'requires_location' => $original->requires_location,
             'requires_photo' => $original->requires_photo,
             'estimated_time' => $original->estimated_time,
-            'aplicadores' => $original->aplicadores // Copiar aplicadores também
+            'aplicadores' => $original->aplicadores,
+            'project_id' => $original->project_id // NOVO: Copiar projeto também
         );
 
         $new_id = $this->Questionnaire_model->create($new_data);
@@ -275,6 +314,38 @@ class Questionnaires extends CI_Controller {
             $this->session->set_flashdata('error', 'Erro ao excluir questionário.');
         }
         redirect('questionnaires');
+    }
+
+    // NOVO: Método para API que inclui informações do projeto
+    public function get_api_data() {
+        $user_role = $this->input->get('role');
+        $questionnaires = $this->Questionnaire_model->get_for_api($user_role);
+        
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'data' => $questionnaires
+        ]);
+    }
+
+    // NOVO: Método para busca AJAX
+    public function search() {
+        $term = $this->input->get('term');
+        $project_id = $this->input->get('project_id');
+        
+        if (!$term) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Termo de busca é obrigatório']);
+            return;
+        }
+        
+        $results = $this->Questionnaire_model->search($term, $project_id);
+        
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'data' => $results
+        ]);
     }
 
     private function check_auth() {

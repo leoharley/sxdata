@@ -1,11 +1,27 @@
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Editar Questionário</h2>
-            <a href="<?= base_url('questionnaires') ?>" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>
-                Voltar
-            </a>
+            <div>
+                <h2>Editar Questionário</h2>
+                <?php if ($questionnaire->project_id && $questionnaire->project_name): ?>
+                    <small class="text-muted d-block">
+                        <i class="fas fa-project-diagram me-1"></i>
+                        Projeto: <strong><?= $questionnaire->project_name ?></strong>
+                    </small>
+                <?php endif; ?>
+            </div>
+            <div>
+                <?php if ($questionnaire->project_id): ?>
+                    <a href="<?= base_url('projects/view/' . $questionnaire->project_id) ?>" class="btn btn-info me-2">
+                        <i class="fas fa-project-diagram me-2"></i>
+                        Ver Projeto
+                    </a>
+                <?php endif; ?>
+                <a href="<?= base_url('questionnaires') ?>" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Voltar
+                </a>
+            </div>
         </div>
     </div>
 </div>
@@ -46,12 +62,12 @@ function is_checkbox_checked($value) {
                 </div>
                 
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="estimated_time" class="form-label">Tempo Estimado (minutos)</label>
                         <input type="number" class="form-control" id="estimated_time" name="estimated_time" 
                                value="<?= set_value('estimated_time', $questionnaire->estimated_time) ?>" min="1" max="120">
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="status" class="form-label">Status</label>
                         <select class="form-select" id="status" name="status">
                             <option value="active" <?= set_select('status', 'active', $questionnaire->status == 'active') ?>>Ativo</option>
@@ -59,9 +75,25 @@ function is_checkbox_checked($value) {
                             <option value="inactive" <?= set_select('status', 'inactive', $questionnaire->status == 'inactive') ?>>Inativo</option>
                         </select>
                     </div>
+                    <div class="col-md-4">
+                        <!-- NOVO: Select de Projeto -->
+                        <label for="project_id" class="form-label">Projeto</label>
+                        <select class="form-select" id="project_id" name="project_id">
+                            <option value="">Sem projeto</option>
+                            <?php foreach ($projects as $project): ?>
+                            <option value="<?= $project->id ?>" 
+                                    <?= set_select('project_id', $project->id, $questionnaire->project_id == $project->id) ?>>
+                                <?= $project->name ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="form-text text-muted">
+                            Projeto atual: <?= $questionnaire->project_name ?: 'Nenhum' ?>
+                        </small>
+                    </div>
                 </div>
 
-                <!-- NOVO: Select de Aplicadores -->
+                <!-- Select de Aplicadores -->
                 <div class="mb-3 mt-3">
                     <label for="aplicadores" class="form-label">Aplicadores Permitidos *</label>
                     <select class="form-select" id="aplicadores" name="aplicadores[]" multiple size="6" required>
@@ -162,6 +194,29 @@ function is_checkbox_checked($value) {
     </div>
     
     <div class="col-lg-4">
+        <!-- Informações do Projeto -->
+        <?php if ($questionnaire->project_id): ?>
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-project-diagram me-2"></i>
+                    Projeto Atual
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6 class="mb-2"><?= $questionnaire->project_name ?></h6>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">ID: <?= $questionnaire->project_id ?></small>
+                    <a href="<?= base_url('projects/view/' . $questionnaire->project_id) ?>" 
+                       class="btn btn-sm btn-outline-info" title="Ver projeto">
+                        <i class="fas fa-eye me-1"></i>
+                        Visualizar
+                    </a>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         <!-- Configurações -->
         <div class="card mb-4">
             <div class="card-header">
@@ -252,7 +307,8 @@ function is_checkbox_checked($value) {
                 <hr>
                 <div class="text-center">
                     <small class="text-muted">
-                        Criado em <?= date('d/m/Y', strtotime($questionnaire->created_at)) ?>
+                        <strong>Versão:</strong> <?= $questionnaire->version ?><br>
+                        <strong>Criado:</strong> <?= date('d/m/Y', strtotime($questionnaire->created_at)) ?>
                         <br>por <?= $questionnaire->created_by_name ?>
                     </small>
                 </div>
@@ -286,6 +342,13 @@ function is_checkbox_checked($value) {
                     <i class="fas fa-copy me-2"></i>
                     Duplicar Questionário
                 </a>
+                <?php if ($questionnaire->project_id): ?>
+                    <a href="<?= base_url('projects/view/' . $questionnaire->project_id) ?>" 
+                       class="btn btn-outline-info w-100 mb-2">
+                        <i class="fas fa-project-diagram me-2"></i>
+                        Ver Projeto
+                    </a>
+                <?php endif; ?>
                 <a href="<?= base_url('questionnaires') ?>" class="btn btn-outline-secondary w-100">
                     Cancelar
                 </a>
@@ -296,9 +359,13 @@ function is_checkbox_checked($value) {
 <?= form_close() ?>
 
 <script>
+// NOVO: Dados dos projetos para JavaScript
+const projectsData = <?= json_encode($projects) ?>;
+
 // Gerenciamento do select de aplicadores
 document.addEventListener('DOMContentLoaded', function() {
     const aplicadoresSelect = document.getElementById('aplicadores');
+    const projectSelect = document.getElementById('project_id');
     
     aplicadoresSelect.addEventListener('change', function() {
         const allOption = this.querySelector('option[value="all"]');
@@ -319,6 +386,27 @@ document.addEventListener('DOMContentLoaded', function() {
         // Se nenhuma opção está selecionada, selecionar "Todos" automaticamente
         if (!Array.from(this.selectedOptions).length) {
             allOption.selected = true;
+        }
+    });
+
+    // NOVO: Alerta ao mudar projeto
+    projectSelect.addEventListener('change', function() {
+        const currentProject = '<?= $questionnaire->project_id ?>';
+        const newProject = this.value;
+        
+        if (currentProject && currentProject != newProject) {
+            if (newProject) {
+                const project = projectsData.find(p => p.id == newProject);
+                const projectName = project ? project.name : 'projeto selecionado';
+                
+                if (!confirm(`Tem certeza que deseja mover este questionário para o projeto "${projectName}"?`)) {
+                    this.value = currentProject; // Reverter seleção
+                }
+            } else {
+                if (!confirm('Tem certeza que deseja remover este questionário do projeto atual?')) {
+                    this.value = currentProject; // Reverter seleção
+                }
+            }
         }
     });
 

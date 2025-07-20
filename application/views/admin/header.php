@@ -216,6 +216,12 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $this->uri->segment(1) == 'questionnaires' ? 'active' : '' ?>" href="<?= base_url('projects') ?>">
+                    <i class="fas fa-project-diagram"></i>
+                    Projetos
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $this->uri->segment(1) == 'questionnaires' ? 'active' : '' ?>" href="<?= base_url('questionnaires') ?>">
                     <i class="fas fa-clipboard-list"></i>
                     Questionários

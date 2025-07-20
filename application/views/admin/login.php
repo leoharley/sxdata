@@ -31,7 +31,7 @@
         
         .login-header {
             background: linear-gradient(135deg, #8fae5d, #a8c46a);
-            padding: 2rem;
+            padding: 1.2rem;
             text-align: center;
             color: white;
         }
@@ -47,7 +47,7 @@
         }
         
         .login-body {
-            padding: 2rem;
+            padding: 1.2rem;
         }
         
         .form-control {
@@ -100,10 +100,11 @@
         <div class="login-card">
             <div class="login-header">
                 <img src="<?php echo img_url('logo_azul_com_branco.png'); ?>" alt="Imagem" width="45%" height="auto">
-                <p>Sistema de Administração</p>
+                <p><small>Seja bem-vindo(a) ao painel de gestão do SXData.</small></p>                
             </div>
             
             <div class="login-body">
+                <span style="text-align:center"><p>Por favor, faça seu login abaixo:</p></span>
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger" role="alert">
                         <i class="fas fa-exclamation-circle me-2"></i>

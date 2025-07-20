@@ -1,7 +1,27 @@
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Criar Questionário</h2>
+            <div>
+                <h2>Criar Questionário</h2>
+                <?php if (isset($preselected_project_id) && $preselected_project_id): ?>
+                    <?php 
+                    // Buscar nome do projeto selecionado
+                    $selected_project = null;
+                    foreach ($projects as $proj) {
+                        if ($proj->id == $preselected_project_id) {
+                            $selected_project = $proj;
+                            break;
+                        }
+                    }
+                    ?>
+                    <?php if ($selected_project): ?>
+                        <small class="text-muted d-block">
+                            <i class="fas fa-project-diagram me-1"></i>
+                            Vinculando ao projeto: <strong><?= $selected_project->name ?></strong>
+                        </small>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
             <a href="<?= base_url('questionnaires') ?>" class="btn btn-secondary">
                 <i class="fas fa-arrow-left me-2"></i>
                 Voltar
@@ -33,14 +53,33 @@
                     <?= form_error('description', '<small class="text-danger">', '</small>') ?>
                 </div>
                 
-                <div class="mb-3">
-                    <label for="estimated_time" class="form-label">Tempo Estimado (minutos)</label>
-                    <input type="number" class="form-control" id="estimated_time" name="estimated_time" 
-                           value="<?= set_value('estimated_time') ?>" min="1" max="120">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="estimated_time" class="form-label">Tempo Estimado (minutos)</label>
+                        <input type="number" class="form-control" id="estimated_time" name="estimated_time" 
+                               value="<?= set_value('estimated_time') ?>" min="1" max="120">
+                    </div>
+                    <div class="col-md-6">
+                        <!-- NOVO: Select de Projeto -->
+                        <label for="project_id" class="form-label">Projeto</label>
+                        <select class="form-select" id="project_id" name="project_id">
+                            <option value="">Selecione um projeto (opcional)</option>
+                            <?php foreach ($projects as $project): ?>
+                            <option value="<?= $project->id ?>" 
+                                    <?= set_select('project_id', $project->id, (isset($preselected_project_id) && $preselected_project_id == $project->id)) ?>>
+                                <?= $project->name ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="form-text text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Vincule este questionário a um projeto específico para melhor organização
+                        </small>
+                    </div>
                 </div>
 
-                <!-- NOVO: Select de Aplicadores -->
-                <div class="mb-3">
+                <!-- Select de Aplicadores -->
+                <div class="mb-3 mt-3">
                     <label for="aplicadores" class="form-label">Aplicadores Permitidos *</label>
                     <select class="form-select" id="aplicadores" name="aplicadores[]" multiple size="6" required>
                         <option value="all">🌟 Todos os Aplicadores</option>
@@ -85,6 +124,19 @@
     </div>
     
     <div class="col-lg-4">
+        <!-- Informações do Projeto Selecionado -->
+        <div class="card mb-4" id="projectInfoCard" style="display: none;">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-project-diagram me-2"></i>
+                    Projeto Selecionado
+                </h5>
+            </div>
+            <div class="card-body" id="projectInfo">
+                <!-- Informações do projeto serão carregadas aqui -->
+            </div>
+        </div>
+        
         <!-- Configurações -->
         <div class="card mb-4">
             <div class="card-header">
@@ -139,9 +191,13 @@
 <script>
 let questionIndex = 0;
 
-// NOVO: Gerenciamento do select de aplicadores
+// NOVO: Dados dos projetos para JavaScript
+const projectsData = <?= json_encode($projects) ?>;
+
+// Gerenciamento do select de aplicadores
 document.addEventListener('DOMContentLoaded', function() {
     const aplicadoresSelect = document.getElementById('aplicadores');
+    const projectSelect = document.getElementById('project_id');
     
     aplicadoresSelect.addEventListener('change', function() {
         const allOption = this.querySelector('option[value="all"]');
@@ -165,9 +221,50 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // NOVO: Gerenciamento do select de projeto
+    projectSelect.addEventListener('change', function() {
+        updateProjectInfo(this.value);
+    });
+    
     // Selecionar "Todos" por padrão
     aplicadoresSelect.querySelector('option[value="all"]').selected = true;
+    
+    // Verificar se há projeto pré-selecionado
+    if (projectSelect.value) {
+        updateProjectInfo(projectSelect.value);
+    }
 });
+
+// NOVO: Função para atualizar informações do projeto
+function updateProjectInfo(projectId) {
+    const projectInfoCard = document.getElementById('projectInfoCard');
+    const projectInfo = document.getElementById('projectInfo');
+    
+    if (!projectId) {
+        projectInfoCard.style.display = 'none';
+        return;
+    }
+    
+    const project = projectsData.find(p => p.id == projectId);
+    if (!project) {
+        projectInfoCard.style.display = 'none';
+        return;
+    }
+    
+    projectInfo.innerHTML = `
+        <h6 class="mb-2">${project.name}</h6>
+        <p class="text-muted small mb-2">${project.description || 'Sem descrição'}</p>
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">ID: ${project.id}</small>
+            <a href="<?= base_url('projects/view/') ?>${project.id}" 
+               class="btn btn-sm btn-outline-info" target="_blank" title="Ver projeto">
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+        </div>
+    `;
+    
+    projectInfoCard.style.display = 'block';
+}
 
 function addQuestion() {
     const container = document.getElementById('questionsContainer');
