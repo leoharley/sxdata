@@ -180,7 +180,7 @@ class Questionnaire_model extends CI_Model {
         $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
         $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->where('q.status', 'active');
-        $this->db->group_by('q.id');
+        $this->db->group_by('q.id,p.name');
         $this->db->order_by('q.title', 'ASC');
         
         $questionnaires = $this->db->get()->result();
