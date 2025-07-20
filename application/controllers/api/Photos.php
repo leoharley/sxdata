@@ -35,7 +35,7 @@ class Photos extends CI_Controller {
 
         $config['upload_path'] = './uploads/photos/';
         $config['allowed_types'] = 'jpg|jpeg|png';
-        $config['max_size'] = 10240; // 10MB
+        $config['max_size'] = 1000240; // 10MB
         $config['encrypt_name'] = TRUE;
 
         // Criar diretório se não existir
