@@ -175,6 +175,65 @@ class Response_model extends CI_Model {
         return $result ? $result->count : 0;
     }
 
+    public function get_with_location($filters = array()) {
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.respondent_email,
+            fr.applied_by,
+            fr.latitude,
+            fr.longitude,
+            fr.location_name,
+            fr.photo_path,
+            fr.consent_given,
+            fr.sync_status,
+            fr.started_at,
+            fr.completed_at,
+            fr.created_at,
+            q.title as questionnaire_title,
+            u.full_name as applied_by_name
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+        
+        // Filtrar apenas respostas que possuem localização
+        $this->db->where('fr.latitude IS NOT NULL');
+        $this->db->where('fr.longitude IS NOT NULL');
+        $this->db->where('fr.latitude !=', 0);
+        $this->db->where('fr.longitude !=', 0);
+        
+        // Aplicar filtros adicionais se fornecidos
+        if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        }
+        
+        if (isset($filters['applied_by']) && $filters['applied_by']) {
+            $this->db->where('fr.applied_by', $filters['applied_by']);
+        }
+        
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        
+        if (isset($filters['sync_status']) && $filters['sync_status']) {
+            $this->db->where('fr.sync_status', $filters['sync_status']);
+        }
+        
+        // Filtrar apenas respostas concluídas
+        $this->db->where('fr.completed_at IS NOT NULL');
+        
+        // Ordenar por data de conclusão (mais recentes primeiro)
+        $this->db->order_by('fr.completed_at', 'DESC');
+        
+        return $this->db->get()->result();
+    }
+
     public function count_photos($filters = array()) {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
