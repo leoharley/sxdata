@@ -498,6 +498,11 @@
         max-width: 150px;
     }
 }
+
+.leaflet-control-attribution .leaflet-control {
+    display: none!important;
+}
+
 </style>
 
 <script>
