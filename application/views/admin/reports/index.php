@@ -613,7 +613,7 @@ function initLeafletMap() {
     // Adicionar camada do OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 14
+        maxZoom: 9
     }).addTo(map);
     
     // Preparar dados para o heatmap com intensidade máxima
