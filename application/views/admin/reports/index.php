@@ -265,6 +265,7 @@
 </div>
 
 <!-- Tabela de Análise Detalhada -->
+<!-- Substituir a seção do mapa de calor na view index.php -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Mapa de Calor - Localizações</h5>
@@ -305,7 +306,7 @@
                                     abs($heatmap_locations['stats']['bounds']['northeast']['lat'] - 
                                         $heatmap_locations['stats']['bounds']['southwest']['lat']), 2
                                 ) ?>°
-                            // Ajustar zoom para mostrar todos os pontos
+                            // Ajustar zoom para mostrar todos os pontos com zoom mínimo para contexto
     <?php if ($heatmap_locations['stats']['bounds']): ?>
     const bounds = L.latLngBounds([
         [<?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>, 
@@ -313,7 +314,21 @@
         [<?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>, 
          <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>]
     ]);
-    map.fitBounds(bounds, { padding: [20, 20] });
+    
+    // Garantir zoom mínimo para mostrar contexto geográfico
+    map.fitBounds(bounds, { 
+        padding: [30, 30],
+        maxZoom: 12  // Limitar zoom máximo para não ficar muito próximo
+    });
+    
+    // Se a área for muito pequena, mostrar mais contexto
+    const currentZoom = map.getZoom();
+    if (currentZoom > 12) {
+        map.setZoom(10);
+    }
+    <?php else: ?>
+    // Fallback: mostrar região central do Brasil
+    map.setView([-15.7942, -47.8822], 6);
     <?php endif; ?>
     
     <?php else: ?>
@@ -592,6 +607,7 @@ new Chart(questionnairesCtx, {
 });
 <?php endif; ?>
 
+// Dados do mapa de calor vindos do PHP
 const heatmapData = <?= json_encode($heatmap_locations ?? ['points' => [], 'stats' => []]) ?>;
 
 let map;
@@ -613,7 +629,7 @@ function initLeafletMap() {
     // Adicionar camada do OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 9
+        maxZoom: 18
     }).addTo(map);
     
     // Preparar dados para o heatmap com intensidade máxima
@@ -642,12 +658,19 @@ function initLeafletMap() {
     }).addTo(map);
     
     <?php else: ?>
-    // Sem dados - mostrar mapa padrão do Brasil
-    map = L.map('heatmap').setView([-15.7942, -47.8822], 4);
+    // Sem dados - mostrar mapa completo do Brasil
+    map = L.map('heatmap').setView([-14.2350, -51.9253], 4);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
+    
+    // Definir bounds do Brasil para mostrar todo o país
+    const brasilBounds = L.latLngBounds(
+        [-33.7683777, -73.9872354],  // Sudoeste (Rio Grande do Sul)
+        [5.2717863, -28.847770]     // Nordeste (Roraima)
+    );
+    map.fitBounds(brasilBounds, { padding: [20, 20] });
     <?php endif; ?>
 }
 
