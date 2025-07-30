@@ -463,14 +463,15 @@
     max-width: 200px;
 }
 
-/* Legenda do heatmap */
+/* Legenda do heatmap com cores mais escuras */
 .heatmap-legend {
     background: linear-gradient(to right, 
-        rgba(0, 0, 255, 0.5) 0%, 
-        rgba(0, 255, 255, 0.7) 25%, 
-        rgba(0, 255, 0, 0.8) 50%, 
-        rgba(255, 255, 0, 0.9) 75%, 
-        rgba(255, 0, 0, 1.0) 100%);
+        rgba(0, 0, 139, 0.7) 0%,      /* Azul escuro */
+        rgba(0, 100, 255, 0.8) 20%,   /* Azul médio */
+        rgba(0, 200, 255, 0.85) 40%,  /* Ciano */
+        rgba(255, 200, 0, 0.9) 70%,   /* Amarelo/laranja */
+        rgba(255, 100, 0, 0.95) 85%,  /* Laranja escuro */
+        rgba(139, 0, 0, 1.0) 100%);   /* Vermelho escuro */
     height: 10px;
     width: 100px;
     border: 1px solid #ccc;
@@ -591,7 +592,6 @@ new Chart(questionnairesCtx, {
 });
 <?php endif; ?>
 
-// Dados do mapa de calor vindos do PHP
 const heatmapData = <?= json_encode($heatmap_locations ?? ['points' => [], 'stats' => []]) ?>;
 
 let map;
@@ -616,26 +616,28 @@ function initLeafletMap() {
         maxZoom: 18
     }).addTo(map);
     
-    // Preparar dados para o heatmap com intensidade baseada na densidade
+    // Preparar dados para o heatmap com intensidade máxima
     const heatPoints = heatmapData.points.map(point => [
         point.lat, 
         point.lng, 
-        1.0 // Intensidade máxima para cada ponto
+        1.5 // Intensidade aumentada para cores mais fortes
     ]);
     
-    // Criar camada de heatmap com configurações melhoradas
+    // Criar camada de heatmap com cores mais escuras e visíveis
     heatLayer = L.heatLayer(heatPoints, {
-        radius: 40,
-        blur: 25,
+        radius: 50,
+        blur: 20,
         maxZoom: 17,
-        max: 1.0,
+        max: 0.8,
+        minOpacity: 0.6,
         gradient: {
-            0.0: 'rgba(0, 0, 255, 0)',
-            0.2: 'rgba(0, 0, 255, 0.5)',
-            0.4: 'rgba(0, 255, 255, 0.7)',
-            0.6: 'rgba(0, 255, 0, 0.8)',
-            0.8: 'rgba(255, 255, 0, 0.9)',
-            1.0: 'rgba(255, 0, 0, 1.0)'
+            0.0: 'rgba(0, 0, 139, 0)',      // Azul escuro transparente
+            0.1: 'rgba(0, 0, 139, 0.7)',    // Azul escuro
+            0.3: 'rgba(0, 100, 255, 0.8)',  // Azul médio
+            0.5: 'rgba(0, 200, 255, 0.85)', // Ciano
+            0.7: 'rgba(255, 200, 0, 0.9)',  // Amarelo/laranja
+            0.9: 'rgba(255, 100, 0, 0.95)', // Laranja escuro
+            1.0: 'rgba(139, 0, 0, 1.0)'     // Vermelho escuro
         }
     }).addTo(map);
     
@@ -662,19 +664,20 @@ function toggleHeatmapIntensity() {
     
     if (currentIntensity === 'high') {
         // Intensidade média
-        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 0.6]);
+        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 1.0]);
         heatLayer = L.heatLayer(heatPoints, {
-            radius: 30,
-            blur: 20,
+            radius: 35,
+            blur: 15,
             maxZoom: 17,
-            max: 0.8,
+            max: 0.6,
+            minOpacity: 0.4,
             gradient: {
-                0.0: 'rgba(0, 0, 255, 0)',
-                0.3: 'rgba(0, 0, 255, 0.3)',
-                0.5: 'rgba(0, 255, 255, 0.5)',
-                0.7: 'rgba(0, 255, 0, 0.6)',
-                0.9: 'rgba(255, 255, 0, 0.7)',
-                1.0: 'rgba(255, 0, 0, 0.8)'
+                0.0: 'rgba(0, 0, 139, 0)',
+                0.2: 'rgba(0, 0, 139, 0.5)',
+                0.4: 'rgba(0, 100, 255, 0.6)',
+                0.6: 'rgba(0, 200, 255, 0.7)',
+                0.8: 'rgba(255, 200, 0, 0.75)',
+                1.0: 'rgba(255, 100, 0, 0.8)'
             }
         });
         button.innerHTML = '<i class="fas fa-adjust me-1"></i>Média';
@@ -682,38 +685,42 @@ function toggleHeatmapIntensity() {
         
     } else if (currentIntensity === 'medium') {
         // Intensidade baixa
-        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 0.3]);
+        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 0.7]);
         heatLayer = L.heatLayer(heatPoints, {
-            radius: 20,
-            blur: 15,
+            radius: 25,
+            blur: 12,
             maxZoom: 17,
-            max: 0.5,
+            max: 0.4,
+            minOpacity: 0.3,
             gradient: {
-                0.0: 'rgba(0, 0, 255, 0)',
-                0.4: 'rgba(0, 0, 255, 0.2)',
-                0.6: 'rgba(0, 255, 255, 0.3)',
-                0.8: 'rgba(0, 255, 0, 0.4)',
-                1.0: 'rgba(255, 255, 0, 0.5)'
+                0.0: 'rgba(0, 0, 139, 0)',
+                0.3: 'rgba(0, 0, 139, 0.3)',
+                0.5: 'rgba(0, 100, 255, 0.4)',
+                0.7: 'rgba(0, 200, 255, 0.5)',
+                0.9: 'rgba(255, 200, 0, 0.6)',
+                1.0: 'rgba(255, 100, 0, 0.65)'
             }
         });
         button.innerHTML = '<i class="fas fa-adjust me-1"></i>Baixa';
         currentIntensity = 'low';
         
     } else {
-        // Volta para intensidade alta
-        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 1.0]);
+        // Volta para intensidade alta (mais escura)
+        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 1.5]);
         heatLayer = L.heatLayer(heatPoints, {
-            radius: 40,
-            blur: 25,
+            radius: 50,
+            blur: 20,
             maxZoom: 17,
-            max: 1.0,
+            max: 0.8,
+            minOpacity: 0.6,
             gradient: {
-                0.0: 'rgba(0, 0, 255, 0)',
-                0.2: 'rgba(0, 0, 255, 0.5)',
-                0.4: 'rgba(0, 255, 255, 0.7)',
-                0.6: 'rgba(0, 255, 0, 0.8)',
-                0.8: 'rgba(255, 255, 0, 0.9)',
-                1.0: 'rgba(255, 0, 0, 1.0)'
+                0.0: 'rgba(0, 0, 139, 0)',
+                0.1: 'rgba(0, 0, 139, 0.7)',
+                0.3: 'rgba(0, 100, 255, 0.8)',
+                0.5: 'rgba(0, 200, 255, 0.85)',
+                0.7: 'rgba(255, 200, 0, 0.9)',
+                0.9: 'rgba(255, 100, 0, 0.95)',
+                1.0: 'rgba(139, 0, 0, 1.0)'
             }
         });
         button.innerHTML = '<i class="fas fa-adjust me-1"></i>Alta';
