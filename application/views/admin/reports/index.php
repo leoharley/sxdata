@@ -260,10 +260,10 @@
             </div>
         </div>
 
-
     </div>
+</div>
 
-    <!-- Tabela de Análise Detalhada -->
+<!-- Tabela de Análise Detalhada -->
 <div class="card">
     <div class="card-header">
         <h5 class="mb-0">Análise Detalhada por Questionário</h5>
@@ -387,11 +387,6 @@
         <?php endif; ?>
     </div>
 </div>
-
-
-</div>
-
-
 
 <style>
 .chart-placeholder {
