@@ -207,6 +207,10 @@
                         <i class="fas fa-map-marker-alt me-1"></i>
                         <?= isset($heatmap_locations['stats']['total_locations']) ? $heatmap_locations['stats']['total_locations'] : 0 ?> locais
                     </span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleHeatmapIntensity()" id="intensityToggle">
+                        <i class="fas fa-adjust me-1"></i>
+                        Intensidade
+                    </button>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -261,87 +265,124 @@
 </div>
 
 <!-- Tabela de Análise Detalhada -->
-<!-- Substituir a seção do mapa de calor na view index.php -->
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Mapa de Calor - Localizações</h5>
-        <div>
-            <span class="badge bg-info me-2">
-                <i class="fas fa-fire me-1"></i>
-                <?= isset($heatmap_locations['stats']['total_locations']) ? $heatmap_locations['stats']['total_locations'] : 0 ?> pontos de calor
-            </span>
-            <button class="btn btn-sm btn-outline-secondary" onclick="toggleHeatmapIntensity()" id="intensityToggle">
-                <i class="fas fa-adjust me-1"></i>
-                Intensidade
-            </button>
-        </div>
+    <div class="card-header">
+        <h5 class="mb-0">Análise Detalhada por Questionário</h5>
     </div>
-    <div class="card-body p-0">
-        <?php if (!empty($heatmap_locations['points'])): ?>
-            <div id="heatmap" style="height: 300px; width: 100%;"></div>
+    <div class="card-body">
+        <?php if (!empty($detailed_analysis) && is_array($detailed_analysis)): ?>
+            <?php 
+            // Filtrar apenas objetos válidos
+            $valid_analysis = array_filter($detailed_analysis, function($item) {
+                return is_object($item) && isset($item->questionnaire_title);
+            });
+            ?>
             
-            <!-- Informações do mapa -->
-            <div class="p-3 border-top bg-light">
-                <div class="row text-center">
-                    <div class="col-4">
-                        <small class="text-muted d-block">Total de Pontos</small>
-                        <strong class="text-primary"><?= count($heatmap_locations['points']) ?></strong>
-                    </div>
-                    <div class="col-4">
-                        <small class="text-muted d-block">Centro do Mapa</small>
-                        <strong class="text-success">
-                            <?= number_format($heatmap_locations['stats']['center']['lat'], 4) ?>,
-                            <?= number_format($heatmap_locations['stats']['center']['lng'], 4) ?>
-                        </strong>
-                    </div>
-                    <div class="col-4">
-                        <small class="text-muted d-block">Área Coberta</small>
-                        <strong class="text-info">
-                            <?php if ($heatmap_locations['stats']['bounds']): ?>
-                                <?= number_format(
-                                    abs($heatmap_locations['stats']['bounds']['northeast']['lat'] - 
-                                        $heatmap_locations['stats']['bounds']['southwest']['lat']), 2
-                                ) ?>°
-                            // Ajustar zoom para mostrar todos os pontos com zoom mínimo para contexto
-    <?php if ($heatmap_locations['stats']['bounds']): ?>
-    const bounds = L.latLngBounds([
-        [<?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>, 
-         <?= $heatmap_locations['stats']['bounds']['southwest']['lng'] ?>],
-        [<?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>, 
-         <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>]
-    ]);
-    
-    // Garantir zoom mínimo para mostrar contexto geográfico
-    map.fitBounds(bounds, { 
-        padding: [30, 30],
-        maxZoom: 12  // Limitar zoom máximo para não ficar muito próximo
-    });
-    
-    // Se a área for muito pequena, mostrar mais contexto
-    const currentZoom = map.getZoom();
-    if (currentZoom > 12) {
-        map.setZoom(10);
-    }
-    <?php else: ?>
-    // Fallback: mostrar região central do Brasil
-    map.setView([-15.7942, -47.8822], 6);
-    <?php endif; ?>
-    
-    <?php else: ?>
-                                N/A
-                            <?php endif; ?>
-                        </strong>
-                    </div>
+            <?php if (!empty($valid_analysis)): ?>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Questionário</th>
+                            <th>Total Respostas</th>
+                            <th>Média por Dia</th>
+                            <th>Taxa Conclusão</th>
+                            <th>Tempo Médio</th>
+                            <th>Localizações</th>
+                            <th>Fotos</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($valid_analysis as $analysis): ?>
+                        <tr>
+                            <td><strong><?= isset($analysis->questionnaire_title) ? $analysis->questionnaire_title : 'N/A' ?></strong></td>
+                            <td><span class="badge bg-primary"><?= isset($analysis->total_responses) ? $analysis->total_responses : 0 ?></span></td>
+                            <td><?= isset($analysis->avg_per_day) ? number_format($analysis->avg_per_day, 1) : '0.0' ?></td>
+                            <td>
+                                <?php $completion_rate = isset($analysis->completion_rate) ? $analysis->completion_rate : 0; ?>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-success" style="width: <?= $completion_rate ?>%"></div>
+                                </div>
+                                <small><?= $completion_rate ?>%</small>
+                            </td>
+                            <td><?= isset($analysis->avg_time) ? $analysis->avg_time : '0' ?> min</td>
+                            <td>
+                                <?php $locations_count = isset($analysis->locations_count) ? $analysis->locations_count : 0; ?>
+                                <?php if ($locations_count > 0): ?>
+                                    <span class="text-success"><?= $locations_count ?></span>
+                                <?php else: ?>
+                                    <span class="text-muted">0</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php $photos_count = isset($analysis->photos_count) ? $analysis->photos_count : 0; ?>
+                                <?php if ($photos_count > 0): ?>
+                                    <span class="text-success"><?= $photos_count ?></span>
+                                <?php else: ?>
+                                    <span class="text-muted">0</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="<?= base_url('responses?questionnaire_id=' . (isset($analysis->questionnaire_id) ? $analysis->questionnaire_id : '')) ?>" 
+                                       class="btn btn-sm btn-outline-primary" title="Ver Respostas">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="<?= base_url('responses/export?questionnaire_id=' . (isset($analysis->questionnaire_id) ? $analysis->questionnaire_id : '')) ?>" 
+                                       class="btn btn-sm btn-outline-success" title="Exportar">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php else: ?>
+            <!-- Estado vazio quando há dados inválidos -->
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning"></i>
+                </div>
+                <h5 class="text-muted mb-3">Dados inconsistentes encontrados</h5>
+                <p class="text-muted mb-4">
+                    Os dados retornados não estão no formato esperado.<br>
+                    Tente recarregar a página ou entre em contato com o suporte.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn btn-outline-primary" onclick="location.reload();">
+                        <i class="fas fa-refresh me-1"></i>
+                        Recarregar Página
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="resetFilters();">
+                        <i class="fas fa-filter me-1"></i>
+                        Limpar Filtros
+                    </button>
                 </div>
             </div>
+            <?php endif; ?>
         <?php else: ?>
-            <div style="height: 300px; background: #f8f9fa; display: flex; align-items: center; justify-content: center;">
-                <div class="text-center">
-                    <i class="fas fa-map fa-3x text-muted mb-3"></i>
-                    <h6 class="text-muted mb-2">Nenhuma localização encontrada</h6>
-                    <p class="text-muted mb-0 small">
-                        Colete dados com GPS ativado para visualizar o mapa de calor
-                    </p>
+            <!-- Estado vazio -->
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-chart-bar fa-3x text-muted"></i>
+                </div>
+                <h5 class="text-muted mb-3">Nenhum dado encontrado</h5>
+                <p class="text-muted mb-4">
+                    Não há dados de análise para o período selecionado.<br>
+                    Tente ajustar os filtros ou verificar se existem questionários ativos.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn btn-outline-primary" onclick="resetFilters();">
+                        <i class="fas fa-refresh me-1"></i>
+                        Limpar Filtros
+                    </button>
+                    <a href="<?= base_url('questionnaires') ?>" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>
+                        Criar Questionário
+                    </a>
                 </div>
             </div>
         <?php endif; ?>
