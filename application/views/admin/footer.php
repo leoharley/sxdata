@@ -35,9 +35,11 @@
         }, 5000);
     </script>
 
-    <script async defer
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBp9hhgqNRp44-hENHV55IEwktaK-a4Tk8&libraries=visualization&callback=initMap">
-    </script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.css" />
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
 </body>
 </html>

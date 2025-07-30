@@ -491,23 +491,69 @@
     border: none;
 }
 
-.gm-style-iw {
-    max-width: 300px !important;
+/* Marcadores personalizados */
+.custom-marker {
+    background: transparent;
+    border: none;
 }
 
-.gm-style-iw-c {
+.marker-pin {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #8fae5d;
+    border-radius: 50% 50% 50% 0;
+    position: relative;
+    transform: rotate(-45deg);
+    border: 3px solid #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.marker-pin i {
+    color: white;
+    font-size: 14px;
+    transform: rotate(45deg);
+}
+
+/* Popups do Leaflet */
+.leaflet-popup-content-wrapper {
     border-radius: 8px !important;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
 }
 
-.gm-style-iw-t::after {
-    background: white !important;
+.leaflet-popup-content {
+    margin: 12px !important;
 }
 
-/* Badge customizado */
+/* Badge customizado para popups */
 .badge {
     font-size: 0.7rem;
     padding: 0.25rem 0.5rem;
+    margin-right: 0.25rem;
+}
+
+/* Controles do mapa */
+.leaflet-control-zoom a {
+    background-color: #8fae5d !important;
+    border-color: #8fae5d !important;
+}
+
+.leaflet-control-zoom a:hover {
+    background-color: #7a9851 !important;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .marker-pin {
+        width: 25px;
+        height: 25px;
+    }
+    
+    .marker-pin i {
+        font-size: 12px;
+    }
 }
 </style>
 
@@ -615,137 +661,111 @@ new Chart(questionnairesCtx, {
 <?php endif; ?>
 
 
+// Dados do mapa de calor vindos do PHP
 const heatmapData = <?= json_encode($heatmap_locations ?? ['points' => [], 'stats' => []]) ?>;
 
 let map;
-let heatmap;
-let markers = [];
+let heatLayer;
+let markersLayer;
 let isHeatmapView = true;
 
-function initMap() {
+function initLeafletMap() {
     <?php if (!empty($heatmap_locations['points'])): ?>
     
     // Configurar o centro do mapa
-    const mapCenter = {
-        lat: <?= $heatmap_locations['stats']['center']['lat'] ?>,
-        lng: <?= $heatmap_locations['stats']['center']['lng'] ?>
-    };
+    const mapCenter = [
+        <?= $heatmap_locations['stats']['center']['lat'] ?>,
+        <?= $heatmap_locations['stats']['center']['lng'] ?>
+    ];
     
-    // Criar o mapa
-    map = new google.maps.Map(document.getElementById("heatmap"), {
-        zoom: 10,
-        center: mapCenter,
-        mapTypeId: "roadmap",
-        styles: [
-            {
-                featureType: "all",
-                elementType: "geometry.fill",
-                stylers: [{ saturation: -15 }, { lightness: 10 }]
-            }
-        ]
-    });
+    // Criar o mapa com Leaflet
+    map = L.map('heatmap').setView(mapCenter, 10);
+    
+    // Adicionar camada do OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18
+    }).addTo(map);
     
     // Preparar dados para o heatmap
-    const heatmapPoints = heatmapData.points.map(point => 
-        new google.maps.LatLng(point.lat, point.lng)
-    );
+    const heatPoints = heatmapData.points.map(point => [
+        point.lat, 
+        point.lng, 
+        0.8 // Intensidade
+    ]);
     
-    // Criar o heatmap
-    heatmap = new google.maps.visualization.HeatmapLayer({
-        data: heatmapPoints,
-        map: map,
-        radius: 50,
-        opacity: 0.8,
-        gradient: [
-            'rgba(0, 255, 255, 0)',
-            'rgba(0, 255, 255, 1)',
-            'rgba(0, 191, 255, 1)',
-            'rgba(0, 127, 255, 1)',
-            'rgba(0, 63, 255, 1)',
-            'rgba(0, 0, 255, 1)',
-            'rgba(0, 0, 223, 1)',
-            'rgba(0, 0, 191, 1)',
-            'rgba(0, 0, 159, 1)',
-            'rgba(0, 0, 127, 1)',
-            'rgba(63, 0, 91, 1)',
-            'rgba(127, 0, 63, 1)',
-            'rgba(191, 0, 31, 1)',
-            'rgba(255, 0, 0, 1)'
-        ]
-    });
+    // Criar camada de heatmap
+    heatLayer = L.heatLayer(heatPoints, {
+        radius: 25,
+        blur: 15,
+        maxZoom: 17,
+        gradient: {
+            0.0: '#3182bd',
+            0.2: '#6baed6', 
+            0.4: '#9ecae1',
+            0.6: '#c6dbef',
+            0.8: '#fd8d3c',
+            1.0: '#e6550d'
+        }
+    }).addTo(map);
     
-    // Criar marcadores (inicialmente ocultos)
+    // Criar camada de marcadores
+    markersLayer = L.layerGroup();
+    
+    // Adicionar marcadores
     heatmapData.points.forEach((point, index) => {
-        const marker = new google.maps.Marker({
-            position: { lat: point.lat, lng: point.lng },
-            map: null, // Inicialmente oculto
-            title: `Resposta #${point.info.id}`,
-            icon: {
-                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="8" fill="#8fae5d" stroke="white" stroke-width="2"/>
-                        <circle cx="12" cy="12" r="3" fill="white"/>
-                    </svg>
-                `),
-                scaledSize: new google.maps.Size(24, 24),
-                anchor: new google.maps.Point(12, 12)
-            }
+        // Criar ícone personalizado
+        const customIcon = L.divIcon({
+            className: 'custom-marker',
+            html: `<div class="marker-pin">
+                      <i class="fas fa-map-marker-alt"></i>
+                   </div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
         });
         
-        // Info window para o marcador
-        const infoWindow = new google.maps.InfoWindow({
-            content: `
-                <div style="max-width: 250px;">
-                    <h6 class="mb-2"><strong>Resposta #${point.info.id}</strong></h6>
-                    <p class="mb-1"><strong>Questionário:</strong> ${point.info.questionnaire_title || 'N/A'}</p>
-                    <p class="mb-1"><strong>Aplicador:</strong> ${point.info.applied_by_name || 'N/A'}</p>
-                    ${point.info.respondent_name ? `<p class="mb-1"><strong>Respondente:</strong> ${point.info.respondent_name}</p>` : ''}
-                    ${point.info.location_name ? `<p class="mb-1"><strong>Local:</strong> ${point.info.location_name}</p>` : ''}
-                    <p class="mb-1"><strong>Data:</strong> ${new Date(point.info.completed_at).toLocaleDateString('pt-BR')}</p>
-                    <div class="d-flex gap-2 mt-2">
-                        <span class="badge ${point.info.consent_given ? 'bg-success' : 'bg-warning'}">
-                            ${point.info.consent_given ? 'Com consentimento' : 'Sem consentimento'}
-                        </span>
-                        ${point.info.has_photo ? '<span class="badge bg-info">Com foto</span>' : ''}
-                    </div>
+        const marker = L.marker([point.lat, point.lng], { icon: customIcon });
+        
+        // Popup com informações
+        const popupContent = `
+            <div style="max-width: 250px;">
+                <h6 class="mb-2"><strong>Resposta #${point.info.id}</strong></h6>
+                <p class="mb-1"><strong>Questionário:</strong> ${point.info.questionnaire_title || 'N/A'}</p>
+                <p class="mb-1"><strong>Aplicador:</strong> ${point.info.applied_by_name || 'N/A'}</p>
+                ${point.info.respondent_name ? `<p class="mb-1"><strong>Respondente:</strong> ${point.info.respondent_name}</p>` : ''}
+                ${point.info.location_name ? `<p class="mb-1"><strong>Local:</strong> ${point.info.location_name}</p>` : ''}
+                <p class="mb-1"><strong>Data:</strong> ${new Date(point.info.completed_at).toLocaleDateString('pt-BR')}</p>
+                <div class="d-flex gap-1 mt-2">
+                    <span class="badge ${point.info.consent_given ? 'bg-success' : 'bg-warning'}" style="font-size: 0.7rem;">
+                        ${point.info.consent_given ? 'Com consentimento' : 'Sem consentimento'}
+                    </span>
+                    ${point.info.has_photo ? '<span class="badge bg-info" style="font-size: 0.7rem;">Com foto</span>' : ''}
                 </div>
-            `
-        });
+            </div>
+        `;
         
-        marker.addListener('click', () => {
-            // Fechar outras info windows
-            markers.forEach(m => {
-                if (m.infoWindow) m.infoWindow.close();
-            });
-            infoWindow.open(map, marker);
-        });
-        
-        marker.infoWindow = infoWindow;
-        markers.push(marker);
+        marker.bindPopup(popupContent);
+        markersLayer.addLayer(marker);
     });
     
-    // Ajustar zoom automaticamente se houver bounds
+    // Ajustar zoom para mostrar todos os pontos
     <?php if ($heatmap_locations['stats']['bounds']): ?>
-    const bounds = new google.maps.LatLngBounds(
-        new google.maps.LatLng(
-            <?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>,
-            <?= $heatmap_locations['stats']['bounds']['southwest']['lng'] ?>
-        ),
-        new google.maps.LatLng(
-            <?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>,
-            <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>
-        )
-    );
-    map.fitBounds(bounds);
+    const bounds = L.latLngBounds([
+        [<?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>, 
+         <?= $heatmap_locations['stats']['bounds']['southwest']['lng'] ?>],
+        [<?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>, 
+         <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>]
+    ]);
+    map.fitBounds(bounds, { padding: [20, 20] });
     <?php endif; ?>
     
     <?php else: ?>
     // Sem dados - mostrar mapa padrão do Brasil
-    map = new google.maps.Map(document.getElementById("heatmap"), {
-        zoom: 4,
-        center: { lat: -15.7942, lng: -47.8822 },
-        mapTypeId: "roadmap"
-    });
+    map = L.map('heatmap').setView([-15.7942, -47.8822], 4);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
     <?php endif; ?>
 }
 
@@ -756,28 +776,22 @@ function toggleHeatmapView() {
     
     if (isHeatmapView) {
         // Mostrar marcadores
-        heatmap.setMap(null);
-        markers.forEach(marker => marker.setMap(map));
+        map.removeLayer(heatLayer);
+        map.addLayer(markersLayer);
         button.innerHTML = '<i class="fas fa-fire me-1"></i>Calor';
         isHeatmapView = false;
     } else {
         // Mostrar heatmap
-        markers.forEach(marker => {
-            marker.setMap(null);
-            if (marker.infoWindow) marker.infoWindow.close();
-        });
-        heatmap.setMap(map);
+        map.removeLayer(markersLayer);
+        map.addLayer(heatLayer);
         button.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i>Pontos';
         isHeatmapView = true;
     }
 }
 
 // Inicializar mapa quando a página carregar
-window.addEventListener('load', () => {
-    // Verificar se o Google Maps está carregado
-    if (typeof google !== 'undefined' && google.maps) {
-        initMap();
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    initLeafletMap();
 });
 
 </script>
