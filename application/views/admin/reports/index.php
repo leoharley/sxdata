@@ -265,7 +265,6 @@
 </div>
 
 <!-- Tabela de Análise Detalhada -->
-<!-- Substituir a seção do mapa de calor na view index.php -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Mapa de Calor - Localizações</h5>
@@ -306,7 +305,7 @@
                                     abs($heatmap_locations['stats']['bounds']['northeast']['lat'] - 
                                         $heatmap_locations['stats']['bounds']['southwest']['lat']), 2
                                 ) ?>°
-                            // Ajustar zoom para mostrar todos os pontos com zoom mínimo para contexto
+                            // Ajustar zoom para mostrar todos os pontos com contexto adequado
     <?php if ($heatmap_locations['stats']['bounds']): ?>
     const bounds = L.latLngBounds([
         [<?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>, 
@@ -315,20 +314,35 @@
          <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>]
     ]);
     
-    // Garantir zoom mínimo para mostrar contexto geográfico
-    map.fitBounds(bounds, { 
-        padding: [30, 30],
-        maxZoom: 12  // Limitar zoom máximo para não ficar muito próximo
-    });
+    // Primeiro, definir bounds do Brasil para referência
+    const brasilBounds = L.latLngBounds(
+        [-33.7683777, -73.9872354],  // Sudoeste do Brasil
+        [5.2717863, -28.847770]     // Nordeste do Brasil
+    );
     
-    // Se a área for muito pequena, mostrar mais contexto
-    const currentZoom = map.getZoom();
-    if (currentZoom > 12) {
-        map.setZoom(10);
+    // Se os dados cobrem uma área muito pequena, mostrar mais contexto
+    const dataArea = Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) * 
+                     Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
+    
+    if (dataArea < 1) { // Área muito pequena (menos de 1 grau²)
+        // Mostrar uma região maior ao redor dos dados
+        const centerLat = (bounds.getNorthEast().lat + bounds.getSouthWest().lat) / 2;
+        const centerLng = (bounds.getNorthEast().lng + bounds.getSouthWest().lng) / 2;
+        map.setView([centerLat, centerLng], 8); // Zoom 8 para mostrar contexto regional
+    } else {
+        // Ajustar aos dados com zoom máximo limitado
+        map.fitBounds(bounds, { 
+            padding: [30, 30],
+            maxZoom: 10  // Limitar zoom máximo
+        });
     }
     <?php else: ?>
-    // Fallback: mostrar região central do Brasil
-    map.setView([-15.7942, -47.8822], 6);
+    // Fallback: mostrar Brasil inteiro
+    const brasilBounds = L.latLngBounds(
+        [-33.7683777, -73.9872354],
+        [5.2717863, -28.847770]
+    );
+    map.fitBounds(brasilBounds, { padding: [10, 10] });
     <?php endif; ?>
     
     <?php else: ?>
@@ -617,14 +631,14 @@ let currentIntensity = 'high';
 function initLeafletMap() {
     <?php if (!empty($heatmap_locations['points'])): ?>
     
-    // Configurar o centro do mapa
+    // Configurar o centro do mapa baseado nos dados
     const mapCenter = [
         <?= $heatmap_locations['stats']['center']['lat'] ?>,
         <?= $heatmap_locations['stats']['center']['lng'] ?>
     ];
     
-    // Criar o mapa com Leaflet
-    map = L.map('heatmap').setView(mapCenter, 10);
+    // Criar o mapa com Leaflet - começar com zoom baixo
+    map = L.map('heatmap');
     
     // Adicionar camada do OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -659,7 +673,7 @@ function initLeafletMap() {
     
     <?php else: ?>
     // Sem dados - mostrar mapa completo do Brasil
-    map = L.map('heatmap').setView([-14.2350, -51.9253], 4);
+    map = L.map('heatmap');
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -667,10 +681,10 @@ function initLeafletMap() {
     
     // Definir bounds do Brasil para mostrar todo o país
     const brasilBounds = L.latLngBounds(
-        [-33.7683777, -73.9872354],  // Sudoeste (Rio Grande do Sul)
-        [5.2717863, -28.847770]     // Nordeste (Roraima)
+        [-33.7683777, -73.9872354],  // Sudoeste (Ponto mais ao sul e oeste)
+        [5.2717863, -28.847770]     // Nordeste (Ponto mais ao norte e leste)
     );
-    map.fitBounds(brasilBounds, { padding: [20, 20] });
+    map.fitBounds(brasilBounds, { padding: [10, 10] });
     <?php endif; ?>
 }
 
@@ -756,7 +770,10 @@ function toggleHeatmapIntensity() {
 
 // Inicializar mapa quando a página carregar
 document.addEventListener('DOMContentLoaded', function() {
-    initLeafletMap();
+    // Aguardar um pouco para garantir que o container está visível
+    setTimeout(() => {
+        initLeafletMap();
+    }, 100);
 });
 
 </script>
