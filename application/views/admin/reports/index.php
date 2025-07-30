@@ -266,123 +266,71 @@
 
 <!-- Tabela de Análise Detalhada -->
 <div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Análise Detalhada por Questionário</h5>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Mapa de Calor - Localizações</h5>
+        <div>
+            <span class="badge bg-info me-2">
+                <i class="fas fa-fire me-1"></i>
+                <?= isset($heatmap_locations['stats']['total_locations']) ? $heatmap_locations['stats']['total_locations'] : 0 ?> pontos de calor
+            </span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="toggleHeatmapIntensity()" id="intensityToggle">
+                <i class="fas fa-adjust me-1"></i>
+                Intensidade
+            </button>
+        </div>
     </div>
-    <div class="card-body">
-        <?php if (!empty($detailed_analysis) && is_array($detailed_analysis)): ?>
-            <?php 
-            // Filtrar apenas objetos válidos
-            $valid_analysis = array_filter($detailed_analysis, function($item) {
-                return is_object($item) && isset($item->questionnaire_title);
-            });
-            ?>
+    <div class="card-body p-0">
+        <?php if (!empty($heatmap_locations['points'])): ?>
+            <div id="heatmap" style="height: 300px; width: 100%;"></div>
             
-            <?php if (!empty($valid_analysis)): ?>
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Questionário</th>
-                            <th>Total Respostas</th>
-                            <th>Média por Dia</th>
-                            <th>Taxa Conclusão</th>
-                            <th>Tempo Médio</th>
-                            <th>Localizações</th>
-                            <th>Fotos</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($valid_analysis as $analysis): ?>
-                        <tr>
-                            <td><strong><?= isset($analysis->questionnaire_title) ? $analysis->questionnaire_title : 'N/A' ?></strong></td>
-                            <td><span class="badge bg-primary"><?= isset($analysis->total_responses) ? $analysis->total_responses : 0 ?></span></td>
-                            <td><?= isset($analysis->avg_per_day) ? number_format($analysis->avg_per_day, 1) : '0.0' ?></td>
-                            <td>
-                                <?php $completion_rate = isset($analysis->completion_rate) ? $analysis->completion_rate : 0; ?>
-                                <div class="progress" style="height: 6px;">
-                                    <div class="progress-bar bg-success" style="width: <?= $completion_rate ?>%"></div>
-                                </div>
-                                <small><?= $completion_rate ?>%</small>
-                            </td>
-                            <td><?= isset($analysis->avg_time) ? $analysis->avg_time : '0' ?> min</td>
-                            <td>
-                                <?php $locations_count = isset($analysis->locations_count) ? $analysis->locations_count : 0; ?>
-                                <?php if ($locations_count > 0): ?>
-                                    <span class="text-success"><?= $locations_count ?></span>
-                                <?php else: ?>
-                                    <span class="text-muted">0</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php $photos_count = isset($analysis->photos_count) ? $analysis->photos_count : 0; ?>
-                                <?php if ($photos_count > 0): ?>
-                                    <span class="text-success"><?= $photos_count ?></span>
-                                <?php else: ?>
-                                    <span class="text-muted">0</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <div class="btn-group" role="group">
-                                    <a href="<?= base_url('responses?questionnaire_id=' . (isset($analysis->questionnaire_id) ? $analysis->questionnaire_id : '')) ?>" 
-                                       class="btn btn-sm btn-outline-primary" title="Ver Respostas">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <a href="<?= base_url('responses/export?questionnaire_id=' . (isset($analysis->questionnaire_id) ? $analysis->questionnaire_id : '')) ?>" 
-                                       class="btn btn-sm btn-outline-success" title="Exportar">
-                                        <i class="fas fa-download"></i>
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php else: ?>
-            <!-- Estado vazio quando há dados inválidos -->
-            <div class="text-center py-5">
-                <div class="mb-4">
-                    <i class="fas fa-exclamation-triangle fa-3x text-warning"></i>
-                </div>
-                <h5 class="text-muted mb-3">Dados inconsistentes encontrados</h5>
-                <p class="text-muted mb-4">
-                    Os dados retornados não estão no formato esperado.<br>
-                    Tente recarregar a página ou entre em contato com o suporte.
-                </p>
-                <div class="d-flex justify-content-center gap-2">
-                    <button type="button" class="btn btn-outline-primary" onclick="location.reload();">
-                        <i class="fas fa-refresh me-1"></i>
-                        Recarregar Página
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="resetFilters();">
-                        <i class="fas fa-filter me-1"></i>
-                        Limpar Filtros
-                    </button>
+            <!-- Informações do mapa -->
+            <div class="p-3 border-top bg-light">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <small class="text-muted d-block">Total de Pontos</small>
+                        <strong class="text-primary"><?= count($heatmap_locations['points']) ?></strong>
+                    </div>
+                    <div class="col-4">
+                        <small class="text-muted d-block">Centro do Mapa</small>
+                        <strong class="text-success">
+                            <?= number_format($heatmap_locations['stats']['center']['lat'], 4) ?>,
+                            <?= number_format($heatmap_locations['stats']['center']['lng'], 4) ?>
+                        </strong>
+                    </div>
+                    <div class="col-4">
+                        <small class="text-muted d-block">Área Coberta</small>
+                        <strong class="text-info">
+                            <?php if ($heatmap_locations['stats']['bounds']): ?>
+                                <?= number_format(
+                                    abs($heatmap_locations['stats']['bounds']['northeast']['lat'] - 
+                                        $heatmap_locations['stats']['bounds']['southwest']['lat']), 2
+                                ) ?>°
+                            // Ajustar zoom para mostrar todos os pontos
+    <?php if ($heatmap_locations['stats']['bounds']): ?>
+    const bounds = L.latLngBounds([
+        [<?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>, 
+         <?= $heatmap_locations['stats']['bounds']['southwest']['lng'] ?>],
+        [<?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>, 
+         <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>]
+    ]);
+    map.fitBounds(bounds, { padding: [20, 20] });
+    <?php endif; ?>
+    
+    <?php else: ?>
+                                N/A
+                            <?php endif; ?>
+                        </strong>
+                    </div>
                 </div>
             </div>
-            <?php endif; ?>
         <?php else: ?>
-            <!-- Estado vazio -->
-            <div class="text-center py-5">
-                <div class="mb-4">
-                    <i class="fas fa-chart-bar fa-3x text-muted"></i>
-                </div>
-                <h5 class="text-muted mb-3">Nenhum dado encontrado</h5>
-                <p class="text-muted mb-4">
-                    Não há dados de análise para o período selecionado.<br>
-                    Tente ajustar os filtros ou verificar se existem questionários ativos.
-                </p>
-                <div class="d-flex justify-content-center gap-2">
-                    <button type="button" class="btn btn-outline-primary" onclick="resetFilters();">
-                        <i class="fas fa-refresh me-1"></i>
-                        Limpar Filtros
-                    </button>
-                    <a href="<?= base_url('questionnaires') ?>" class="btn btn-primary">
-                        <i class="fas fa-plus me-1"></i>
-                        Criar Questionário
-                    </a>
+            <div style="height: 300px; background: #f8f9fa; display: flex; align-items: center; justify-content: center;">
+                <div class="text-center">
+                    <i class="fas fa-map fa-3x text-muted mb-3"></i>
+                    <h6 class="text-muted mb-2">Nenhuma localização encontrada</h6>
+                    <p class="text-muted mb-0 small">
+                        Colete dados com GPS ativado para visualizar o mapa de calor
+                    </p>
                 </div>
             </div>
         <?php endif; ?>
@@ -486,52 +434,10 @@
     margin: 0;
 }
 
+/* Estilos para o mapa Leaflet */
 #heatmap {
     border-radius: 0;
     border: none;
-}
-
-/* Marcadores personalizados */
-.custom-marker {
-    background: transparent;
-    border: none;
-}
-
-.marker-pin {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #8fae5d;
-    border-radius: 50% 50% 50% 0;
-    position: relative;
-    transform: rotate(-45deg);
-    border: 3px solid #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-.marker-pin i {
-    color: white;
-    font-size: 14px;
-    transform: rotate(45deg);
-}
-
-/* Popups do Leaflet */
-.leaflet-popup-content-wrapper {
-    border-radius: 8px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-}
-
-.leaflet-popup-content {
-    margin: 12px !important;
-}
-
-/* Badge customizado para popups */
-.badge {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.5rem;
-    margin-right: 0.25rem;
 }
 
 /* Controles do mapa */
@@ -544,15 +450,40 @@
     background-color: #7a9851 !important;
 }
 
+/* Tooltip personalizado para informações do heatmap */
+.heatmap-info {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    font-size: 12px;
+    max-width: 200px;
+}
+
+/* Legenda do heatmap */
+.heatmap-legend {
+    background: linear-gradient(to right, 
+        rgba(0, 0, 255, 0.5) 0%, 
+        rgba(0, 255, 255, 0.7) 25%, 
+        rgba(0, 255, 0, 0.8) 50%, 
+        rgba(255, 255, 0, 0.9) 75%, 
+        rgba(255, 0, 0, 1.0) 100%);
+    height: 10px;
+    width: 100px;
+    border: 1px solid #ccc;
+    margin: 5px 0;
+}
+
 /* Responsividade */
 @media (max-width: 768px) {
-    .marker-pin {
-        width: 25px;
-        height: 25px;
-    }
-    
-    .marker-pin i {
-        font-size: 12px;
+    .heatmap-info {
+        bottom: 10px;
+        left: 10px;
+        font-size: 11px;
+        max-width: 150px;
     }
 }
 </style>
@@ -660,14 +591,12 @@ new Chart(questionnairesCtx, {
 });
 <?php endif; ?>
 
-
 // Dados do mapa de calor vindos do PHP
 const heatmapData = <?= json_encode($heatmap_locations ?? ['points' => [], 'stats' => []]) ?>;
 
 let map;
 let heatLayer;
-let markersLayer;
-let isHeatmapView = true;
+let currentIntensity = 'high';
 
 function initLeafletMap() {
     <?php if (!empty($heatmap_locations['points'])): ?>
@@ -687,77 +616,28 @@ function initLeafletMap() {
         maxZoom: 18
     }).addTo(map);
     
-    // Preparar dados para o heatmap
+    // Preparar dados para o heatmap com intensidade baseada na densidade
     const heatPoints = heatmapData.points.map(point => [
         point.lat, 
         point.lng, 
-        0.8 // Intensidade
+        1.0 // Intensidade máxima para cada ponto
     ]);
     
-    // Criar camada de heatmap
+    // Criar camada de heatmap com configurações melhoradas
     heatLayer = L.heatLayer(heatPoints, {
-        radius: 25,
-        blur: 15,
+        radius: 40,
+        blur: 25,
         maxZoom: 17,
+        max: 1.0,
         gradient: {
-            0.0: '#3182bd',
-            0.2: '#6baed6', 
-            0.4: '#9ecae1',
-            0.6: '#c6dbef',
-            0.8: '#fd8d3c',
-            1.0: '#e6550d'
+            0.0: 'rgba(0, 0, 255, 0)',
+            0.2: 'rgba(0, 0, 255, 0.5)',
+            0.4: 'rgba(0, 255, 255, 0.7)',
+            0.6: 'rgba(0, 255, 0, 0.8)',
+            0.8: 'rgba(255, 255, 0, 0.9)',
+            1.0: 'rgba(255, 0, 0, 1.0)'
         }
     }).addTo(map);
-    
-    // Criar camada de marcadores
-    markersLayer = L.layerGroup();
-    
-    // Adicionar marcadores
-    heatmapData.points.forEach((point, index) => {
-        // Criar ícone personalizado
-        const customIcon = L.divIcon({
-            className: 'custom-marker',
-            html: `<div class="marker-pin">
-                      <i class="fas fa-map-marker-alt"></i>
-                   </div>`,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
-        
-        const marker = L.marker([point.lat, point.lng], { icon: customIcon });
-        
-        // Popup com informações
-        const popupContent = `
-            <div style="max-width: 250px;">
-                <h6 class="mb-2"><strong>Resposta #${point.info.id}</strong></h6>
-                <p class="mb-1"><strong>Questionário:</strong> ${point.info.questionnaire_title || 'N/A'}</p>
-                <p class="mb-1"><strong>Aplicador:</strong> ${point.info.applied_by_name || 'N/A'}</p>
-                ${point.info.respondent_name ? `<p class="mb-1"><strong>Respondente:</strong> ${point.info.respondent_name}</p>` : ''}
-                ${point.info.location_name ? `<p class="mb-1"><strong>Local:</strong> ${point.info.location_name}</p>` : ''}
-                <p class="mb-1"><strong>Data:</strong> ${new Date(point.info.completed_at).toLocaleDateString('pt-BR')}</p>
-                <div class="d-flex gap-1 mt-2">
-                    <span class="badge ${point.info.consent_given ? 'bg-success' : 'bg-warning'}" style="font-size: 0.7rem;">
-                        ${point.info.consent_given ? 'Com consentimento' : 'Sem consentimento'}
-                    </span>
-                    ${point.info.has_photo ? '<span class="badge bg-info" style="font-size: 0.7rem;">Com foto</span>' : ''}
-                </div>
-            </div>
-        `;
-        
-        marker.bindPopup(popupContent);
-        markersLayer.addLayer(marker);
-    });
-    
-    // Ajustar zoom para mostrar todos os pontos
-    <?php if ($heatmap_locations['stats']['bounds']): ?>
-    const bounds = L.latLngBounds([
-        [<?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>, 
-         <?= $heatmap_locations['stats']['bounds']['southwest']['lng'] ?>],
-        [<?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>, 
-         <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>]
-    ]);
-    map.fitBounds(bounds, { padding: [20, 20] });
-    <?php endif; ?>
     
     <?php else: ?>
     // Sem dados - mostrar mapa padrão do Brasil
@@ -769,24 +649,79 @@ function initLeafletMap() {
     <?php endif; ?>
 }
 
-function toggleHeatmapView() {
+function toggleHeatmapIntensity() {
     if (!map || !heatmapData.points.length) return;
     
-    const button = document.getElementById('heatmapToggle');
+    const button = document.getElementById('intensityToggle');
     
-    if (isHeatmapView) {
-        // Mostrar marcadores
-        map.removeLayer(heatLayer);
-        map.addLayer(markersLayer);
-        button.innerHTML = '<i class="fas fa-fire me-1"></i>Calor';
-        isHeatmapView = false;
+    // Remover layer atual
+    map.removeLayer(heatLayer);
+    
+    // Preparar dados com nova intensidade
+    let heatPoints;
+    
+    if (currentIntensity === 'high') {
+        // Intensidade média
+        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 0.6]);
+        heatLayer = L.heatLayer(heatPoints, {
+            radius: 30,
+            blur: 20,
+            maxZoom: 17,
+            max: 0.8,
+            gradient: {
+                0.0: 'rgba(0, 0, 255, 0)',
+                0.3: 'rgba(0, 0, 255, 0.3)',
+                0.5: 'rgba(0, 255, 255, 0.5)',
+                0.7: 'rgba(0, 255, 0, 0.6)',
+                0.9: 'rgba(255, 255, 0, 0.7)',
+                1.0: 'rgba(255, 0, 0, 0.8)'
+            }
+        });
+        button.innerHTML = '<i class="fas fa-adjust me-1"></i>Média';
+        currentIntensity = 'medium';
+        
+    } else if (currentIntensity === 'medium') {
+        // Intensidade baixa
+        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 0.3]);
+        heatLayer = L.heatLayer(heatPoints, {
+            radius: 20,
+            blur: 15,
+            maxZoom: 17,
+            max: 0.5,
+            gradient: {
+                0.0: 'rgba(0, 0, 255, 0)',
+                0.4: 'rgba(0, 0, 255, 0.2)',
+                0.6: 'rgba(0, 255, 255, 0.3)',
+                0.8: 'rgba(0, 255, 0, 0.4)',
+                1.0: 'rgba(255, 255, 0, 0.5)'
+            }
+        });
+        button.innerHTML = '<i class="fas fa-adjust me-1"></i>Baixa';
+        currentIntensity = 'low';
+        
     } else {
-        // Mostrar heatmap
-        map.removeLayer(markersLayer);
-        map.addLayer(heatLayer);
-        button.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i>Pontos';
-        isHeatmapView = true;
+        // Volta para intensidade alta
+        heatPoints = heatmapData.points.map(point => [point.lat, point.lng, 1.0]);
+        heatLayer = L.heatLayer(heatPoints, {
+            radius: 40,
+            blur: 25,
+            maxZoom: 17,
+            max: 1.0,
+            gradient: {
+                0.0: 'rgba(0, 0, 255, 0)',
+                0.2: 'rgba(0, 0, 255, 0.5)',
+                0.4: 'rgba(0, 255, 255, 0.7)',
+                0.6: 'rgba(0, 255, 0, 0.8)',
+                0.8: 'rgba(255, 255, 0, 0.9)',
+                1.0: 'rgba(255, 0, 0, 1.0)'
+            }
+        });
+        button.innerHTML = '<i class="fas fa-adjust me-1"></i>Alta';
+        currentIntensity = 'high';
     }
+    
+    // Adicionar nova layer
+    heatLayer.addTo(map);
 }
 
 // Inicializar mapa quando a página carregar
