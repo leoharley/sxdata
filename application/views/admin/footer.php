@@ -34,5 +34,10 @@
             $('.alert').fadeOut();
         }, 5000);
     </script>
+
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBp9hhgqNRp44-hENHV55IEwktaK-a4Tk8&libraries=visualization&callback=initMap">
+    </script>
+
 </body>
 </html>

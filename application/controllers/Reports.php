@@ -29,6 +29,9 @@ class Reports extends CI_Controller {
         $data['charts_data'] = $this->get_charts_data($filters);
         $data['detailed_analysis'] = $this->get_detailed_analysis($filters);
         
+        // NOVO: Obter dados de localização para o mapa de calor
+        $data['heatmap_locations'] = $this->get_heatmap_data($filters);
+        
         $this->load->view('admin/header', $data);
         $this->load->view('admin/reports/index', $data);
         $this->load->view('admin/footer');
@@ -58,6 +61,95 @@ class Reports extends CI_Controller {
         }
         
         $this->kmz_generator->generate($responses, $title);
+    }
+
+    /**
+     * NOVO MÉTODO: Obter dados de localização para o mapa de calor
+     */
+    private function get_heatmap_data($filters) {
+        // Usar o método get_with_location para obter respostas com localização
+        $responses_with_location = $this->Response_model->get_with_location($filters);
+        
+        $heatmap_data = array();
+        
+        foreach ($responses_with_location as $response) {
+            // Preparar dados para o Google Maps Heatmap
+            $heatmap_data[] = array(
+                'lat' => (float) $response->latitude,
+                'lng' => (float) $response->longitude,
+                'weight' => 1, // Peso padrão, pode ser ajustado baseado em critérios
+                'info' => array(
+                    'id' => $response->id,
+                    'questionnaire_title' => $response->questionnaire_title,
+                    'applied_by_name' => $response->applied_by_name,
+                    'respondent_name' => $response->respondent_name,
+                    'location_name' => $response->location_name,
+                    'completed_at' => $response->completed_at,
+                    'consent_given' => $response->consent_given,
+                    'has_photo' => !empty($response->photo_path)
+                )
+            );
+        }
+        
+        // Calcular estatísticas do mapa de calor
+        $heatmap_stats = array(
+            'total_locations' => count($heatmap_data),
+            'center' => $this->calculate_map_center($heatmap_data),
+            'bounds' => $this->calculate_map_bounds($heatmap_data)
+        );
+        
+        return array(
+            'points' => $heatmap_data,
+            'stats' => $heatmap_stats
+        );
+    }
+
+    /**
+     * Calcular o centro do mapa baseado nas localizações
+     */
+    private function calculate_map_center($locations) {
+        if (empty($locations)) {
+            // Centro padrão (Brasil)
+            return array('lat' => -15.7942, 'lng' => -47.8822);
+        }
+        
+        $total_lat = 0;
+        $total_lng = 0;
+        $count = count($locations);
+        
+        foreach ($locations as $location) {
+            $total_lat += $location['lat'];
+            $total_lng += $location['lng'];
+        }
+        
+        return array(
+            'lat' => $total_lat / $count,
+            'lng' => $total_lng / $count
+        );
+    }
+
+    /**
+     * Calcular os limites do mapa baseado nas localizações
+     */
+    private function calculate_map_bounds($locations) {
+        if (empty($locations)) {
+            return null;
+        }
+        
+        $min_lat = $max_lat = $locations[0]['lat'];
+        $min_lng = $max_lng = $locations[0]['lng'];
+        
+        foreach ($locations as $location) {
+            $min_lat = min($min_lat, $location['lat']);
+            $max_lat = max($max_lat, $location['lat']);
+            $min_lng = min($min_lng, $location['lng']);
+            $max_lng = max($max_lng, $location['lng']);
+        }
+        
+        return array(
+            'southwest' => array('lat' => $min_lat, 'lng' => $min_lng),
+            'northeast' => array('lat' => $max_lat, 'lng' => $max_lng)
+        );
     }
 
     private function get_filters() {
@@ -121,3 +213,4 @@ class Reports extends CI_Controller {
         }
     }
 }
+?>

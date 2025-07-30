@@ -200,19 +200,67 @@
         </div>
         
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Mapa de Calor - Localizações</h5>
-            </div>
-            <div class="card-body">
-                <div id="heatmap" style="height: 200px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                    <div class="text-center">
-                        <i class="fas fa-map fa-2x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">Mapa de calor das coletas</p>
-                        <small class="text-muted">Requer integração com Google Maps</small>
-                    </div>
+                <div>
+                    <span class="badge bg-info me-2">
+                        <i class="fas fa-map-marker-alt me-1"></i>
+                        <?= isset($heatmap_locations['stats']['total_locations']) ? $heatmap_locations['stats']['total_locations'] : 0 ?> locais
+                    </span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleHeatmapView()" id="heatmapToggle">
+                        <i class="fas fa-layer-group me-1"></i>
+                        Calor
+                    </button>
                 </div>
             </div>
+            <div class="card-body p-0">
+                <?php if (!empty($heatmap_locations['points'])): ?>
+                    <div id="heatmap" style="height: 300px; width: 100%;"></div>
+                    
+                    <!-- Informações do mapa -->
+                    <div class="p-3 border-top bg-light">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <small class="text-muted d-block">Total de Pontos</small>
+                                <strong class="text-primary"><?= count($heatmap_locations['points']) ?></strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Centro do Mapa</small>
+                                <strong class="text-success">
+                                    <?= number_format($heatmap_locations['stats']['center']['lat'], 4) ?>,
+                                    <?= number_format($heatmap_locations['stats']['center']['lng'], 4) ?>
+                                </strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Área Coberta</small>
+                                <strong class="text-info">
+                                    <?php if ($heatmap_locations['stats']['bounds']): ?>
+                                        <?= number_format(
+                                            abs($heatmap_locations['stats']['bounds']['northeast']['lat'] - 
+                                                $heatmap_locations['stats']['bounds']['southwest']['lat']), 2
+                                        ) ?>°
+                                    <?php else: ?>
+                                        N/A
+                                    <?php endif; ?>
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div style="height: 300px; background: #f8f9fa; display: flex; align-items: center; justify-content: center;">
+                        <div class="text-center">
+                            <i class="fas fa-map fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted mb-2">Nenhuma localização encontrada</h6>
+                            <p class="text-muted mb-0 small">
+                                Colete dados com GPS ativado para visualizar o mapa de calor
+                            </p>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
+
+
     </div>
 </div>
 
@@ -437,6 +485,30 @@
     font-size: 0.9rem;
     margin: 0;
 }
+
+#heatmap {
+    border-radius: 0;
+    border: none;
+}
+
+.gm-style-iw {
+    max-width: 300px !important;
+}
+
+.gm-style-iw-c {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.gm-style-iw-t::after {
+    background: white !important;
+}
+
+/* Badge customizado */
+.badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+}
 </style>
 
 <script>
@@ -541,4 +613,171 @@ new Chart(questionnairesCtx, {
     }
 });
 <?php endif; ?>
+
+
+const heatmapData = <?= json_encode($heatmap_locations ?? ['points' => [], 'stats' => []]) ?>;
+
+let map;
+let heatmap;
+let markers = [];
+let isHeatmapView = true;
+
+function initMap() {
+    <?php if (!empty($heatmap_locations['points'])): ?>
+    
+    // Configurar o centro do mapa
+    const mapCenter = {
+        lat: <?= $heatmap_locations['stats']['center']['lat'] ?>,
+        lng: <?= $heatmap_locations['stats']['center']['lng'] ?>
+    };
+    
+    // Criar o mapa
+    map = new google.maps.Map(document.getElementById("heatmap"), {
+        zoom: 10,
+        center: mapCenter,
+        mapTypeId: "roadmap",
+        styles: [
+            {
+                featureType: "all",
+                elementType: "geometry.fill",
+                stylers: [{ saturation: -15 }, { lightness: 10 }]
+            }
+        ]
+    });
+    
+    // Preparar dados para o heatmap
+    const heatmapPoints = heatmapData.points.map(point => 
+        new google.maps.LatLng(point.lat, point.lng)
+    );
+    
+    // Criar o heatmap
+    heatmap = new google.maps.visualization.HeatmapLayer({
+        data: heatmapPoints,
+        map: map,
+        radius: 50,
+        opacity: 0.8,
+        gradient: [
+            'rgba(0, 255, 255, 0)',
+            'rgba(0, 255, 255, 1)',
+            'rgba(0, 191, 255, 1)',
+            'rgba(0, 127, 255, 1)',
+            'rgba(0, 63, 255, 1)',
+            'rgba(0, 0, 255, 1)',
+            'rgba(0, 0, 223, 1)',
+            'rgba(0, 0, 191, 1)',
+            'rgba(0, 0, 159, 1)',
+            'rgba(0, 0, 127, 1)',
+            'rgba(63, 0, 91, 1)',
+            'rgba(127, 0, 63, 1)',
+            'rgba(191, 0, 31, 1)',
+            'rgba(255, 0, 0, 1)'
+        ]
+    });
+    
+    // Criar marcadores (inicialmente ocultos)
+    heatmapData.points.forEach((point, index) => {
+        const marker = new google.maps.Marker({
+            position: { lat: point.lat, lng: point.lng },
+            map: null, // Inicialmente oculto
+            title: `Resposta #${point.info.id}`,
+            icon: {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="8" fill="#8fae5d" stroke="white" stroke-width="2"/>
+                        <circle cx="12" cy="12" r="3" fill="white"/>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(24, 24),
+                anchor: new google.maps.Point(12, 12)
+            }
+        });
+        
+        // Info window para o marcador
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="max-width: 250px;">
+                    <h6 class="mb-2"><strong>Resposta #${point.info.id}</strong></h6>
+                    <p class="mb-1"><strong>Questionário:</strong> ${point.info.questionnaire_title || 'N/A'}</p>
+                    <p class="mb-1"><strong>Aplicador:</strong> ${point.info.applied_by_name || 'N/A'}</p>
+                    ${point.info.respondent_name ? `<p class="mb-1"><strong>Respondente:</strong> ${point.info.respondent_name}</p>` : ''}
+                    ${point.info.location_name ? `<p class="mb-1"><strong>Local:</strong> ${point.info.location_name}</p>` : ''}
+                    <p class="mb-1"><strong>Data:</strong> ${new Date(point.info.completed_at).toLocaleDateString('pt-BR')}</p>
+                    <div class="d-flex gap-2 mt-2">
+                        <span class="badge ${point.info.consent_given ? 'bg-success' : 'bg-warning'}">
+                            ${point.info.consent_given ? 'Com consentimento' : 'Sem consentimento'}
+                        </span>
+                        ${point.info.has_photo ? '<span class="badge bg-info">Com foto</span>' : ''}
+                    </div>
+                </div>
+            `
+        });
+        
+        marker.addListener('click', () => {
+            // Fechar outras info windows
+            markers.forEach(m => {
+                if (m.infoWindow) m.infoWindow.close();
+            });
+            infoWindow.open(map, marker);
+        });
+        
+        marker.infoWindow = infoWindow;
+        markers.push(marker);
+    });
+    
+    // Ajustar zoom automaticamente se houver bounds
+    <?php if ($heatmap_locations['stats']['bounds']): ?>
+    const bounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(
+            <?= $heatmap_locations['stats']['bounds']['southwest']['lat'] ?>,
+            <?= $heatmap_locations['stats']['bounds']['southwest']['lng'] ?>
+        ),
+        new google.maps.LatLng(
+            <?= $heatmap_locations['stats']['bounds']['northeast']['lat'] ?>,
+            <?= $heatmap_locations['stats']['bounds']['northeast']['lng'] ?>
+        )
+    );
+    map.fitBounds(bounds);
+    <?php endif; ?>
+    
+    <?php else: ?>
+    // Sem dados - mostrar mapa padrão do Brasil
+    map = new google.maps.Map(document.getElementById("heatmap"), {
+        zoom: 4,
+        center: { lat: -15.7942, lng: -47.8822 },
+        mapTypeId: "roadmap"
+    });
+    <?php endif; ?>
+}
+
+function toggleHeatmapView() {
+    if (!map || !heatmapData.points.length) return;
+    
+    const button = document.getElementById('heatmapToggle');
+    
+    if (isHeatmapView) {
+        // Mostrar marcadores
+        heatmap.setMap(null);
+        markers.forEach(marker => marker.setMap(map));
+        button.innerHTML = '<i class="fas fa-fire me-1"></i>Calor';
+        isHeatmapView = false;
+    } else {
+        // Mostrar heatmap
+        markers.forEach(marker => {
+            marker.setMap(null);
+            if (marker.infoWindow) marker.infoWindow.close();
+        });
+        heatmap.setMap(map);
+        button.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i>Pontos';
+        isHeatmapView = true;
+    }
+}
+
+// Inicializar mapa quando a página carregar
+window.addEventListener('load', () => {
+    // Verificar se o Google Maps está carregado
+    if (typeof google !== 'undefined' && google.maps) {
+        initMap();
+    }
+});
+
 </script>
