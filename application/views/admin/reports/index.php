@@ -611,9 +611,9 @@ function initLeafletMap() {
     map = L.map('heatmap').setView(mapCenter, 10);
     
     // Adicionar camada do OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 18
+    L.tileLayer('', {
+        attribution: '',
+        maxZoom: 12
     }).addTo(map);
     
     // Preparar dados para o heatmap com intensidade máxima
@@ -645,8 +645,8 @@ function initLeafletMap() {
     // Sem dados - mostrar mapa padrão do Brasil
     map = L.map('heatmap').setView([-15.7942, -47.8822], 4);
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    L.tileLayer('', {
+        attribution: ''
     }).addTo(map);
     <?php endif; ?>
 }
