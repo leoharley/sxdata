@@ -63,7 +63,7 @@
                 </div>
                 
                 <div class="col-md-2">
-                    <label class="form-label">Status Sync</label>
+                    <label class="form-label">Status de Sincronização</label>
                     <select class="form-select" name="sync_status">
                         <option value="">Todos</option>
                         <option value="synced" <?= set_select('sync_status', 'synced', 
