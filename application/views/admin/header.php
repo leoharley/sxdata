@@ -198,6 +198,9 @@
                 margin-left: 0;
             }
         }
+        .leaflet-control-attribution .leaflet-control {
+            display: none!important;
+        }
     </style>
 </head>
 <body>
