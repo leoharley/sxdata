@@ -624,7 +624,7 @@ function initLeafletMap() {
     
     // Adicionar camada do OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        attribution: '',
         maxZoom: 18
     }).addTo(map);
     
@@ -658,7 +658,7 @@ function initLeafletMap() {
     map = L.map('heatmap').setView([-14.2350, -51.9253], 4);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        attribution: ''
     }).addTo(map);
     
     // Definir bounds do Brasil para mostrar todo o país
