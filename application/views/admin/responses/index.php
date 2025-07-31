@@ -214,7 +214,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="photoImage" src="" class="img-fluid" alt="Foto capturada">
+                <img id="photoImage" src="" class="img-fluid" alt="Foto capturada" style="70vh">
             </div>
         </div>
     </div>
