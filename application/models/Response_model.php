@@ -481,24 +481,26 @@ class Response_model extends CI_Model {
     }
 
     public function get_detailed_analysis($filters = array()) {
-        $analysis = array();
-        
-        // Estatísticas básicas
-        $analysis['total_responses'] = $this->count_by_filters($filters);
-        $analysis['unique_respondents'] = $this->count_unique_respondents($filters);
-        $analysis['responses_with_photos'] = $this->count_photos($filters);
-        $analysis['responses_with_location'] = $this->count_locations($filters);
-        $analysis['consent_rate'] = $this->get_consent_rate($filters);
-        
-        // Estatísticas por status de sincronização
-        $this->db->select('sync_status, COUNT(*) as count');
-        $this->db->from('form_responses fr');
-        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        // Em vez de retornar um array simples, vamos retornar dados por questionário
+        $this->db->select("
+            q.id as questionnaire_id,
+            q.title as questionnaire_title,
+            COUNT(fr.id) as total_responses,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' THEN 1 END) as photos_count,
+            COUNT(CASE WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL THEN 1 END) as locations_count,
+            AVG(CASE WHEN fr.completed_at IS NOT NULL AND fr.started_at IS NOT NULL 
+                THEN EXTRACT(EPOCH FROM (fr.completed_at - fr.started_at))/60 END) as avg_time,
+            COUNT(CASE WHEN fr.completed_at IS NOT NULL THEN 1 END) as completed_responses
+        ");
+        $this->db->from('questionnaires q');
+        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
         
         // Aplicar filtros
+        $this->db->where('q.status', 'active'); // Apenas questionários ativos
+        
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
-            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+            $this->db->where('q.id', $filters['questionnaire_id']);
         }
         
         if (isset($filters['applied_by']) && $filters['applied_by']) {
@@ -517,34 +519,46 @@ class Response_model extends CI_Model {
             $this->db->where('fr.sync_status', $filters['sync_status']);
         }
         
-        $this->db->group_by('sync_status');
-        $sync_stats = $this->db->get()->result();
+        $this->db->group_by('q.id, q.title');
+        $this->db->having('COUNT(fr.id) >', 0); // Apenas questionários com respostas
+        $this->db->order_by('COUNT(fr.id)', 'DESC');
         
-        $analysis['sync_stats'] = array();
-        foreach ($sync_stats as $stat) {
-            $analysis['sync_stats'][$stat->sync_status] = $stat->count;
+        $questionnaire_analysis = $this->db->get()->result();
+        
+        // Calcular métricas adicionais para cada questionário
+        foreach ($questionnaire_analysis as $analysis) {
+            // Calcular média por dia (assumindo período de 30 dias se não especificado)
+            $days_in_period = 30;
+            if (isset($filters['date_from']) && isset($filters['date_to'])) {
+                $date_from = new DateTime($filters['date_from']);
+                $date_to = new DateTime($filters['date_to']);
+                $days_in_period = max(1, $date_to->diff($date_from)->days);
+            } elseif (isset($filters['period'])) {
+                switch ($filters['period']) {
+                    case 'last_7_days':
+                        $days_in_period = 7;
+                        break;
+                    case 'last_30_days':
+                        $days_in_period = 30;
+                        break;
+                    case 'last_3_months':
+                        $days_in_period = 90;
+                        break;
+                }
+            }
+            
+            $analysis->avg_per_day = round($analysis->total_responses / $days_in_period, 1);
+            
+            // Taxa de conclusão (assumindo que nem todas as respostas foram concluídas)
+            $analysis->completion_rate = $analysis->total_responses > 0 
+                ? round(($analysis->completed_responses / $analysis->total_responses) * 100, 1)
+                : 0;
+            
+            // Formatar tempo médio
+            $analysis->avg_time = $analysis->avg_time ? round($analysis->avg_time, 1) : 0;
         }
         
-        // Top 5 aplicadores
-        $analysis['top_applicators'] = $this->get_top_applicators($filters, 5);
-        
-        // Top 5 questionários
-        $analysis['top_questionnaires'] = $this->get_questionnaires_popularity($filters, 5);
-        
-        // Dados dos últimos 7 dias
-        $analysis['daily_responses'] = $this->get_responses_by_day_filtered($filters, 7);
-        $analysis['questionnaire_title'] = $this->get_filtered($filters);
-        
-        // Porcentagens calculadas
-        if ($analysis['total_responses'] > 0) {
-            $analysis['photo_percentage'] = round(($analysis['responses_with_photos'] / $analysis['total_responses']) * 100, 2);
-            $analysis['location_percentage'] = round(($analysis['responses_with_location'] / $analysis['total_responses']) * 100, 2);
-        } else {
-            $analysis['photo_percentage'] = 0;
-            $analysis['location_percentage'] = 0;
-        }
-       
-        return $analysis;
+        return $questionnaire_analysis;
     }
 
     public function get_sync_status_stats() {
