@@ -242,7 +242,7 @@
             <li class="nav-item">
                 <a class="nav-link <?= $this->uri->segment(1) == 'reports' ? 'active' : '' ?>" href="<?= base_url('reports') ?>">
                     <i class="fas fa-file-alt"></i>
-                    Relatórios
+                    Relatórios e Análises
                 </a>
             </li>
             <li class="nav-item">
