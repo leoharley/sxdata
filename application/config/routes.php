@@ -29,6 +29,6 @@ $route['api/forms/submit'] = 'api/forms/submit';
 $route['api/photos/upload'] = 'api/photos/upload';
 
 // Rotas para API de Estatísticas
-$route['api/stats/user/(:num)'] = 'stats/user/$1';
-$route['api/stats/user'] = 'stats/user';
-$route['api/stats/overview'] = 'stats/overview';
+$route['api/stats/user/(:num)'] = 'api/stats/user/$1';
+$route['api/stats/user'] = 'api/stats/user';
+$route['api/stats/overview'] = 'api/stats/overview';
