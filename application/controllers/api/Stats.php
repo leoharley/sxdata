@@ -23,34 +23,100 @@ class Stats extends CI_Controller {
      * Retorna estatísticas específicas de um usuário aplicador
      */
     public function user($user_id = null) {
-        if ($this->input->method() !== 'get') {
-            $this->output->set_status_header(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
-        }
+    if ($this->input->method() !== 'get') {
+        $this->output->set_status_header(405);
+        echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+        return;
+    }
 
-        // Verificar autenticação
-        $authenticated_user = $this->verify_auth();
-        if (!$authenticated_user) {
-            return;
-        }
+    // Verificar autenticação
+    $authenticated_user = $this->verify_auth();
+    if (!$authenticated_user) {
+        return;
+    }
 
-        // Se não foi especificado user_id, usar o do token
-        if (!$user_id) {
-            $user_id = $authenticated_user;
-        }
+    // Se não foi especificado user_id, usar o do token
+    if (!$user_id) {
+        $user_id = $authenticated_user;
+    }
 
-        // Verificar se o usuário pode acessar essas estatísticas
-        if ($authenticated_user != $user_id && !$this->Response_model->is_supervisor_or_admin($authenticated_user)) {
-            $this->output->set_status_header(403);
-            echo json_encode(['success' => false, 'message' => 'Access denied']);
-            return;
-        }
+    // CORREÇÃO: Administradores podem ver dados agregados de todos os aplicadores
+    $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
+    
+    // Verificar se o usuário pode acessar essas estatísticas
+    if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
+        $this->output->set_status_header(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied']);
+        return;
+    }
 
-        try {
+    try {
+        // CORREÇÃO: Para administradores, mostrar dados agregados se não especificar user_id
+        if ($is_admin_or_supervisor && !$this->input->get('user_id')) {
+            // Dados agregados para administradores/supervisores
+            $filters = [];
+            
+            $total_forms = $this->Response_model->count_by_filters($filters);
+            $today_forms = $this->Response_model->count_by_filters([
+                'date_from' => date('Y-m-d'),
+                'date_to' => date('Y-m-d')
+            ]);
+            $pending_sync = $this->Response_model->count_by_filters([
+                'sync_status' => 'pending'
+            ]);
+            $photos_captured = $this->Response_model->count_photos($filters);
+            
+            // Taxa de sucesso geral
+            $synced_forms = $this->Response_model->count_by_filters([
+                'sync_status' => 'synced'
+            ]);
+            $success_rate = $total_forms > 0 ? round(($synced_forms / $total_forms) * 100) : 100;
+            
+            // Dados agregados de todos os aplicadores
+            $total_applicators = $this->Response_model->count_applicators('active');
+            $active_days = $this->get_system_active_days(30);
+            
+            // Atividade recente de todo o sistema
+            $recent_activity = $this->format_system_recent_activity(
+                $this->Response_model->get_recent(10)
+            );
+            
+            // Estatísticas de período do sistema
+            $weekly_stats = $this->get_system_period_stats(7);
+            $monthly_stats = $this->get_system_period_stats(30);
+            
+            // Top questionários do sistema
+            $top_questionnaires = $this->format_top_questionnaires(
+                $this->Response_model->get_questionnaires_popularity([], 5)
+            );
+
+            $stats = [
+                'user_id' => (int)$authenticated_user,
+                'user_type' => 'admin_aggregated',
+                'summary' => [
+                    'total_forms' => (int)$total_forms,
+                    'today_forms' => (int)$today_forms,
+                    'pending_sync' => (int)$pending_sync,
+                    'success_rate' => (int)$success_rate,
+                    'active_days' => (int)$active_days,
+                    'photos_captured' => (int)$photos_captured
+                ],
+                'recent_activity' => $recent_activity,
+                'period_stats' => [
+                    'weekly' => $weekly_stats,
+                    'monthly' => $monthly_stats
+                ],
+                'top_questionnaires' => $top_questionnaires,
+                'system_info' => [
+                    'total_applicators' => (int)$total_applicators,
+                    'data_source' => 'aggregated_from_all_applicators'
+                ],
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+        } else {
+            // Dados específicos de um usuário (comportamento original)
             $filters = ['applied_by' => $user_id];
             
-            // Estatísticas básicas usando métodos do model
             $total_forms = $this->Response_model->count_by_filters($filters);
             $today_forms = $this->Response_model->count_by_filters(array_merge($filters, [
                 'date_from' => date('Y-m-d'),
@@ -80,6 +146,7 @@ class Stats extends CI_Controller {
 
             $stats = [
                 'user_id' => (int)$user_id,
+                'user_type' => 'individual',
                 'summary' => [
                     'total_forms' => (int)$total_forms,
                     'today_forms' => (int)$today_forms,
@@ -96,20 +163,21 @@ class Stats extends CI_Controller {
                 'top_questionnaires' => $top_questionnaires,
                 'updated_at' => date('Y-m-d H:i:s')
             ];
-
-            echo json_encode([
-                'success' => true,
-                'data' => $stats
-            ]);
-
-        } catch (Exception $e) {
-            $this->output->set_status_header(500);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Failed to get user stats: ' . $e->getMessage()
-            ]);
         }
+
+        echo json_encode([
+            'success' => true,
+            'data' => $stats
+        ]);
+
+    } catch (Exception $e) {
+        $this->output->set_status_header(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to get user stats: ' . $e->getMessage()
+        ]);
     }
+}
 
     /**
      * GET /api/stats/overview
@@ -484,4 +552,66 @@ class Stats extends CI_Controller {
         if (!$full) $string = array_slice($string, 0, 1);
         return $string ? implode(', ', $string) . ' atrás' : 'agora mesmo';
     }
+
+
+    /**
+     * Obter dias ativos do sistema (todos os aplicadores)
+     */
+    private function get_system_active_days($days = 30) {
+        $this->db->select('COUNT(DISTINCT DATE(completed_at)) as active_days');
+        $this->db->from('form_responses');
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        
+        $result = $this->db->get()->row();
+        return $result ? $result->active_days : 0;
+    }
+
+    /**
+     * Obter estatísticas de período do sistema
+     */
+    private function get_system_period_stats($days) {
+        $filters = [
+            'date_from' => date('Y-m-d', strtotime("-{$days} days")),
+            'date_to' => date('Y-m-d')
+        ];
+        
+        $total = $this->Response_model->count_by_filters($filters);
+        $photos = $this->Response_model->count_photos($filters);
+        $locations = $this->Response_model->count_locations($filters);
+        $avg_per_day = $days > 0 ? round($total / $days, 1) : 0;
+        
+        return [
+            'total_forms' => (int)$total,
+            'photos_captured' => (int)$photos,
+            'locations_captured' => (int)$locations,
+            'avg_per_day' => (float)$avg_per_day,
+            'period_days' => (int)$days
+        ];
+    }
+
+    /**
+     * Formatar atividade recente do sistema
+     */
+    private function format_system_recent_activity($activities) {
+        $formatted_activities = [];
+        
+        foreach ($activities as $activity) {
+            $time_diff = $this->time_elapsed_string($activity->completed_at);
+            
+            $formatted_activities[] = [
+                'id' => (int)$activity->id,
+                'action' => 'Formulário aplicado',
+                'description' => $activity->questionnaire_title,
+                'time' => $time_diff,
+                'sync_status' => $activity->sync_status,
+                'applicator_name' => $activity->applied_by_name,
+                'respondent_name' => $activity->respondent_name
+            ];
+        }
+        
+        return $formatted_activities;
+    }
+
+
 }

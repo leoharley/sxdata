@@ -922,7 +922,60 @@ class Response_model extends CI_Model {
         $this->db->where('id', $user_id);
         $user = $this->db->get('users')->row();
         
-        return $user && in_array($user->role, array('supervisor', 'administrador', 'admin'));
+        if (!$user) {
+            return false;
+        }
+        
+        // Lista completa de roles que têm permissões administrativas
+        $admin_roles = array(
+            'supervisor', 
+            'administrador', 
+            'admin', 
+            'administrator',
+            'gestor',
+            'manager'
+        );
+        
+        return in_array(strtolower($user->role), $admin_roles);
+    }
+
+    /**
+     * Obter informações do usuário
+     */
+    public function get_user_info($user_id) {
+        $this->db->select('id, username, full_name, role, is_active');
+        $this->db->where('id', $user_id);
+        return $this->db->get('users')->row();
+    }
+
+    /**
+     * Obter dados agregados para administradores
+     * Este método retorna estatísticas de todo o sistema
+     */
+    public function get_admin_aggregated_stats() {
+        // Total de formulários de todos os aplicadores
+        $total_forms = $this->count_all();
+        
+        // Formulários hoje
+        $today_forms = $this->count_today();
+        
+        // Pendentes de sincronização
+        $pending_sync = $this->count_pending_sync();
+        
+        // Fotos capturadas (total)
+        $photos_captured = $this->count_photos([]);
+        
+        // Taxa de sucesso geral
+        $synced_forms = $this->count_by_filters(['sync_status' => 'synced']);
+        $success_rate = $total_forms > 0 ? round(($synced_forms / $total_forms) * 100) : 100;
+        
+        return [
+            'total_forms' => (int)$total_forms,
+            'today_forms' => (int)$today_forms,
+            'pending_sync' => (int)$pending_sync,
+            'photos_captured' => (int)$photos_captured,
+            'success_rate' => (int)$success_rate
+        ];
     }
 
     /**
