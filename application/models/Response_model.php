@@ -169,7 +169,7 @@ class Response_model extends CI_Model {
         
         // Garantir que só conte emails não nulos/vazios
         $this->db->where('fr.respondent_email IS NOT NULL');
-        $this->db->where('fr.respondent_email !=', '');
+        $this->db->where("fr.respondent_email != ''");
         
         $result = $this->db->get()->row();
         return $result ? $result->count : 0;
@@ -262,7 +262,7 @@ class Response_model extends CI_Model {
         
         // Contar apenas respostas que têm fotos (photo_path não é nulo/vazio)
         $this->db->where('fr.photo_path IS NOT NULL');
-        $this->db->where('fr.photo_path !=', '');
+        $this->db->where("fr.photo_path != ''");
         
         return $this->db->count_all_results();
     }
@@ -610,23 +610,23 @@ class Response_model extends CI_Model {
         return $this->db->get()->result();
     }
 
-
     /**
      * Obter estatísticas de aplicadores para supervisores
+     * CORRIGIDO: Usar aspas simples para PostgreSQL
      */
     public function get_applicators_stats($filters = array()) {
-        $this->db->select('
+        $this->db->select("
             u.id,
             u.full_name,
             u.username,
             u.is_active,
             COUNT(fr.id) as total_forms,
             COUNT(CASE WHEN DATE(fr.completed_at) = CURRENT_DATE THEN 1 END) as today_forms,
-            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != "" THEN 1 END) as photos_captured,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' THEN 1 END) as photos_captured,
             COUNT(CASE WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL THEN 1 END) as locations_captured,
             MAX(fr.completed_at) as last_activity,
             COUNT(DISTINCT DATE(fr.completed_at)) as active_days
-        ');
+        ");
         $this->db->from('users u');
         $this->db->join('form_responses fr', 'u.id = fr.applied_by', 'left');
         $this->db->where('u.role', 'aplicador');
@@ -668,7 +668,7 @@ class Response_model extends CI_Model {
         ');
         $this->db->from('form_responses fr');
         $this->db->where('fr.location_name IS NOT NULL');
-        $this->db->where('fr.location_name !=', '');
+        $this->db->where("fr.location_name != ''");
         
         // Aplicar filtros de data
         if (isset($filters['date_from']) && $filters['date_from']) {
@@ -721,7 +721,7 @@ class Response_model extends CI_Model {
         $this->db->select('COUNT(DISTINCT location_name) as covered_regions');
         $this->db->from('form_responses');
         $this->db->where('location_name IS NOT NULL');
-        $this->db->where('location_name !=', '');
+        $this->db->where("location_name != ''");
         $regions_result = $this->db->get()->row();
         $summary['covered_regions'] = $regions_result ? $regions_result->covered_regions : 0;
         
@@ -775,10 +775,11 @@ class Response_model extends CI_Model {
 
     /**
      * Obter estatísticas de cobertura territorial
+     * CORRIGIDO: Compatibilidade com PostgreSQL
      */
     public function get_coverage_stats($filters = array()) {
         // Número total de pontos únicos de coleta
-        $this->db->select('COUNT(DISTINCT CONCAT(latitude, \',\', longitude)) as unique_points');
+        $this->db->select("COUNT(DISTINCT CONCAT(latitude::text, ',', longitude::text)) as unique_points");
         $this->db->from('form_responses');
         $this->db->where('latitude IS NOT NULL');
         $this->db->where('longitude IS NOT NULL');
@@ -802,23 +803,23 @@ class Response_model extends CI_Model {
         $this->db->where('EXTRACT(YEAR FROM completed_at) =', date('Y'));
         $this->db->where('EXTRACT(MONTH FROM completed_at) =', date('n'));
         $this->db->where('location_name IS NOT NULL');
-        $this->db->where('location_name !=', '');
+        $this->db->where("location_name != ''");
         $new_areas_result = $this->db->get()->row();
         $new_areas = $new_areas_result ? $new_areas_result->new_areas : 0;
         
         // Zonas de alta densidade usando subconsulta compatível com PostgreSQL
-        $subquery = '(
-            SELECT COUNT(*) as high_density_count
+        $high_density_query = "
+            SELECT COUNT(*) as high_density_zones
             FROM (
                 SELECT location_name, COUNT(*) as forms_count 
                 FROM form_responses 
-                WHERE location_name IS NOT NULL AND location_name != \'\'
+                WHERE location_name IS NOT NULL AND location_name != ''
                 GROUP BY location_name 
                 HAVING COUNT(*) > 10
             ) as density_zones
-        )';
+        ";
         
-        $high_density_result = $this->db->query('SELECT ' . $subquery . ' as high_density_zones')->row();
+        $high_density_result = $this->db->query($high_density_query)->row();
         $high_density = $high_density_result ? $high_density_result->high_density_zones : 0;
         
         return array(
@@ -838,7 +839,7 @@ class Response_model extends CI_Model {
         $this->db->from('form_responses');
         $this->db->where('applied_by', $applicator_id);
         $this->db->where('location_name IS NOT NULL');
-        $this->db->where('location_name !=', '');
+        $this->db->where("location_name != ''");
         $this->db->group_by('location_name');
         $this->db->order_by('count', 'DESC');
         $this->db->limit(1);
@@ -1007,6 +1008,4 @@ class Response_model extends CI_Model {
         
         return $this->db->count_all_results('users');
     }
-
-
 }
