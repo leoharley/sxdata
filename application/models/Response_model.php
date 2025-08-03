@@ -602,4 +602,343 @@ class Response_model extends CI_Model {
         $this->db->order_by('fr.completed_at', 'DESC');
         return $this->db->get()->result();
     }
+
+
+    /**
+     * Obter estatísticas de aplicadores para supervisores
+     */
+    public function get_applicators_stats($filters = array()) {
+        $this->db->select('
+            u.id,
+            u.full_name,
+            u.username,
+            u.is_active,
+            COUNT(fr.id) as total_forms,
+            COUNT(CASE WHEN DATE(fr.completed_at) = CURDATE() THEN 1 END) as today_forms,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != "" THEN 1 END) as photos_captured,
+            COUNT(CASE WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL THEN 1 END) as locations_captured,
+            MAX(fr.completed_at) as last_activity,
+            COUNT(DISTINCT DATE(fr.completed_at)) as active_days
+        ');
+        $this->db->from('users u');
+        $this->db->join('form_responses fr', 'u.id = fr.applied_by', 'left');
+        $this->db->where('u.role', 'aplicador');
+        
+        // Aplicar filtros
+        if (isset($filters['status']) && $filters['status'] !== 'all') {
+            if ($filters['status'] === 'active') {
+                $this->db->where('u.is_active', TRUE);
+            } elseif ($filters['status'] === 'inactive') {
+                $this->db->where('u.is_active', FALSE);
+            }
+        }
+        
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        
+        $this->db->group_by('u.id, u.full_name, u.username, u.is_active');
+        $this->db->order_by('total_forms', 'DESC');
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter estatísticas por localização/região
+     */
+    public function get_location_stats($filters = array()) {
+        $this->db->select('
+            fr.location_name,
+            COUNT(fr.id) as total_forms,
+            COUNT(DISTINCT fr.applied_by) as unique_applicators,
+            AVG(fr.latitude) as avg_latitude,
+            AVG(fr.longitude) as avg_longitude
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->where('fr.location_name IS NOT NULL');
+        $this->db->where('fr.location_name !=', '');
+        
+        // Aplicar filtros de data
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        
+        $this->db->group_by('fr.location_name');
+        $this->db->order_by('total_forms', 'DESC');
+        $this->db->limit(20); // Top 20 localizações
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter resumo para supervisores
+     */
+    public function get_supervisor_summary($filters = array()) {
+        $summary = array();
+        
+        // Total de aplicadores
+        $this->db->where('role', 'aplicador');
+        $summary['total_applicators'] = $this->db->count_all_results('users');
+        
+        // Aplicadores ativos
+        $this->db->where('role', 'aplicador');
+        $this->db->where('is_active', TRUE);
+        $summary['active_applicators'] = $this->db->count_all_results('users');
+        
+        // Total de formulários no período
+        $this->db->from('form_responses fr');
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        $summary['total_forms'] = $this->db->count_all_results();
+        
+        // Formulários hoje
+        $summary['today_forms'] = $this->count_by_filters(array(
+            'date_from' => date('Y-m-d'),
+            'date_to' => date('Y-m-d')
+        ));
+        
+        // Regiões cobertas
+        $this->db->select('COUNT(DISTINCT location_name) as covered_regions');
+        $this->db->from('form_responses');
+        $this->db->where('location_name IS NOT NULL');
+        $this->db->where('location_name !=', '');
+        $regions_result = $this->db->get()->row();
+        $summary['covered_regions'] = $regions_result ? $regions_result->covered_regions : 0;
+        
+        // Taxa de produtividade
+        $summary['productivity_rate'] = $summary['active_applicators'] > 0 
+            ? round($summary['total_forms'] / $summary['active_applicators'], 1) 
+            : 0;
+        
+        return $summary;
+    }
+
+    /**
+     * Obter dados para o mapa de aplicadores
+     */
+    public function get_map_locations($filters = array()) {
+        $this->db->select('
+            fr.latitude,
+            fr.longitude,
+            fr.location_name,
+            fr.applied_by,
+            u.full_name as applicator_name,
+            COUNT(fr.id) as forms_count,
+            MAX(fr.completed_at) as last_activity
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+        $this->db->where('fr.latitude IS NOT NULL');
+        $this->db->where('fr.longitude IS NOT NULL');
+        $this->db->where('fr.latitude !=', 0);
+        $this->db->where('fr.longitude !=', 0);
+        
+        // Aplicar filtros
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        
+        if (isset($filters['applicator_id']) && $filters['applicator_id']) {
+            $this->db->where('fr.applied_by', $filters['applicator_id']);
+        }
+        
+        $this->db->group_by('fr.latitude, fr.longitude, fr.applied_by');
+        $this->db->order_by('forms_count', 'DESC');
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter estatísticas de cobertura territorial
+     */
+    public function get_coverage_stats($filters = array()) {
+        // Número total de pontos únicos de coleta
+        $this->db->select('COUNT(DISTINCT CONCAT(latitude, ",", longitude)) as unique_points');
+        $this->db->from('form_responses');
+        $this->db->where('latitude IS NOT NULL');
+        $this->db->where('longitude IS NOT NULL');
+        $this->db->where('latitude !=', 0);
+        $this->db->where('longitude !=', 0);
+        
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(completed_at) >=', $filters['date_from']);
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(completed_at) <=', $filters['date_to']);
+        }
+        
+        $unique_points_result = $this->db->get()->row();
+        $unique_points = $unique_points_result ? $unique_points_result->unique_points : 0;
+        
+        // Novas áreas este mês
+        $this->db->select('COUNT(DISTINCT location_name) as new_areas');
+        $this->db->from('form_responses');
+        $this->db->where('DATE(completed_at) >=', date('Y-m-01')); // Primeiro dia do mês atual
+        $this->db->where('location_name IS NOT NULL');
+        $this->db->where('location_name !=', '');
+        $new_areas_result = $this->db->get()->row();
+        $new_areas = $new_areas_result ? $new_areas_result->new_areas : 0;
+        
+        // Zonas de alta densidade (mais de 10 formulários no mesmo local)
+        $this->db->select('COUNT(*) as high_density_zones');
+        $this->db->from('(
+            SELECT location_name, COUNT(*) as forms_count 
+            FROM form_responses 
+            WHERE location_name IS NOT NULL AND location_name != ""
+            GROUP BY location_name 
+            HAVING forms_count > 10
+        ) as density_zones');
+        $high_density_result = $this->db->get()->row();
+        $high_density = $high_density_result ? $high_density_result->high_density_zones : 0;
+        
+        return array(
+            'unique_collection_points' => (int)$unique_points,
+            'coverage_percentage' => min(100, ($unique_points * 2)), // Cálculo simplificado
+            'new_areas_this_month' => (int)$new_areas,
+            'high_density_zones' => (int)$high_density,
+            'total_area_covered' => $unique_points . ' pontos únicos'
+        );
+    }
+
+    /**
+     * Obter localização primária de um aplicador
+     */
+    public function get_applicator_primary_location($applicator_id) {
+        $this->db->select('location_name, COUNT(*) as count');
+        $this->db->from('form_responses');
+        $this->db->where('applied_by', $applicator_id);
+        $this->db->where('location_name IS NOT NULL');
+        $this->db->where('location_name !=', '');
+        $this->db->group_by('location_name');
+        $this->db->order_by('count', 'DESC');
+        $this->db->limit(1);
+        
+        $result = $this->db->get()->row();
+        return $result ? $result->location_name : 'Não definida';
+    }
+
+    /**
+     * Obter dias ativos de um usuário
+     */
+    public function get_active_days($user_id, $days = 30) {
+        $this->db->select('COUNT(DISTINCT DATE(completed_at)) as active_days');
+        $this->db->from('form_responses');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        
+        $result = $this->db->get()->row();
+        return $result ? $result->active_days : 0;
+    }
+
+    /**
+     * Obter atividade recente de um usuário
+     */
+    public function get_recent_activity($user_id, $limit = 10) {
+        $this->db->select('
+            fr.id,
+            fr.completed_at,
+            fr.sync_status,
+            q.title as questionnaire_title,
+            fr.respondent_name
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.applied_by', $user_id);
+        $this->db->where('fr.completed_at IS NOT NULL');
+        $this->db->order_by('fr.completed_at', 'DESC');
+        $this->db->limit($limit);
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter estatísticas de um período específico
+     */
+    public function get_period_stats($user_id, $days) {
+        $filters = array(
+            'applied_by' => $user_id,
+            'date_from' => date('Y-m-d', strtotime("-{$days} days")),
+            'date_to' => date('Y-m-d')
+        );
+        
+        $total = $this->count_by_filters($filters);
+        $photos = $this->count_photos($filters);
+        $locations = $this->count_locations($filters);
+        $avg_per_day = $days > 0 ? round($total / $days, 1) : 0;
+        
+        return array(
+            'total_forms' => (int)$total,
+            'photos_captured' => (int)$photos,
+            'locations_captured' => (int)$locations,
+            'avg_per_day' => (float)$avg_per_day,
+            'period_days' => (int)$days
+        );
+    }
+
+    /**
+     * Obter questionários mais aplicados por um usuário
+     */
+    public function get_top_questionnaires_by_user($user_id, $limit = 5) {
+        $this->db->select('
+            q.id,
+            q.title,
+            COUNT(fr.id) as total_applications,
+            MAX(fr.completed_at) as last_application
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.applied_by', $user_id);
+        $this->db->where('fr.completed_at IS NOT NULL');
+        $this->db->group_by('q.id, q.title');
+        $this->db->order_by('total_applications', 'DESC');
+        $this->db->limit($limit);
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Verificar se usuário é supervisor ou administrador
+     */
+    public function is_supervisor_or_admin($user_id) {
+        $this->db->select('role');
+        $this->db->where('id', $user_id);
+        $user = $this->db->get('users')->row();
+        
+        return $user && in_array($user->role, array('supervisor', 'administrador', 'admin'));
+    }
+
+    /**
+     * Contar total de aplicadores
+     */
+    public function count_applicators($status = 'all') {
+        $this->db->where('role', 'aplicador');
+        
+        if ($status === 'active') {
+            $this->db->where('is_active', TRUE);
+        } elseif ($status === 'inactive') {
+            $this->db->where('is_active', FALSE);
+        }
+        
+        return $this->db->count_all_results('users');
+    }
+
+
 }

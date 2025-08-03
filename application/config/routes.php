@@ -32,3 +32,7 @@ $route['api/photos/upload'] = 'api/photos/upload';
 $route['api/stats/user/(:num)'] = 'api/stats/user/$1';
 $route['api/stats/user'] = 'api/stats/user';
 $route['api/stats/overview'] = 'api/stats/overview';
+
+// Novas rotas para Supervisores/Administradores
+$route['api/stats/applicators'] = 'api/stats/applicators';
+$route['api/stats/locations'] = 'api/stats/locations';
