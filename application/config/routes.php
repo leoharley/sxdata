@@ -27,3 +27,8 @@ $route['api/auth/verify'] = 'api/auth/verify';
 $route['api/questionnaires'] = 'api/questionnaires/index';
 $route['api/forms/submit'] = 'api/forms/submit';
 $route['api/photos/upload'] = 'api/photos/upload';
+
+// Rotas para API de Estatísticas
+$route['api/stats/user/(:num)'] = 'stats/user/$1';
+$route['api/stats/user'] = 'stats/user';
+$route['api/stats/overview'] = 'stats/overview';
