@@ -43,6 +43,7 @@ class Stats extends CI_Controller {
     // CORREÇÃO: Administradores podem ver dados agregados de todos os aplicadores
     $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
     
+    
     // Verificar se o usuário pode acessar essas estatísticas
     if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
         $this->output->set_status_header(403);
@@ -398,12 +399,21 @@ class Stats extends CI_Controller {
         $formatted = [];
         
         foreach ($questionnaires as $questionnaire) {
+            // Verificar se as propriedades existem antes de acessá-las
+            $total_applications = isset($questionnaire->total_applications) 
+                ? $questionnaire->total_applications 
+                : (isset($questionnaire->total_responses) ? $questionnaire->total_responses : 0);
+                
+            $last_application = isset($questionnaire->last_application) 
+                ? $questionnaire->last_application 
+                : null;
+            
             $formatted[] = [
                 'id' => (int)$questionnaire->id,
                 'title' => $questionnaire->title,
-                'total_applications' => (int)$questionnaire->total_applications,
-                'last_application' => $questionnaire->last_application,
-                'last_application_time' => $this->time_elapsed_string($questionnaire->last_application)
+                'total_applications' => (int)$total_applications,
+                'last_application' => $last_application,
+                'last_application_time' => $last_application ? $this->time_elapsed_string($last_application) : 'Nunca'
             ];
         }
         

@@ -443,7 +443,12 @@ class Response_model extends CI_Model {
     }
 
     public function get_questionnaires_popularity($filters = array(), $limit = 10) {
-        $this->db->select('q.id, q.title, COUNT(fr.id) as total_responses');
+        $this->db->select('
+            q.id, 
+            q.title, 
+            COUNT(fr.id) as total_applications,
+            MAX(fr.completed_at) as last_application
+        ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
@@ -474,7 +479,7 @@ class Response_model extends CI_Model {
         $this->db->where('q.title IS NOT NULL');
         
         $this->db->group_by('q.id, q.title');
-        $this->db->order_by('total_responses', 'DESC');
+        $this->db->order_by('total_applications', 'DESC');
         $this->db->limit($limit);
         
         return $this->db->get()->result();
