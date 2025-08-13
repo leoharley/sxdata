@@ -62,7 +62,7 @@ class Excel
             $sheet->setCellValue('F' . $row, $response->latitude ?? '');
             $sheet->setCellValue('G' . $row, $response->longitude ?? '');
 
-            $location_name = $response->location_name ?? $this->get_location_name($response->latitude, $response->longitude);
+            $location_name = $this->get_location_name($response->latitude, $response->longitude);
             $sheet->setCellValue('H' . $row, $location_name);
 
             $sheet->setCellValue('I' . $row, $response->consent_given ? 'Sim' : 'Não');
