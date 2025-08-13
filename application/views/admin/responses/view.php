@@ -263,7 +263,7 @@ function format_location_name($data)
                 
                 <!-- Endereço formatado -->
                 <div class="text-center mb-3">
-                    <div class="alert alert-info mb-2">
+                    <div class="alert-info mb-2" style="border: none;border-radius: 0.5rem;">
                         <i class="fas fa-map-pin me-2"></i>
                         <strong><?= get_location_name($response->latitude, $response->longitude) ?></strong>
                     </div>
