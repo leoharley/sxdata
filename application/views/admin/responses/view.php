@@ -261,19 +261,11 @@ function format_location_name($data)
                     <code class="fs-6"><?= number_format($response->latitude, 6) ?>, <?= number_format($response->longitude, 6) ?></code>
                 </div>
                 
-                <!-- Loading da localização -->
-                <div id="location-loading" class="text-center" style="display: block;">
-                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <small class="text-muted">Carregando endereço...</small>
-                </div>
-                
                 <!-- Endereço formatado -->
-                <div id="location-display" class="text-center mb-3" style="display: none;">
+                <div class="text-center mb-3">
                     <div class="alert alert-info mb-2">
                         <i class="fas fa-map-pin me-2"></i>
-                        <strong id="location-text"></strong>
+                        <strong><?= get_location_name($response->latitude, $response->longitude) ?></strong>
                     </div>
                 </div>
                 
@@ -457,31 +449,6 @@ function format_location_name($data)
 </style>
 
 <script>
-// Função para buscar e exibir localização
-async function loadLocationName() {
-    const latitude = <?= $response->latitude ?? 'null' ?>;
-    const longitude = <?= $response->longitude ?? 'null' ?>;
-    
-    if (!latitude || !longitude) {
-        return;
-    }
-    
-    try {
-        // Simular busca de localização usando a função PHP
-        const locationName = '<?= $response->latitude && $response->longitude ? addslashes(get_location_name($response->latitude, $response->longitude)) : "N/A" ?>';
-        
-        // Atualizar interface
-        document.getElementById('location-loading').style.display = 'none';
-        document.getElementById('location-display').style.display = 'block';
-        document.getElementById('location-text').textContent = locationName;
-        
-    } catch (error) {
-        console.error('Erro ao carregar localização:', error);
-        document.getElementById('location-loading').innerHTML = 
-            '<small class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Erro ao carregar endereço</small>';
-    }
-}
-
 function showFullPhoto(photoUrl) {
     document.getElementById('fullPhotoImage').src = photoUrl;
     document.getElementById('downloadPhotoLink').href = photoUrl;
@@ -498,12 +465,4 @@ function copyCoordinates(coordinates) {
         alert('Coordenadas: ' + coordinates);
     });
 }
-
-// Carregar localização quando a página estiver pronta
-document.addEventListener('DOMContentLoaded', function() {
-    // Pequeno delay para uma transição suave
-    setTimeout(() => {
-        loadLocationName();
-    }, 500);
-});
 </script>
