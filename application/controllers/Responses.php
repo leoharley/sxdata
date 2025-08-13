@@ -87,4 +87,161 @@ class Responses extends CI_Controller {
             redirect('auth/login');
         }
     }
+
+    public function get_location()
+    {
+        // Verificar se é uma requisição POST
+        if ($this->input->method() !== 'post') {
+            show_404();
+            return;
+        }
+        
+        $latitude = $this->input->post('latitude');
+        $longitude = $this->input->post('longitude');
+        
+        // Validar entrada
+        if (empty($latitude) || empty($longitude) || 
+            !is_numeric($latitude) || !is_numeric($longitude)) {
+            echo 'N/A';
+            return;
+        }
+        
+        // Validar range das coordenadas
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            echo 'N/A';
+            return;
+        }
+        
+        try {
+            $location_name = $this->get_location_name_api($latitude, $longitude);
+            echo $location_name;
+        } catch (Exception $e) {
+            log_message('error', 'Erro na geocodificação: ' . $e->getMessage());
+            echo 'Erro ao carregar';
+        }
+    }
+
+private function get_location_name_api($latitude, $longitude)
+    {
+        // Verificar cache primeiro (usando cache do CodeIgniter se disponível)
+        $cache_key = 'location_' . round($latitude, 3) . '_' . round($longitude, 3);
+        
+        if ($this->cache) {
+            $cached_result = $this->cache->get($cache_key);
+            if ($cached_result !== FALSE) {
+                return $cached_result;
+            }
+        }
+        
+        try {
+            // URL da API Nominatim
+            $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=16&addressdetails=1&accept-language=pt-BR,pt,en";
+            
+            // Configurar contexto da requisição
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'header' => [
+                        'User-Agent: SXData-App/1.0 (contact@sxdata.com)',
+                        'Accept: application/json',
+                        'Accept-Language: pt-BR,pt;q=0.9,en;q=0.8'
+                    ],
+                    'timeout' => 10
+                ]
+            ]);
+
+            $response = file_get_contents($url, false, $context);
+            
+            if ($response === FALSE) {
+                return 'N/A';
+            }
+
+            $data = json_decode($response, true);
+            
+            if (isset($data['display_name'])) {
+                $formatted_name = $this->format_location_name_api($data);
+                
+                // Salvar no cache por 1 hora se o resultado for válido
+                if ($this->cache && $formatted_name !== 'N/A') {
+                    $this->cache->save($cache_key, $formatted_name, 3600);
+                }
+                
+                return $formatted_name;
+            }
+
+        } catch (Exception $e) {
+            log_message('error', 'Erro na API de geocodificação: ' . $e->getMessage());
+        }
+
+        return 'N/A';
+    }
+
+    private function format_location_name_api($data)
+    {
+        if (!isset($data['address'])) {
+            return isset($data['display_name']) ? substr($data['display_name'], 0, 50) . '...' : 'N/A';
+        }
+
+        $address = $data['address'];
+        $location_parts = [];
+
+        // Priorizar informações mais específicas para o contexto brasileiro
+        if (!empty($address['road'])) {
+            $location_parts[] = $address['road'];
+        }
+        
+        if (!empty($address['suburb']) || !empty($address['neighbourhood'])) {
+            $location_parts[] = $address['suburb'] ?? $address['neighbourhood'];
+        }
+        
+        if (!empty($address['city']) || !empty($address['town']) || !empty($address['village'])) {
+            $location_parts[] = $address['city'] ?? $address['town'] ?? $address['village'];
+        }
+        
+        if (!empty($address['state'])) {
+            $location_parts[] = $address['state'];
+        }
+
+        $result = !empty($location_parts) ? implode(', ', $location_parts) : $data['display_name'];
+        
+        // Limitar o tamanho da string retornada
+        if (strlen($result) > 50) {
+            $result = substr($result, 0, 47) . '...';
+        }
+        
+        return $result;
+    }
+
+    // Método alternativo usando cURL (mais robusto)
+    private function get_location_name_curl($latitude, $longitude)
+    {
+        $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=16&addressdetails=1&accept-language=pt-BR";
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'SXData-App/1.0 (contact@sxdata.com)');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: application/json',
+            'Accept-Language: pt-BR,pt;q=0.9,en;q=0.8'
+        ]);
+        
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($response === FALSE || $http_code !== 200) {
+            return 'N/A';
+        }
+        
+        $data = json_decode($response, true);
+        
+        if (isset($data['display_name'])) {
+            return $this->format_location_name_api($data);
+        }
+        
+        return 'N/A';
+    }
+
 }
