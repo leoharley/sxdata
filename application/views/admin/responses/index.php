@@ -1,3 +1,94 @@
+<?php 
+
+public function get_location_name($latitude, $longitude)
+    {
+        // Verificar se as coordenadas são válidas
+        if (empty($latitude) || empty($longitude) || 
+            !is_numeric($latitude) || !is_numeric($longitude)) {
+            return 'N/A';
+        }
+
+        // Validar range das coordenadas
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return 'N/A';
+        }
+
+        try {
+            // Opção 1: Usando OpenStreetMap Nominatim (gratuito, sem necessidade de API key)
+            $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=18&addressdetails=1";
+            
+            // Configurar contexto da requisição
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'header' => [
+                        'User-Agent: SXData-App/1.0',
+                        'Accept: application/json'
+                    ],
+                    'timeout' => 10
+                ]
+            ]);
+
+            $response = file_get_contents($url, false, $context);
+            
+            if ($response === FALSE) {
+                return 'N/A';
+            }
+
+            $data = json_decode($response, true);
+            
+            if (isset($data['display_name'])) {
+                // Retornar o nome formatado da localização
+                return $this->format_location_name($data);
+            }
+
+        } catch (Exception $e) {
+            // Log do erro se necessário
+            log_message('error', 'Erro na geocodificação: ' . $e->getMessage());
+        }
+
+        return 'N/A';
+    }
+
+    /**
+     * Formatar o nome da localização de acordo com os dados retornados
+     * @param array $data Dados da API de geocodificação
+     * @return string Nome formatado da localização
+     */
+    private function format_location_name($data)
+    {
+        if (!isset($data['address'])) {
+            return isset($data['display_name']) ? $data['display_name'] : 'N/A';
+        }
+
+        $address = $data['address'];
+        $location_parts = [];
+
+        // Priorizar informações mais específicas
+        if (!empty($address['road'])) {
+            $location_parts[] = $address['road'];
+        }
+        
+        if (!empty($address['suburb']) || !empty($address['neighbourhood'])) {
+            $location_parts[] = $address['suburb'] ?? $address['neighbourhood'];
+        }
+        
+        if (!empty($address['city']) || !empty($address['town']) || !empty($address['village'])) {
+            $location_parts[] = $address['city'] ?? $address['town'] ?? $address['village'];
+        }
+        
+        if (!empty($address['state'])) {
+            $location_parts[] = $address['state'];
+        }
+        
+        if (!empty($address['country'])) {
+            $location_parts[] = $address['country'];
+        }
+
+        return !empty($location_parts) ? implode(', ', $location_parts) : $data['display_name'];
+    }
+
+?>
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -126,17 +217,19 @@
                         </td>
                         <td><?= $response->applied_by_name ?></td>
                         <td>
-                            <?php if ($response->location_name): ?>
-                                <?= $response->location_name ?>
-                                <?php if ($response->latitude && $response->longitude): ?>
-                                    <br><small class="text-muted">
-                                        <?= number_format($response->latitude, 4) ?>, 
-                                        <?= number_format($response->longitude, 4) ?>
-                                    </small>
-                                <?php endif; ?>
+                            <?php if ($response->latitude && $response->longitude): ?>
+
+                            <?= get_location_name($response->latitude,$response->longitude) ?>
+
+                                <br><small class="text-muted">
+                                    <?= number_format($response->latitude, 4) ?>, 
+                                    <?= number_format($response->longitude, 4) ?>
+                                </small>
+                                
                             <?php else: ?>
-                                <span class="text-muted">Não informado</span>
+                                <span class="text-muted">Localização não capturada</span>
                             <?php endif; ?>
+
                         </td>
                         <td>
                             <?php if ($response->completed_at): ?>

@@ -27,7 +27,7 @@ class Excel
             'E1' => 'Email',
             'F1' => 'Latitude',
             'G1' => 'Longitude',
-            'H1' => 'Locaização',
+            'H1' => 'Localização',
             'I1' => 'Consentimento',
             'J1' => 'Data/Hora Conclusão',
             'K1' => 'Status',
