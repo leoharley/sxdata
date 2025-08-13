@@ -1,6 +1,6 @@
 <?php 
 
-public function get_location_name($latitude, $longitude)
+function get_location_name($latitude, $longitude)
     {
         // Verificar se as coordenadas são válidas
         if (empty($latitude) || empty($longitude) || 
@@ -50,12 +50,8 @@ public function get_location_name($latitude, $longitude)
         return 'N/A';
     }
 
-    /**
-     * Formatar o nome da localização de acordo com os dados retornados
-     * @param array $data Dados da API de geocodificação
-     * @return string Nome formatado da localização
-     */
-    private function format_location_name($data)
+
+function format_location_name($data)
     {
         if (!isset($data['address'])) {
             return isset($data['display_name']) ? $data['display_name'] : 'N/A';
@@ -225,7 +221,7 @@ public function get_location_name($latitude, $longitude)
                                     <?= number_format($response->latitude, 4) ?>, 
                                     <?= number_format($response->longitude, 4) ?>
                                 </small>
-                                
+
                             <?php else: ?>
                                 <span class="text-muted">Localização não capturada</span>
                             <?php endif; ?>
