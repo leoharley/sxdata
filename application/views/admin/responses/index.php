@@ -246,13 +246,19 @@ function get_location_name_cached($latitude, $longitude)
                         <td><?= $response->applied_by_name ?></td>
                         <td>
                             <?php if ($response->latitude && $response->longitude): ?>
-                                <div class="location-info">
-                                    <strong><?= get_location_name_cached($response->latitude, $response->longitude) ?></strong>
-                                    <br><small class="text-muted">
-                                        <i class="fas fa-map-pin me-1"></i>
-                                        <?= number_format($response->latitude, 4) ?>, 
-                                        <?= number_format($response->longitude, 4) ?>
-                                    </small>
+                                <div class="location-info" data-lat="<?= $response->latitude ?>" data-lng="<?= $response->longitude ?>">
+                                    <div class="location-loading">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        <span class="loading-text">Carregando localização...</span>
+                                    </div>
+                                    <div class="location-content" style="display: none;">
+                                        <strong class="location-name"></strong>
+                                        <br><small class="text-muted">
+                                            <i class="fas fa-map-pin me-1"></i>
+                                            <?= number_format($response->latitude, 4) ?>, 
+                                            <?= number_format($response->longitude, 4) ?>
+                                        </small>
+                                    </div>
                                 </div>
                             <?php else: ?>
                                 <span class="text-muted">
