@@ -61,7 +61,10 @@ class Excel
             $sheet->setCellValue('E' . $row, $response->respondent_email ?? 'N/A');
             $sheet->setCellValue('F' . $row, $response->latitude ?? '');
             $sheet->setCellValue('G' . $row, $response->longitude ?? '');
-            $sheet->setCellValue('H' . $row, $response->location_name ?? 'N/A');
+
+            $location_name = $response->location_name ?? $this->get_location_name($response->latitude, $response->longitude);
+            $sheet->setCellValue('H' . $row, $location_name);
+
             $sheet->setCellValue('I' . $row, $response->consent_given ? 'Sim' : 'Não');
             $sheet->setCellValue('J' . $row, $response->completed_at ? date('d/m/Y H:i:s', strtotime($response->completed_at)) : 'N/A');            
             $sheet->setCellValue('K' . $row, $statusMap[$response->sync_status] ?? 'N/A');
@@ -176,4 +179,93 @@ class Excel
         $writer->save('php://output');
         exit;
     }
+
+    public function get_location_name($latitude, $longitude)
+    {
+        // Verificar se as coordenadas são válidas
+        if (empty($latitude) || empty($longitude) || 
+            !is_numeric($latitude) || !is_numeric($longitude)) {
+            return 'N/A';
+        }
+
+        // Validar range das coordenadas
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return 'N/A';
+        }
+
+        try {
+            // Opção 1: Usando OpenStreetMap Nominatim (gratuito, sem necessidade de API key)
+            $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=18&addressdetails=1";
+            
+            // Configurar contexto da requisição
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'header' => [
+                        'User-Agent: SXData-App/1.0',
+                        'Accept: application/json'
+                    ],
+                    'timeout' => 10
+                ]
+            ]);
+
+            $response = file_get_contents($url, false, $context);
+            
+            if ($response === FALSE) {
+                return 'N/A';
+            }
+
+            $data = json_decode($response, true);
+            
+            if (isset($data['display_name'])) {
+                // Retornar o nome formatado da localização
+                return $this->format_location_name($data);
+            }
+
+        } catch (Exception $e) {
+            // Log do erro se necessário
+            log_message('error', 'Erro na geocodificação: ' . $e->getMessage());
+        }
+
+        return 'N/A';
+    }
+
+    /**
+     * Formatar o nome da localização de acordo com os dados retornados
+     * @param array $data Dados da API de geocodificação
+     * @return string Nome formatado da localização
+     */
+    private function format_location_name($data)
+    {
+        if (!isset($data['address'])) {
+            return isset($data['display_name']) ? $data['display_name'] : 'N/A';
+        }
+
+        $address = $data['address'];
+        $location_parts = [];
+
+        // Priorizar informações mais específicas
+        if (!empty($address['road'])) {
+            $location_parts[] = $address['road'];
+        }
+        
+        if (!empty($address['suburb']) || !empty($address['neighbourhood'])) {
+            $location_parts[] = $address['suburb'] ?? $address['neighbourhood'];
+        }
+        
+        if (!empty($address['city']) || !empty($address['town']) || !empty($address['village'])) {
+            $location_parts[] = $address['city'] ?? $address['town'] ?? $address['village'];
+        }
+        
+        if (!empty($address['state'])) {
+            $location_parts[] = $address['state'];
+        }
+        
+        if (!empty($address['country'])) {
+            $location_parts[] = $address['country'];
+        }
+
+        return !empty($location_parts) ? implode(', ', $location_parts) : $data['display_name'];
+    }
+
 }
