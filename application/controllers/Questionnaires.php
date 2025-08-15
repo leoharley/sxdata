@@ -160,19 +160,109 @@ class Questionnaires extends CI_Controller {
                     'requires_photo' => $this->input->post('requires_photo') ? TRUE : FALSE,
                     'estimated_time' => $this->input->post('estimated_time') ?: NULL,
                     'aplicadores' => $aplicadores_json,
-                    'project_id' => $this->input->post('project_id') ?: NULL // NOVO: Atualizar projeto
+                    'project_id' => $this->input->post('project_id') ?: NULL
                 );
 
-                if ($this->Questionnaire_model->update($id, $questionnaire_data)) {
-                    $this->session->set_flashdata('success', 'Questionário atualizado com sucesso!');
+                // Iniciar transação para garantir consistência
+                $this->db->trans_start();
+
+                // Atualizar dados do questionário
+                $questionnaire_updated = $this->Questionnaire_model->update($id, $questionnaire_data);
+
+                if ($questionnaire_updated) {
+                    // NOVO: Processar perguntas editadas
+                    $questions = $this->input->post('questions');
                     
-                    // NOVO: Redirecionar baseado no projeto
-                    if ($questionnaire_data['project_id']) {
-                        redirect('projects/view/' . $questionnaire_data['project_id']);
+                    if ($questions && is_array($questions)) {
+                        // Obter IDs das perguntas existentes para comparação
+                        $existing_questions = $this->Question_model->get_by_questionnaire($id);
+                        $existing_question_ids = array_column($existing_questions, 'id');
+                        $processed_question_ids = array();
+
+                        foreach ($questions as $index => $question) {
+                            // Validar dados da pergunta
+                            if (empty(trim($question['text']))) {
+                                continue; // Pular perguntas sem texto
+                            }
+
+                            $question_data = array(
+                                'questionnaire_id' => $id,
+                                'question_text' => trim($question['text']),
+                                'question_type' => $question['type'],
+                                'is_required' => isset($question['required']) ? TRUE : FALSE,
+                                'order_index' => $index + 1,
+                                'conditional_logic' => NULL // Pode ser expandido futuramente
+                            );
+
+                            $question_id = null;
+
+                            // Verificar se é uma pergunta existente ou nova
+                            if (!empty($question['id']) && is_numeric($question['id'])) {
+                                // Pergunta existente - atualizar
+                                $question_id = intval($question['id']);
+                                $this->Question_model->update($question_id, $question_data);
+                                $processed_question_ids[] = $question_id;
+                            } else {
+                                // Nova pergunta - criar
+                                $question_id = $this->Question_model->create($question_data);
+                                if ($question_id) {
+                                    $processed_question_ids[] = $question_id;
+                                }
+                            }
+
+                            // Processar opções para perguntas de múltipla escolha
+                            if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select'])) {
+                                // Primeiro, remover todas as opções existentes desta pergunta
+                                $this->Question_model->delete_options($question_id);
+
+                                // Adicionar as novas opções
+                                if (isset($question['options']) && is_array($question['options'])) {
+                                    foreach ($question['options'] as $opt_index => $option) {
+                                        if (!empty(trim($option['text']))) {
+                                            $option_value = !empty($option['value']) ? 
+                                                        $option['value'] : 
+                                                        strtolower(str_replace(' ', '_', trim($option['text'])));
+
+                                            $option_data = array(
+                                                'question_id' => $question_id,
+                                                'option_text' => trim($option['text']),
+                                                'option_value' => $option_value,
+                                                'order_index' => $opt_index + 1
+                                            );
+
+                                            $this->Question_model->create_option($option_data);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Remover perguntas que não estão mais na lista (foram excluídas)
+                        $questions_to_delete = array_diff($existing_question_ids, $processed_question_ids);
+                        foreach ($questions_to_delete as $question_id_to_delete) {
+                            $this->Question_model->delete($question_id_to_delete);
+                        }
+                    }
+
+                    // Finalizar transação
+                    $this->db->trans_complete();
+
+                    if ($this->db->trans_status() === FALSE) {
+                        // Erro na transação
+                        $this->session->set_flashdata('error', 'Erro ao salvar as alterações do questionário.');
                     } else {
-                        redirect('questionnaires');
+                        // Sucesso
+                        $this->session->set_flashdata('success', 'Questionário atualizado com sucesso!');
+                        
+                        // Redirecionar baseado no projeto
+                        if ($questionnaire_data['project_id']) {
+                            redirect('projects/view/' . $questionnaire_data['project_id']);
+                        } else {
+                            redirect('questionnaires');
+                        }
                     }
                 } else {
+                    $this->db->trans_rollback();
                     $data['error'] = 'Erro ao atualizar questionário.';
                 }
             }
@@ -182,7 +272,7 @@ class Questionnaires extends CI_Controller {
         $data['questionnaire'] = $questionnaire;
         $data['questions'] = $this->Question_model->get_by_questionnaire($id);
         $data['aplicadores'] = $this->User_model->get_aplicadores();
-        $data['projects'] = $this->Project_model->get_for_select(); // NOVO: Carregar projetos
+        $data['projects'] = $this->Project_model->get_for_select();
         
         // Decodificar aplicadores selecionados
         $data['aplicadores_selecionados'] = array();
