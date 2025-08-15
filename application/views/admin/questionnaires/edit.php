@@ -1395,6 +1395,8 @@ function generateConditionsPreview(conditions, questionIndex, ruleType) {
                     
     // Atualizar preview inicial
     updateLogicPreview();
+} }
+});
 }
 
 function validateAllConditionalLogic() {
