@@ -380,4 +380,387 @@ class Questionnaire_model extends CI_Model {
             }
         }
     }
+
+
+    /**
+     * Obter histórico de aplicações de questionários de um usuário
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @param array $filters Filtros para a consulta
+     * @return array Lista de aplicações
+     */
+    public function get_application_history($user_id, $filters = []) {
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.respondent_email,
+            fr.latitude,
+            fr.longitude,
+            fr.location_name,
+            fr.photo_path,
+            fr.consent_given,
+            fr.sync_status,
+            fr.started_at,
+            fr.completed_at,
+            fr.created_at,
+            q.title as questionnaire_title,
+            q.id as questionnaire_code
+        ');
+        
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.applied_by', $user_id);
+        
+        // Aplicar filtros de período
+        if (!empty($filters['period'])) {
+            switch ($filters['period']) {
+                case 'today':
+                    $this->db->where('DATE(fr.completed_at)', date('Y-m-d'));
+                    break;
+                case 'week':
+                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-7 days')));
+                    break;
+                case 'month':
+                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-30 days')));
+                    break;
+            }
+        }
+        
+        // Filtro por status de sincronização
+        if (!empty($filters['sync_status'])) {
+            $this->db->where('fr.sync_status', $filters['sync_status']);
+        }
+        
+        // Filtro por questionário específico
+        if (!empty($filters['questionnaire_id'])) {
+            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        }
+        
+        // Ordenação e paginação
+        $this->db->order_by('fr.completed_at', 'DESC');
+        $this->db->order_by('fr.created_at', 'DESC');
+        
+        if (!empty($filters['limit'])) {
+            $this->db->limit($filters['limit'], $filters['offset'] ?? 0);
+        }
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter contadores para os filtros do histórico
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @return array Contadores por categoria
+     */
+    public function get_history_counters($user_id) {
+        $counters = [];
+        
+        // Total geral
+        $this->db->where('applied_by', $user_id);
+        $counters['total'] = $this->db->count_all_results('form_responses');
+        
+        // Hoje
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('DATE(completed_at)', date('Y-m-d'));
+        $counters['today'] = $this->db->count_all_results('form_responses');
+        
+        // Última semana
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-7 days')));
+        $counters['week'] = $this->db->count_all_results('form_responses');
+        
+        // Por status de sincronização
+        $sync_statuses = ['pending', 'synced', 'error'];
+        foreach ($sync_statuses as $status) {
+            $this->db->where('applied_by', $user_id);
+            $this->db->where('sync_status', $status);
+            $counters[$status] = $this->db->count_all_results('form_responses');
+        }
+        
+        return $counters;
+    }
+
+    /**
+     * Obter resumo do histórico de um usuário
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @return array Dados de resumo
+     */
+    public function get_history_summary($user_id) {
+        // Estatísticas gerais
+        $this->db->select('
+            COUNT(*) as total_applications,
+            COUNT(CASE WHEN sync_status = "synced" THEN 1 END) as synced_count,
+            COUNT(CASE WHEN sync_status = "pending" THEN 1 END) as pending_count,
+            COUNT(CASE WHEN sync_status = "error" THEN 1 END) as error_count,
+            COUNT(CASE WHEN photo_path IS NOT NULL AND photo_path != "" THEN 1 END) as photos_captured,
+            COUNT(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 1 END) as locations_captured,
+            COUNT(CASE WHEN consent_given = true THEN 1 END) as consents_given,
+            COUNT(CASE WHEN DATE(completed_at) = CURDATE() THEN 1 END) as today_applications,
+            COUNT(CASE WHEN completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) as week_applications,
+            COUNT(CASE WHEN completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 END) as month_applications,
+            MIN(completed_at) as first_application,
+            MAX(completed_at) as last_application
+        ');
+        
+        $this->db->from('form_responses');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
+        
+        $stats = $this->db->get()->row();
+        
+        if (!$stats) {
+            return [
+                'total_applications' => 0,
+                'success_rate' => 0,
+                'photos_captured' => 0,
+                'locations_captured' => 0,
+                'consents_given' => 0,
+                'period_stats' => [
+                    'today' => 0,
+                    'week' => 0,
+                    'month' => 0
+                ],
+                'sync_stats' => [
+                    'synced' => 0,
+                    'pending' => 0,
+                    'error' => 0
+                ],
+                'activity_period' => [
+                    'first_application' => null,
+                    'last_application' => null,
+                    'days_active' => 0
+                ]
+            ];
+        }
+        
+        // Calcular taxa de sucesso
+        $success_rate = $stats->total_applications > 0 
+            ? round(($stats->synced_count / $stats->total_applications) * 100, 1) 
+            : 0;
+        
+        // Calcular dias ativos
+        $days_active = 0;
+        if ($stats->first_application && $stats->last_application) {
+            $first = new DateTime($stats->first_application);
+            $last = new DateTime($stats->last_application);
+            $days_active = $first->diff($last)->days + 1;
+        }
+        
+        return [
+            'total_applications' => (int)$stats->total_applications,
+            'success_rate' => (float)$success_rate,
+            'photos_captured' => (int)$stats->photos_captured,
+            'locations_captured' => (int)$stats->locations_captured,
+            'consents_given' => (int)$stats->consents_given,
+            'period_stats' => [
+                'today' => (int)$stats->today_applications,
+                'week' => (int)$stats->week_applications,
+                'month' => (int)$stats->month_applications
+            ],
+            'sync_stats' => [
+                'synced' => (int)$stats->synced_count,
+                'pending' => (int)$stats->pending_count,
+                'error' => (int)$stats->error_count
+            ],
+            'activity_period' => [
+                'first_application' => $stats->first_application,
+                'last_application' => $stats->last_application,
+                'days_active' => $days_active
+            ]
+        ];
+    }
+
+    /**
+     * Obter aplicações recentes de um usuário
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @param int $limit Limite de registros
+     * @return array Lista das aplicações mais recentes
+     */
+    public function get_recent_applications($user_id, $limit = 5) {
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.location_name,
+            fr.sync_status,
+            fr.completed_at,
+            fr.created_at,
+            q.title as questionnaire_title
+        ');
+        
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.applied_by', $user_id);
+        $this->db->where('fr.completed_at IS NOT NULL');
+        $this->db->order_by('fr.completed_at', 'DESC');
+        $this->db->limit($limit);
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter estatísticas de questionários por usuário
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @return array Estatísticas por questionário
+     */
+    public function get_user_questionnaire_stats($user_id) {
+        $this->db->select('
+            q.id,
+            q.title,
+            COUNT(fr.id) as total_applications,
+            COUNT(CASE WHEN fr.sync_status = "synced" THEN 1 END) as synced_applications,
+            MAX(fr.completed_at) as last_application,
+            MIN(fr.completed_at) as first_application,
+            AVG(CASE 
+                WHEN fr.started_at IS NOT NULL AND fr.completed_at IS NOT NULL 
+                THEN TIMESTAMPDIFF(MINUTE, fr.started_at, fr.completed_at)
+                ELSE NULL 
+            END) as avg_duration_minutes
+        ');
+        
+        $this->db->from('questionnaires q');
+        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'inner');
+        $this->db->where('fr.completed_at IS NOT NULL');
+        $this->db->group_by('q.id, q.title');
+        $this->db->order_by('total_applications', 'DESC');
+        $this->db->limit(10); // Top 10 questionários mais aplicados
+        
+        $results = $this->db->get()->result();
+        
+        // Formatar os resultados
+        $formatted = [];
+        foreach ($results as $result) {
+            $success_rate = $result->total_applications > 0 
+                ? round(($result->synced_applications / $result->total_applications) * 100, 1) 
+                : 0;
+                
+            $formatted[] = [
+                'questionnaire_id' => (int)$result->id,
+                'questionnaire_title' => $result->title,
+                'questionnaire_code' => sprintf('#%03d', $result->id),
+                'total_applications' => (int)$result->total_applications,
+                'synced_applications' => (int)$result->synced_applications,
+                'success_rate' => (float)$success_rate,
+                'avg_duration_minutes' => $result->avg_duration_minutes ? round($result->avg_duration_minutes, 1) : null,
+                'first_application' => $result->first_application,
+                'last_application' => $result->last_application
+            ];
+        }
+        
+        return $formatted;
+    }
+
+    /**
+     * Obter dados para gráfico de aplicações por período
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @param int $days Número de dias para análise
+     * @return array Dados para gráfico
+     */
+    public function get_applications_chart_data($user_id, $days = 30) {
+        $this->db->select('
+            DATE(completed_at) as application_date,
+            COUNT(*) as total_applications,
+            COUNT(CASE WHEN sync_status = "synced" THEN 1 END) as synced_applications,
+            COUNT(CASE WHEN photo_path IS NOT NULL AND photo_path != "" THEN 1 END) as photos_captured
+        ');
+        
+        $this->db->from('form_responses');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        $this->db->group_by('DATE(completed_at)');
+        $this->db->order_by('application_date', 'ASC');
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter questionários disponíveis para um usuário aplicador
+     * 
+     * @param int $user_id ID do usuário aplicador
+     * @return array Lista de questionários disponíveis
+     */
+    public function get_available_questionnaires_for_user($user_id) {
+        $this->db->select('
+            q.id,
+            q.title,
+            q.description,
+            q.estimated_time,
+            q.requires_consent,
+            q.requires_location,
+            q.requires_photo,
+            p.name as project_name,
+            COUNT(fr.id) as user_applications
+        ');
+        
+        $this->db->from('questionnaires q');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->group_by('q.id, q.title, q.description, q.estimated_time, q.requires_consent, q.requires_location, q.requires_photo, p.name');
+        $this->db->order_by('q.title', 'ASC');
+        
+        $questionnaires = $this->db->get()->result();
+        
+        // Filtrar questionários que o usuário pode acessar
+        $available = [];
+        foreach ($questionnaires as $questionnaire) {
+            if ($this->can_aplicador_access($questionnaire->id, $user_id)) {
+                $available[] = $questionnaire;
+            }
+        }
+        
+        return $available;
+    }
+
+    /**
+     * Obter detalhes de uma aplicação específica
+     * 
+     * @param int $response_id ID da resposta
+     * @param int $user_id ID do usuário (para verificação de permissão)
+     * @return object|null Detalhes da aplicação
+     */
+    public function get_application_details($response_id, $user_id) {
+        $this->db->select('
+            fr.*,
+            q.title as questionnaire_title,
+            q.description as questionnaire_description,
+            q.estimated_time,
+            p.name as project_name,
+            u.full_name as applied_by_name
+        ');
+        
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+        $this->db->where('fr.id', $response_id);
+        $this->db->where('fr.applied_by', $user_id); // Garantir que o usuário só acesse suas próprias aplicações
+        
+        $application = $this->db->get()->row();
+        
+        if ($application) {
+            // Buscar as respostas das perguntas
+            $this->db->select('
+                qr.*,
+                q.question_text,
+                q.question_type
+            ');
+            $this->db->from('question_responses qr');
+            $this->db->join('questions q', 'qr.question_id = q.id', 'left');
+            $this->db->where('qr.form_response_id', $response_id);
+            $this->db->order_by('q.order_index', 'ASC');
+            
+            $application->responses = $this->db->get()->result();
+        }
+        
+        return $application;
+    }
+
 }

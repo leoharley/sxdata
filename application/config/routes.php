@@ -36,3 +36,8 @@ $route['api/stats/overview'] = 'api/stats/overview';
 // Novas rotas para Supervisores/Administradores
 $route['api/stats/applicators'] = 'api/stats/applicators';
 $route['api/stats/locations'] = 'api/stats/locations';
+
+$route['api/stats/history'] = 'stats/history';
+$route['api/stats/history/(:num)'] = 'stats/history/$1';
+$route['api/stats/history/(:num)/summary'] = 'stats/history_summary/$1';
+$route['api/stats/history/summary'] = 'stats/history_summary';
