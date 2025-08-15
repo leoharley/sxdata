@@ -250,9 +250,11 @@ class Question_model extends CI_Model {
      * Buscar perguntas com lógica condicional
      */
     public function get_by_questionnaire_with_logic($questionnaire_id) {
-        // Para PostgreSQL, usar STRING_AGG
+        // Para PostgreSQL com campo JSON, usar abordagem sem GROUP BY no campo JSON
         $sql = "
-            SELECT q.*, 
+            SELECT q.id, q.questionnaire_id, q.question_text, q.question_type, 
+                q.is_required, q.order_index, q.conditional_logic::text as conditional_logic_text,
+                q.created_at, q.updated_at,
                 STRING_AGG(
                     qo.id || ':' || qo.option_text || ':' || qo.option_value || ':' || qo.order_index, 
                     '|' ORDER BY qo.order_index
@@ -261,50 +263,56 @@ class Question_model extends CI_Model {
             LEFT JOIN question_options qo ON q.id = qo.question_id
             WHERE q.questionnaire_id = ?
             GROUP BY q.id, q.questionnaire_id, q.question_text, q.question_type, 
-                    q.is_required, q.order_index, q.conditional_logic, q.created_at, q.updated_at
+                    q.is_required, q.order_index, q.conditional_logic::text, q.created_at, q.updated_at
             ORDER BY q.order_index ASC
         ";
         
-        $questions = $this->db->query($sql, array($questionnaire_id))->result();
-        
-        // Processar opções
-        foreach ($questions as &$question) {
-            $question->options = array();
+        try {
+            $questions = $this->db->query($sql, array($questionnaire_id))->result();
             
-            if (!empty($question->options_data)) {
-                $options_parts = explode('|', $question->options_data);
-                foreach ($options_parts as $option_part) {
-                    if (empty($option_part)) continue;
-                    
-                    $option_data = explode(':', $option_part);
-                    if (count($option_data) >= 4) {
-                        $question->options[] = (object) array(
-                            'id' => $option_data[0],
-                            'option_text' => $option_data[1],
-                            'option_value' => $option_data[2],
-                            'order_index' => $option_data[3]
-                        );
+            // Processar resultados
+            foreach ($questions as &$question) {
+                // Restaurar conditional_logic do texto
+                $question->conditional_logic = $question->conditional_logic_text;
+                unset($question->conditional_logic_text);
+                
+                // Processar opções
+                $question->options = array();
+                if (!empty($question->options_data)) {
+                    $options_parts = explode('|', $question->options_data);
+                    foreach ($options_parts as $option_part) {
+                        if (empty($option_part)) continue;
+                        
+                        $option_data = explode(':', $option_part);
+                        if (count($option_data) >= 4) {
+                            $question->options[] = (object) array(
+                                'id' => $option_data[0],
+                                'option_text' => $option_data[1],
+                                'option_value' => $option_data[2],
+                                'order_index' => $option_data[3]
+                            );
+                        }
+                    }
+                }
+                unset($question->options_data);
+                
+                // Decodificar lógica condicional
+                $question->conditional_logic_decoded = null;
+                if (!empty($question->conditional_logic)) {
+                    $logic = json_decode($question->conditional_logic, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $question->conditional_logic_decoded = $logic;
                     }
                 }
             }
             
-            // Remover campo temporário
-            unset($question->options_data);
+            return $questions;
             
-            // Decodificar lógica condicional se existir
-            if (!empty($question->conditional_logic)) {
-                $logic = json_decode($question->conditional_logic, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $question->conditional_logic_decoded = $logic;
-                } else {
-                    $question->conditional_logic_decoded = null;
-                }
-            } else {
-                $question->conditional_logic_decoded = null;
-            }
+        } catch (Exception $e) {
+            // Se ainda falhar, usar método simples
+            log_message('error', 'Erro na consulta PostgreSQL: ' . $e->getMessage());
+            return $this->get_by_questionnaire_with_logic_simple($questionnaire_id);
         }
-        
-        return $questions;
     }
 
 
