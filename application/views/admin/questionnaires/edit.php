@@ -360,6 +360,125 @@ function is_checkbox_checked($value) {
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="conditionalLogicModal" tabindex="-1" aria-labelledby="conditionalLogicModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="conditionalLogicModalLabel">
+                    <i class="fas fa-sitemap me-2"></i>
+                    Configurar Lógica Condicional
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Lógica Condicional:</strong> Configure quando esta pergunta deve aparecer ou ser obrigatória baseado nas respostas de outras perguntas.
+                </div>
+                
+                <!-- Configuração de Visibilidade -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-eye me-2"></i>
+                            Regras de Visibilidade
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="enableVisibilityRules" onchange="toggleVisibilityRules()">
+                            <label class="form-check-label" for="enableVisibilityRules">
+                                <strong>Ativar regras de visibilidade</strong>
+                                <br><small class="text-muted">Esta pergunta só aparecerá quando as condições forem atendidas</small>
+                            </label>
+                        </div>
+                        
+                        <div id="visibilityRulesContainer" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Operador Lógico</label>
+                                <select class="form-select" id="visibilityOperator">
+                                    <option value="AND">E (todas as condições devem ser verdadeiras)</option>
+                                    <option value="OR">OU (pelo menos uma condição deve ser verdadeira)</option>
+                                </select>
+                            </div>
+                            
+                            <div id="visibilityConditions">
+                                <!-- Condições serão adicionadas aqui -->
+                            </div>
+                            
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addVisibilityCondition()">
+                                <i class="fas fa-plus me-1"></i>
+                                Adicionar Condição
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuração de Obrigatoriedade -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-asterisk me-2"></i>
+                            Regras de Obrigatoriedade
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="enableRequiredRules" onchange="toggleRequiredRules()">
+                            <label class="form-check-label" for="enableRequiredRules">
+                                <strong>Ativar regras de obrigatoriedade condicional</strong>
+                                <br><small class="text-muted">Esta pergunta será obrigatória apenas quando as condições forem atendidas</small>
+                            </label>
+                        </div>
+                        
+                        <div id="requiredRulesContainer" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Operador Lógico</label>
+                                <select class="form-select" id="requiredOperator">
+                                    <option value="AND">E (todas as condições devem ser verdadeiras)</option>
+                                    <option value="OR">OU (pelo menos uma condição deve ser verdadeira)</option>
+                                </select>
+                            </div>
+                            
+                            <div id="requiredConditions">
+                                <!-- Condições serão adicionadas aqui -->
+                            </div>
+                            
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addRequiredCondition()">
+                                <i class="fas fa-plus me-1"></i>
+                                Adicionar Condição
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview das Regras -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-preview me-2"></i>
+                            Preview das Regras
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="rulesPreview" class="text-muted">
+                            Nenhuma regra configurada ainda.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveConditionalLogic()">
+                    <i class="fas fa-save me-1"></i>
+                    Salvar Regras
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?= form_close() ?>
 
 <script>
@@ -420,15 +539,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Função para adicionar nova pergunta
 function addQuestion() {
-    const container = document.getElementById('questions-container');
+    const container = document.getElementById('questions-container') || document.getElementById('questionsContainer');
     const questionHtml = `
-        <div class="question-item border rounded p-3 mb-3" data-question-index="${questionIndex}">
+        <div class="question-item border rounded p-3 mb-3" data-question-index="${questionIndex}" data-question-id="q_${questionIndex}">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div class="d-flex align-items-center">
                     <span class="question-number badge bg-primary me-2">${questionIndex + 1}</span>
                     <h6 class="mb-0">Pergunta</h6>
                 </div>
                 <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-info" onclick="openConditionalLogicModal(${questionIndex})" 
+                            title="Configurar lógica condicional">
+                        <i class="fas fa-sitemap"></i>
+                    </button>
                     <button type="button" class="btn btn-outline-secondary" onclick="moveQuestion(this, 'up')" title="Mover para cima">
                         <i class="fas fa-arrow-up"></i>
                     </button>
@@ -442,6 +565,7 @@ function addQuestion() {
             </div>
             
             <input type="hidden" name="questions[${questionIndex}][id]" value="">
+            <input type="hidden" name="questions[${questionIndex}][conditional_logic]" value="" data-conditional-logic="true">
             
             <div class="row mb-3">
                 <div class="col-md-8">
@@ -467,11 +591,24 @@ function addQuestion() {
                 </div>
             </div>
             
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" name="questions[${questionIndex}][required]" value="1">
-                <label class="form-check-label">
-                    Pergunta obrigatória
-                </label>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="questions[${questionIndex}][required]" value="1">
+                        <label class="form-check-label">
+                            <strong>Pergunta obrigatória</strong>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="questions[${questionIndex}][conditional_required]" value="1">
+                        <label class="form-check-label">
+                            <strong>Obrigatória condicionalmente</strong>
+                            <br><small class="text-muted">Use lógica condicional para definir quando é obrigatória</small>
+                        </label>
+                    </div>
+                </div>
             </div>
             
             <div class="options-container" style="display: none;">
@@ -493,13 +630,22 @@ function addQuestion() {
                     Adicionar Opção
                 </button>
             </div>
+            
+            <!-- Área para preview da lógica condicional -->
+            <div class="conditional-logic-preview mt-3" style="display: none;">
+                <div class="alert alert-info">
+                    <i class="fas fa-sitemap me-2"></i>
+                    <strong>Lógica Condicional:</strong>
+                    <div class="logic-preview-text mt-1"></div>
+                </div>
+            </div>
         </div>
     `;
     
     // Remover mensagem de "nenhuma pergunta" se existir
-    const noQuestionsMessage = document.getElementById('no-questions-message');
+    const noQuestionsMessage = document.getElementById('no-questions-message') || document.getElementById('noQuestions');
     if (noQuestionsMessage) {
-        noQuestionsMessage.remove();
+        noQuestionsMessage.style.display = 'none';
     }
     
     container.insertAdjacentHTML('beforeend', questionHtml);
@@ -507,6 +653,136 @@ function addQuestion() {
     
     updateQuestionNumbers();
     updateQuestionCount();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Para perguntas existentes (edit.php)
+    const existingQuestions = document.querySelectorAll('.question-item');
+    existingQuestions.forEach((question, index) => {
+        // Adicionar data-question-id se não existir
+        if (!question.dataset.questionId) {
+            question.dataset.questionId = `q_${index}`;
+        }
+        
+        // Adicionar botão de lógica condicional se não existir
+        const header = question.querySelector('.d-flex.justify-content-between');
+        const existingLogicBtn = header.querySelector('.btn-outline-info');
+        
+        if (!existingLogicBtn) {
+            const btnGroup = header.querySelector('.btn-group');
+            const logicBtn = document.createElement('button');
+            logicBtn.type = 'button';
+            logicBtn.className = 'btn btn-outline-info btn-sm';
+            logicBtn.onclick = () => openConditionalLogicModal(index);
+            logicBtn.title = 'Configurar lógica condicional';
+            logicBtn.innerHTML = '<i class="fas fa-sitemap"></i>';
+            
+            btnGroup.insertBefore(logicBtn, btnGroup.firstChild);
+        }
+        
+        // Adicionar campo hidden para lógica condicional se não existir
+        let conditionalInput = question.querySelector('input[data-conditional-logic="true"]');
+        if (!conditionalInput) {
+            conditionalInput = document.createElement('input');
+            conditionalInput.type = 'hidden';
+            conditionalInput.name = `questions[${index}][conditional_logic]`;
+            conditionalInput.setAttribute('data-conditional-logic', 'true');
+            conditionalInput.value = '';
+            question.appendChild(conditionalInput);
+        }
+        
+        // Verificar se há lógica condicional existente
+        const existingLogic = conditionalInput.value;
+        if (existingLogic) {
+            try {
+                const logic = JSON.parse(existingLogic);
+                if (Object.keys(logic).length > 0) {
+                    updateConditionalLogicIndicator(index, true);
+                    showConditionalLogicPreview(index, logic);
+                }
+            } catch (e) {
+                console.warn('Erro ao parsing da lógica condicional:', e);
+            }
+        }
+    });
+    
+    // Inicializar sistema de lógica condicional após um breve delay
+    setTimeout(() => {
+        if (typeof initConditionalLogic === 'function') {
+            initConditionalLogic();
+        }
+    }, 1000);
+});
+
+// Atualizar validação do formulário
+const originalFormSubmit = document.getElementById('questionnaireForm')?.addEventListener;
+
+if (document.getElementById('questionnaireForm')) {
+    document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
+        // Validações existentes...
+        const aplicadoresSelect = document.getElementById('aplicadores');
+        if (aplicadoresSelect && !aplicadoresSelect.selectedOptions.length) {
+            e.preventDefault();
+            alert('Selecione pelo menos um aplicador para este questionário.');
+            return false;
+        }
+        
+        const questions = document.querySelectorAll('.question-item');
+        if (questions.length === 0) {
+            e.preventDefault();
+            alert('Adicione pelo menos uma pergunta ao questionário.');
+            return false;
+        }
+        
+        // Validar lógica condicional
+        if (typeof validateConditionalLogic === 'function' && !validateConditionalLogic()) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Validações de perguntas...
+        let isValid = true;
+        questions.forEach((question, index) => {
+            const questionText = question.querySelector('.question-text');
+            const questionType = question.querySelector('.question-type');
+            
+            if (!questionText.value.trim()) {
+                isValid = false;
+                questionText.focus();
+                alert(`O texto da pergunta ${index + 1} é obrigatório.`);
+                return;
+            }
+            
+            // Validar opções para perguntas de múltipla escolha
+            if (['radio', 'checkbox', 'select'].includes(questionType.value)) {
+                const options = question.querySelectorAll('.option-item input[type="text"]');
+                let hasValidOption = false;
+                
+                options.forEach(option => {
+                    if (option.value.trim()) {
+                        hasValidOption = true;
+                        const valueInput = option.parentNode.querySelector('input[type="hidden"][name*="[value]"]');
+                        if (!valueInput.value) {
+                            valueInput.value = option.value.toLowerCase().replace(/\s+/g, '_');
+                        }
+                    }
+                });
+                
+                if (!hasValidOption) {
+                    isValid = false;
+                    alert(`A pergunta ${index + 1} precisa ter pelo menos uma opção válida.`);
+                    return;
+                }
+            }
+        });
+        
+        if (!isValid) {
+            e.preventDefault();
+            return false;
+        }
+        
+        updateQuestionNumbers();
+    });
 }
 
 // Função para remover pergunta
@@ -834,5 +1110,59 @@ window.addEventListener('beforeunload', function(e) {
 .question-item.dragging {
     opacity: 0.5;
     transform: rotate(2deg);
+}
+
+.conditional-logic-indicator {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.condition-item {
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.condition-item:hover {
+    background-color: #e9ecef;
+}
+
+.btn-group .btn-outline-info {
+    border-color: #0dcaf0;
+    color: #0dcaf0;
+}
+
+.btn-group .btn-outline-info:hover {
+    background-color: #0dcaf0;
+    color: white;
+}
+
+.conditional-logic-preview .alert {
+    margin-bottom: 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.has-error {
+    border: 2px solid #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+.required-asterisk {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.conditional-hidden {
+    display: none !important;
+}
+
+.question-item.conditional-question {
+    border: 2px dashed #17a2b8;
+    background-color: rgba(23, 162, 184, 0.05);
 }
 </style>
