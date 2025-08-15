@@ -30,6 +30,91 @@
     </div>
 </div>
 
+<!-- CSS para Lógica Condicional -->
+<style>
+    .question-item {
+        transition: all 0.3s ease;
+    }
+    
+    .question-item.has-conditional {
+        border-left: 4px solid #007bff;
+    }
+    
+    .conditional-rules {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 15px;
+        margin-top: 10px;
+        display: none;
+    }
+    
+    .condition-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+    
+    .logic-type-selector {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .logic-type-btn {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .logic-type-btn.active {
+        border-color: #007bff;
+        background: #e7f3ff;
+    }
+    
+    .logic-type-btn:hover {
+        border-color: #007bff;
+    }
+    
+    .operator-selector {
+        background: #e9ecef;
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin: 5px 0;
+    }
+    
+    .logic-preview {
+        background: #e7f3ff;
+        border: 1px solid #b3d7ff;
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 0.9em;
+        margin-top: 10px;
+    }
+    
+    .question-reference {
+        background: #fff3cd;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    
+    .validation-errors {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+        padding: 8px;
+        border-radius: 4px;
+        margin-top: 5px;
+    }
+</style>
+
 <?= form_open('questionnaires/create', ['id' => 'questionnaireForm']) ?>
 <div class="row">
     <div class="col-lg-8">
@@ -60,7 +145,7 @@
                                value="<?= set_value('estimated_time') ?>" min="1" max="120">
                     </div>
                     <div class="col-md-6">
-                        <!-- NOVO: Select de Projeto -->
+                        <!-- Select de Projeto -->
                         <label for="project_id" class="form-label">Projeto</label>
                         <select class="form-select" id="project_id" name="project_id">
                             <option value="">Selecione um projeto (opcional)</option>
@@ -102,12 +187,21 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Perguntas</h5>
-                <button type="button" class="btn btn-sm btn-primary" onclick="addQuestion()">
-                    <i class="fas fa-plus me-1"></i>
-                    Adicionar Pergunta
-                </button>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-info me-2" onclick="previewLogic()">
+                        <i class="fas fa-eye me-1"></i>
+                        Visualizar Lógica
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="addQuestion()">
+                        <i class="fas fa-plus me-1"></i>
+                        Adicionar Pergunta
+                    </button>
+                </div>
             </div>
             <div class="card-body">
+                <!-- Validação Global -->
+                <div id="globalValidation" class="validation-errors" style="display: none;"></div>
+                
                 <div id="questionsContainer">
                     <!-- Perguntas serão adicionadas aqui via JavaScript -->
                 </div>
@@ -186,163 +280,71 @@
         </div>
     </div>
 </div>
+<?= form_close() ?>
 
-
-<div class="modal fade" id="conditionalLogicModal" tabindex="-1" aria-labelledby="conditionalLogicModalLabel" aria-hidden="true">
+<!-- Modal para Visualização da Lógica -->
+<div class="modal fade" id="logicPreviewModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="conditionalLogicModalLabel">
+                <h5 class="modal-title">
                     <i class="fas fa-sitemap me-2"></i>
-                    Configurar Lógica Condicional
+                    Visualização da Lógica Condicional
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>Lógica Condicional:</strong> Configure quando esta pergunta deve aparecer ou ser obrigatória baseado nas respostas de outras perguntas.
+                <div id="logicPreviewContent">
+                    <!-- Conteúdo será gerado dinamicamente -->
                 </div>
-                
-                <!-- Configuração de Visibilidade -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-eye me-2"></i>
-                            Regras de Visibilidade
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="enableVisibilityRules" onchange="toggleVisibilityRules()">
-                            <label class="form-check-label" for="enableVisibilityRules">
-                                <strong>Ativar regras de visibilidade</strong>
-                                <br><small class="text-muted">Esta pergunta só aparecerá quando as condições forem atendidas</small>
-                            </label>
-                        </div>
-                        
-                        <div id="visibilityRulesContainer" style="display: none;">
-                            <div class="mb-3">
-                                <label class="form-label">Operador Lógico</label>
-                                <select class="form-select" id="visibilityOperator">
-                                    <option value="AND">E (todas as condições devem ser verdadeiras)</option>
-                                    <option value="OR">OU (pelo menos uma condição deve ser verdadeira)</option>
-                                </select>
-                            </div>
-                            
-                            <div id="visibilityConditions">
-                                <!-- Condições serão adicionadas aqui -->
-                            </div>
-                            
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addVisibilityCondition()">
-                                <i class="fas fa-plus me-1"></i>
-                                Adicionar Condição
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Configuração de Obrigatoriedade -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-asterisk me-2"></i>
-                            Regras de Obrigatoriedade
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="enableRequiredRules" onchange="toggleRequiredRules()">
-                            <label class="form-check-label" for="enableRequiredRules">
-                                <strong>Ativar regras de obrigatoriedade condicional</strong>
-                                <br><small class="text-muted">Esta pergunta será obrigatória apenas quando as condições forem atendidas</small>
-                            </label>
-                        </div>
-                        
-                        <div id="requiredRulesContainer" style="display: none;">
-                            <div class="mb-3">
-                                <label class="form-label">Operador Lógico</label>
-                                <select class="form-select" id="requiredOperator">
-                                    <option value="AND">E (todas as condições devem ser verdadeiras)</option>
-                                    <option value="OR">OU (pelo menos uma condição deve ser verdadeira)</option>
-                                </select>
-                            </div>
-                            
-                            <div id="requiredConditions">
-                                <!-- Condições serão adicionadas aqui -->
-                            </div>
-                            
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addRequiredCondition()">
-                                <i class="fas fa-plus me-1"></i>
-                                Adicionar Condição
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Preview das Regras -->
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-preview me-2"></i>
-                            Preview das Regras
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="rulesPreview" class="text-muted">
-                            Nenhuma regra configurada ainda.
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="saveConditionalLogic()">
-                    <i class="fas fa-save me-1"></i>
-                    Salvar Regras
-                </button>
             </div>
         </div>
     </div>
 </div>
 
-
-<?= form_close() ?>
-
 <script>
 let questionIndex = 0;
 
-// NOVO: Dados dos projetos para JavaScript
+// Dados dos projetos para JavaScript
 const projectsData = <?= json_encode($projects) ?>;
 
-// Gerenciamento do select de aplicadores
+// Tipos de operadores para lógica condicional
+const logicOperators = {
+    'equals': 'Igual a',
+    'not_equals': 'Diferente de',
+    'contains': 'Contém',
+    'not_contains': 'Não contém',
+    'greater_than': 'Maior que',
+    'less_than': 'Menor que',
+    'is_empty': 'Está vazio',
+    'is_not_empty': 'Não está vazio'
+};
+
+// Gerenciamento inicial
 document.addEventListener('DOMContentLoaded', function() {
     const aplicadoresSelect = document.getElementById('aplicadores');
     const projectSelect = document.getElementById('project_id');
     
+    // Gerenciamento do select de aplicadores
     aplicadoresSelect.addEventListener('change', function() {
         const allOption = this.querySelector('option[value="all"]');
         const otherOptions = Array.from(this.querySelectorAll('option:not([value="all"])'));
         
-        // Se "Todos" foi selecionado
         if (allOption.selected) {
-            // Desmarcar todas as outras opções
             otherOptions.forEach(option => option.selected = false);
         } else {
-            // Se alguma opção específica foi selecionada, desmarcar "Todos"
             const hasSpecificSelection = otherOptions.some(option => option.selected);
             if (hasSpecificSelection) {
                 allOption.selected = false;
             }
         }
         
-        // Se nenhuma opção está selecionada, selecionar "Todos" automaticamente
         if (!Array.from(this.selectedOptions).length) {
             allOption.selected = true;
         }
     });
     
-    // NOVO: Gerenciamento do select de projeto
+    // Gerenciamento do select de projeto
     projectSelect.addEventListener('change', function() {
         updateProjectInfo(this.value);
     });
@@ -356,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// NOVO: Função para atualizar informações do projeto
+// Função para atualizar informações do projeto
 function updateProjectInfo(projectId) {
     const projectInfoCard = document.getElementById('projectInfoCard');
     const projectInfo = document.getElementById('projectInfo');
@@ -387,446 +389,163 @@ function updateProjectInfo(projectId) {
     projectInfoCard.style.display = 'block';
 }
 
-function addQuestion() {function addQuestion() {
-    const container = document.getElementById('questions-container') || document.getElementById('questionsContainer');
+// Função para adicionar pergunta
+function addQuestion() {
+    const container = document.getElementById('questionsContainer');
+    const noQuestions = document.getElementById('noQuestions');
+    
     const questionHtml = `
-        <div class="question-item border rounded p-3 mb-3" data-question-index="${questionIndex}">
+        <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}">
             <div class="d-flex justify-content-between align-items-start mb-3">
-                <div class="d-flex align-items-center">
-                    <span class="question-number badge bg-primary me-2">${questionIndex + 1}</span>
-                    <h6 class="mb-0">Pergunta</h6>
-                </div>
-                <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-info" onclick="openConditionalLogicModal(${questionIndex})" 
-                            title="Configurar lógica condicional">
-                        <i class="fas fa-sitemap"></i>
+                <h6 class="mb-0">Pergunta ${questionIndex + 1}</h6>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-primary me-1" 
+                            onclick="toggleConditionalLogic(${questionIndex})" title="Adicionar Lógica Condicional">
+                        <i class="fas fa-project-diagram"></i>
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="moveQuestion(this, 'up')" title="Mover para cima">
-                        <i class="fas fa-arrow-up"></i>
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="moveQuestion(this, 'down')" title="Mover para baixo">
-                        <i class="fas fa-arrow-down"></i>
-                    </button>
-                    <button type="button" class="btn btn-outline-danger" onclick="removeQuestion(this)" title="Remover pergunta">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeQuestion(${questionIndex})">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
             
-            <input type="hidden" name="questions[${questionIndex}][id]" value="">
-            <input type="hidden" name="questions[${questionIndex}][conditional_logic]" value="">
+            <div class="mb-3">
+                <label class="form-label">Texto da Pergunta *</label>
+                <textarea class="form-control" name="questions[${questionIndex}][text]" 
+                          rows="2" required onchange="updateLogicPreview()"></textarea>
+            </div>
             
-            <div class="row mb-3">
-                <div class="col-md-8">
-                    <label class="form-label">Texto da Pergunta *</label>
-                    <textarea class="form-control question-text" name="questions[${questionIndex}][text]" 
-                              rows="2" required maxlength="500" placeholder="Digite o texto da pergunta..."></textarea>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Tipo *</label>
-                    <select class="form-select question-type" name="questions[${questionIndex}][type]" 
-                            onchange="toggleOptions(this)" required>
-                        <option value="text">Texto</option>
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">Tipo de Pergunta *</label>
+                    <select class="form-select" name="questions[${questionIndex}][type]" 
+                            onchange="handleQuestionTypeChange(${questionIndex}, this.value)" required>
+                        <option value="">Selecione...</option>
+                        <option value="text">Texto Simples</option>
                         <option value="textarea">Texto Longo</option>
                         <option value="number">Número</option>
-                        <option value="radio">Múltipla Escolha</option>
-                        <option value="checkbox">Múltipla Seleção</option>
-                        <option value="select">Lista Suspensa</option>
-                        <option value="date">Data</option>
-                        <option value="time">Hora</option>
                         <option value="email">E-mail</option>
-                        <option value="phone">Telefone</option>
+                        <option value="date">Data</option>
+                        <option value="datetime">Data e Hora</option>
+                        <option value="radio">Múltipla Escolha (única)</option>
+                        <option value="checkbox">Múltipla Escolha (múltipla)</option>
+                        <option value="select">Lista Suspensa</option>
                     </select>
                 </div>
-            </div>
-            
-            <div class="row mb-3">
                 <div class="col-md-6">
+                    <label class="form-label">&nbsp;</label>
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="questions[${questionIndex}][required]" value="1">
+                        <input class="form-check-input" type="checkbox" 
+                               name="questions[${questionIndex}][required]" value="1">
                         <label class="form-check-label">
-                            <strong>Pergunta obrigatória</strong>
-                        </label>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="questions[${questionIndex}][conditional_required]" value="1">
-                        <label class="form-check-label">
-                            <strong>Obrigatória condicionalmente</strong>
-                            <br><small class="text-muted">Use lógica condicional para definir quando é obrigatória</small>
+                            Pergunta obrigatória
                         </label>
                     </div>
                 </div>
             </div>
             
-            <div class="options-container" style="display: none;">
+            <!-- Opções de Resposta -->
+            <div id="options-${questionIndex}" class="mt-3" style="display: none;">
                 <label class="form-label">Opções de Resposta</label>
-                <div class="options-list">
-                    <div class="option-item d-flex align-items-center mb-2">
-                        <input type="text" class="form-control me-2" 
-                               name="questions[${questionIndex}][options][0][text]" 
-                               placeholder="Texto da opção" required>
-                        <input type="hidden" name="questions[${questionIndex}][options][0][value]" value="">
-                        <input type="hidden" name="questions[${questionIndex}][options][0][id]" value="">
-                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeOption(this)">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+                <div id="optionsContainer-${questionIndex}">
+                    <!-- Opções serão adicionadas aqui -->
                 </div>
-                <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="addOption(this)">
+                <button type="button" class="btn btn-sm btn-outline-primary" 
+                        onclick="addOption(${questionIndex})">
                     <i class="fas fa-plus me-1"></i>
                     Adicionar Opção
                 </button>
             </div>
             
-            <!-- Área para preview da lógica condicional -->
-            <div class="conditional-logic-preview mt-3" style="display: none;">
-                <div class="alert alert-info">
-                    <i class="fas fa-sitemap me-2"></i>
-                    <strong>Lógica Condicional:</strong>
-                    <div class="logic-preview-text mt-1"></div>
+            <!-- Lógica Condicional -->
+            <div id="conditionalLogic-${questionIndex}" class="conditional-rules">
+                <h6 class="mb-3">
+                    <i class="fas fa-project-diagram me-2"></i>
+                    Lógica Condicional
+                </h6>
+                
+                <!-- Seletor de Tipo de Lógica -->
+                <div class="logic-type-selector">
+                    <div class="logic-type-btn" onclick="selectLogicType(${questionIndex}, 'visibility')">
+                        <i class="fas fa-eye me-1"></i>
+                        <strong>Visibilidade</strong>
+                        <small class="d-block text-muted">Mostrar/ocultar pergunta</small>
+                    </div>
+                    <div class="logic-type-btn" onclick="selectLogicType(${questionIndex}, 'required')">
+                        <i class="fas fa-asterisk me-1"></i>
+                        <strong>Obrigatoriedade</strong>
+                        <small class="d-block text-muted">Tornar obrigatória</small>
+                    </div>
+                </div>
+                
+                <!-- Regras de Visibilidade -->
+                <div id="visibilityRules-${questionIndex}" class="logic-rules" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Mostrar esta pergunta quando:</strong>
+                        <button type="button" class="btn btn-xs btn-outline-primary" 
+                                onclick="addCondition(${questionIndex}, 'visibility')">
+                            <i class="fas fa-plus"></i> Condição
+                        </button>
+                    </div>
+                    
+                    <div class="operator-selector mb-2">
+                        <select class="form-select form-select-sm" name="questions[${questionIndex}][logic][visibility][operator]">
+                            <option value="AND">Todas as condições (E)</option>
+                            <option value="OR">Qualquer condição (OU)</option>
+                        </select>
+                    </div>
+                    
+                    <div id="visibilityConditions-${questionIndex}">
+                        <!-- Condições serão adicionadas aqui -->
+                    </div>
+                </div>
+                
+                <!-- Regras de Obrigatoriedade -->
+                <div id="requiredRules-${questionIndex}" class="logic-rules" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Tornar obrigatória quando:</strong>
+                        <button type="button" class="btn btn-xs btn-outline-primary" 
+                                onclick="addCondition(${questionIndex}, 'required')">
+                            <i class="fas fa-plus"></i> Condição
+                        </button>
+                    </div>
+                    
+                    <div class="operator-selector mb-2">
+                        <select class="form-select form-select-sm" name="questions[${questionIndex}][logic][required][operator]">
+                            <option value="AND">Todas as condições (E)</option>
+                            <option value="OR">Qualquer condição (OU)</option>
+                        </select>
+                    </div>
+                    
+                    <div id="requiredConditions-${questionIndex}">
+                        <!-- Condições serão adicionadas aqui -->
+                    </div>
+                </div>
+                
+                <!-- Preview da Lógica -->
+                <div id="logicPreview-${questionIndex}" class="logic-preview" style="display: none;">
+                    <!-- Preview será gerado aqui -->
+                </div>
+                
+                <div class="text-end mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" 
+                            onclick="clearConditionalLogic(${questionIndex})">
+                        Limpar Lógica
+                    </button>
                 </div>
             </div>
         </div>
     `;
     
-    // Remover mensagem de "nenhuma pergunta" se existir
-    const noQuestionsMessage = document.getElementById('no-questions-message') || document.getElementById('noQuestions');
-    if (noQuestionsMessage) {
-        noQuestionsMessage.style.display = 'none';
-    }
-    
     container.insertAdjacentHTML('beforeend', questionHtml);
+    noQuestions.style.display = 'none';
     questionIndex++;
-    
     updateQuestionNumbers();
-    updateQuestionCount();
 }
 
-// Função para atualizar template de pergunta existente (para edit.php)
-function updateExistingQuestionTemplate(questionElement, index) {
-    const header = questionElement.querySelector('.d-flex.justify-content-between');
-    const existingLogicBtn = header.querySelector('.btn-outline-info');
-    
-    if (!existingLogicBtn) {
-        const logicBtn = document.createElement('button');
-        logicBtn.type = 'button';
-        logicBtn.className = 'btn btn-outline-info btn-sm me-1';
-        logicBtn.onclick = () => openConditionalLogicModal(index);
-        logicBtn.title = 'Configurar lógica condicional';
-        logicBtn.innerHTML = '<i class="fas fa-sitemap"></i>';
-        
-        const btnGroup = header.querySelector('.btn-group');
-        btnGroup.insertBefore(logicBtn, btnGroup.firstChild);
-    }
-    
-    // Adicionar campo hidden para lógica condicional se não existir
-    let conditionalInput = questionElement.querySelector('input[name*="[conditional_logic]"]');
-    if (!conditionalInput) {
-        conditionalInput = document.createElement('input');
-        conditionalInput.type = 'hidden';
-        conditionalInput.name = `questions[${index}][conditional_logic]`;
-        conditionalInput.value = '';
-        questionElement.appendChild(conditionalInput);
-    }
-    
-    // Adicionar checkbox para obrigatória condicionalmente se não existir
-    const requiredSection = questionElement.querySelector('.form-check');
-    if (requiredSection && !questionElement.querySelector('input[name*="[conditional_required]"]')) {
-        const conditionalRequiredHtml = `
-            <div class="col-md-6">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="questions[${index}][conditional_required]" value="1">
-                    <label class="form-check-label">
-                        <strong>Obrigatória condicionalmente</strong>
-                        <br><small class="text-muted">Use lógica condicional para definir quando é obrigatória</small>
-                    </label>
-                </div>
-            </div>
-        `;
-        
-        // Converter a seção atual em uma row
-        const currentCheck = requiredSection.closest('.form-check');
-        const newRow = document.createElement('div');
-        newRow.className = 'row mb-3';
-        
-        const col1 = document.createElement('div');
-        col1.className = 'col-md-6';
-        col1.appendChild(currentCheck.cloneNode(true));
-        
-        newRow.appendChild(col1);
-        newRow.insertAdjacentHTML('beforeend', conditionalRequiredHtml);
-        
-        currentCheck.parentNode.replaceChild(newRow, currentCheck);
-    }
-    
-    // Adicionar área de preview se não existir
-    if (!questionElement.querySelector('.conditional-logic-preview')) {
-        const previewHtml = `
-            <div class="conditional-logic-preview mt-3" style="display: none;">
-                <div class="alert alert-info">
-                    <i class="fas fa-sitemap me-2"></i>
-                    <strong>Lógica Condicional:</strong>
-                    <div class="logic-preview-text mt-1"></div>
-                </div>
-            </div>
-        `;
-        
-        questionElement.insertAdjacentHTML('beforeend', previewHtml);
-    }
-    
-    // Verificar se há lógica condicional existente e mostrar indicador
-    const conditionalLogic = conditionalInput.value;
-    if (conditionalLogic) {
-        try {
-            const logic = JSON.parse(conditionalLogic);
-            if (Object.keys(logic).length > 0) {
-                updateConditionalLogicIndicator(index, true);
-                showConditionalLogicPreview(index, logic);
-            }
-        } catch (e) {
-            console.warn('Erro ao parsing da lógica condicional:', e);
-        }
-    }
-}
-
-// Função para mostrar preview da lógica condicional na pergunta
-function showConditionalLogicPreview(questionIndex, logic) {
-    const question = document.querySelector(`[data-question-index="${questionIndex}"]`);
-    const preview = question.querySelector('.conditional-logic-preview');
-    const previewText = question.querySelector('.logic-preview-text');
-    
-    if (!preview || !previewText) return;
-    
-    let text = '';
-    
-    if (logic.visibility) {
-        text += '<strong>Visibilidade:</strong> Aparece quando ';
-        const conditions = logic.visibility.conditions.map(c => {
-            const questionElement = document.querySelector(`[data-question-index="${c.question}"]`);
-            const questionText = questionElement ? 
-                questionElement.querySelector('.question-text').value.substring(0, 30) + '...' : 
-                `Pergunta ${c.question + 1}`;
-            return `"${questionText}" ${c.operator} "${c.value}"`;
-        });
-        text += conditions.join(logic.visibility.operator === 'AND' ? ' E ' : ' OU ');
-        text += '<br>';
-    }
-    
-    if (logic.required) {
-        text += '<strong>Obrigatória:</strong> Quando ';
-        const conditions = logic.required.conditions.map(c => {
-            const questionElement = document.querySelector(`[data-question-index="${c.question}"]`);
-            const questionText = questionElement ? 
-                questionElement.querySelector('.question-text').value.substring(0, 30) + '...' : 
-                `Pergunta ${c.question + 1}`;
-            return `"${questionText}" ${c.operator} "${c.value}"`;
-        });
-        text += conditions.join(logic.required.operator === 'AND' ? ' E ' : ' OU ');
-    }
-    
-    previewText.innerHTML = text;
-    preview.style.display = text ? 'block' : 'none';
-}
-
-// Atualizar validação do formulário para incluir lógica condicional
-const originalFormValidation = document.getElementById('questionnaireForm')?.addEventListener;
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Atualizar perguntas existentes (para edit.php)
-    const existingQuestions = document.querySelectorAll('.question-item');
-    existingQuestions.forEach((question, index) => {
-        updateExistingQuestionTemplate(question, index);
-    });
-    
-    // Sobrescrever validação do formulário
-    const form = document.getElementById('questionnaireForm');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            // Validações existentes...
-            const aplicadoresSelect = document.getElementById('aplicadores');
-            if (aplicadoresSelect && !aplicadoresSelect.selectedOptions.length) {
-                e.preventDefault();
-                alert('Selecione pelo menos um aplicador para este questionário.');
-                return false;
-            }
-            
-            const questions = document.querySelectorAll('.question-item');
-            if (questions.length === 0) {
-                e.preventDefault();
-                alert('Adicione pelo menos uma pergunta ao questionário.');
-                return false;
-            }
-            
-            // Validar lógica condicional
-            if (!validateConditionalLogic()) {
-                e.preventDefault();
-                return false;
-            }
-            
-            // Validar cada pergunta
-            let isValid = true;
-            questions.forEach((question, index) => {
-                const questionText = question.querySelector('.question-text');
-                const questionType = question.querySelector('.question-type');
-                
-                if (!questionText.value.trim()) {
-                    isValid = false;
-                    questionText.focus();
-                    alert(`O texto da pergunta ${index + 1} é obrigatório.`);
-                    return;
-                }
-                
-                // Validar opções para perguntas de múltipla escolha
-                if (['radio', 'checkbox', 'select'].includes(questionType.value)) {
-                    const options = question.querySelectorAll('.option-item input[type="text"]');
-                    let hasValidOption = false;
-                    
-                    options.forEach(option => {
-                        if (option.value.trim()) {
-                            hasValidOption = true;
-                            const valueInput = option.parentNode.querySelector('input[type="hidden"][name*="[value]"]');
-                            if (!valueInput.value) {
-                                valueInput.value = option.value.toLowerCase().replace(/\s+/g, '_');
-                            }
-                        }
-                    });
-                    
-                    if (!hasValidOption) {
-                        isValid = false;
-                        alert(`A pergunta ${index + 1} precisa ter pelo menos uma opção válida.`);
-                        return;
-                    }
-                }
-            });
-            
-            if (!isValid) {
-                e.preventDefault();
-                return false;
-            }
-            
-            updateQuestionNumbers();
-        });
-    }
-});
-
-// CSS adicional para melhorar a aparência
-const additionalCSS = `
-<style>
-.conditional-logic-indicator {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.7; }
-    100% { opacity: 1; }
-}
-
-.condition-item {
-    background-color: #f8f9fa;
-    transition: all 0.3s ease;
-}
-
-.condition-item:hover {
-    background-color: #e9ecef;
-}
-
-.modal-lg {
-    max-width: 900px;
-}
-
-.btn-group .btn-outline-info {
-    border-color: #0dcaf0;
-    color: #0dcaf0;
-}
-
-.btn-group .btn-outline-info:hover {
-    background-color: #0dcaf0;
-    color: white;
-}
-
-.conditional-logic-preview .alert {
-    margin-bottom: 0;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-}
-</style>
-`;
-
-document.head.insertAdjacentHTML('beforeend', additionalCSS);
-
-if (document.getElementById('questionnaireForm')) {
-    document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
-        // Validações existentes...
-        const aplicadoresSelect = document.getElementById('aplicadores');
-        if (aplicadoresSelect && !aplicadoresSelect.selectedOptions.length) {
-            e.preventDefault();
-            alert('Selecione pelo menos um aplicador para este questionário.');
-            return false;
-        }
-        
-        const questions = document.querySelectorAll('.question-item');
-        if (questions.length === 0) {
-            e.preventDefault();
-            alert('Adicione pelo menos uma pergunta ao questionário.');
-            return false;
-        }
-        
-        // Validar lógica condicional
-        if (typeof validateConditionalLogic === 'function' && !validateConditionalLogic()) {
-            e.preventDefault();
-            return false;
-        }
-        
-        // Validações de perguntas...
-        let isValid = true;
-        questions.forEach((question, index) => {
-            const questionText = question.querySelector('.question-text');
-            const questionType = question.querySelector('.question-type');
-            
-            if (!questionText.value.trim()) {
-                isValid = false;
-                questionText.focus();
-                alert(`O texto da pergunta ${index + 1} é obrigatório.`);
-                return;
-            }
-            
-            // Validar opções para perguntas de múltipla escolha
-            if (['radio', 'checkbox', 'select'].includes(questionType.value)) {
-                const options = question.querySelectorAll('.option-item input[type="text"]');
-                let hasValidOption = false;
-                
-                options.forEach(option => {
-                    if (option.value.trim()) {
-                        hasValidOption = true;
-                        const valueInput = option.parentNode.querySelector('input[type="hidden"][name*="[value]"]');
-                        if (!valueInput.value) {
-                            valueInput.value = option.value.toLowerCase().replace(/\s+/g, '_');
-                        }
-                    }
-                });
-                
-                if (!hasValidOption) {
-                    isValid = false;
-                    alert(`A pergunta ${index + 1} precisa ter pelo menos uma opção válida.`);
-                    return;
-                }
-            }
-        });
-        
-        if (!isValid) {
-            e.preventDefault();
-            return false;
-        }
-        
-        updateQuestionNumbers();
-    });
-}
-
+// Função para remover pergunta
 function removeQuestion(index) {
-    if (confirm('Tem certeza que deseja remover esta pergunta?')) {
+    if (confirm('Tem certeza que deseja remover esta pergunta? Isso pode afetar as regras condicionais de outras perguntas.')) {
         const questionItem = document.querySelector(`[data-index="${index}"]`);
         questionItem.remove();
         
@@ -835,15 +554,16 @@ function removeQuestion(index) {
             document.getElementById('noQuestions').style.display = 'block';
         }
         updateQuestionNumbers();
+        validateAllConditionalLogic();
     }
 }
 
+// Função para lidar com mudança de tipo de pergunta
 function handleQuestionTypeChange(questionIndex, type) {
     const optionsDiv = document.getElementById(`options-${questionIndex}`);
     
-    if (type === 'radio' || type === 'checkbox') {
+    if (['radio', 'checkbox', 'select'].includes(type)) {
         optionsDiv.style.display = 'block';
-        // Adicionar primeira opção automaticamente
         const optionsContainer = document.getElementById(`optionsContainer-${questionIndex}`);
         if (optionsContainer.children.length === 0) {
             addOption(questionIndex);
@@ -852,8 +572,11 @@ function handleQuestionTypeChange(questionIndex, type) {
     } else {
         optionsDiv.style.display = 'none';
     }
+    
+    updateLogicPreview();
 }
 
+// Função para adicionar opção
 function addOption(questionIndex) {
     const container = document.getElementById(`optionsContainer-${questionIndex}`);
     const optionIndex = container.children.length;
@@ -862,12 +585,12 @@ function addOption(questionIndex) {
         <div class="input-group mb-2">
             <input type="text" class="form-control" 
                    name="questions[${questionIndex}][options][${optionIndex}][text]" 
-                   placeholder="Texto da opção" required>
+                   placeholder="Texto da opção" required onchange="updateLogicPreview()">
             <input type="hidden" 
                    name="questions[${questionIndex}][options][${optionIndex}][value]" 
                    value="">
             <button type="button" class="btn btn-outline-danger" 
-                    onclick="this.parentElement.remove()">
+                    onclick="this.parentElement.remove(); updateLogicPreview();">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -876,12 +599,478 @@ function addOption(questionIndex) {
     container.insertAdjacentHTML('beforeend', optionHtml);
 }
 
+// Função para atualizar numeração das perguntas
 function updateQuestionNumbers() {
     const questions = document.querySelectorAll('.question-item');
     questions.forEach((question, index) => {
         const title = question.querySelector('h6');
         title.textContent = `Pergunta ${index + 1}`;
+        
+        // Atualizar referências nos selects de condições
+        updateConditionQuestionOptions(question, index);
     });
+}
+
+// Função para mostrar/ocultar lógica condicional
+function toggleConditionalLogic(questionIndex) {
+    const logicDiv = document.getElementById(`conditionalLogic-${questionIndex}`);
+    const questionItem = document.querySelector(`[data-index="${questionIndex}"]`);
+    
+    if (logicDiv.style.display === 'none' || logicDiv.style.display === '') {
+        logicDiv.style.display = 'block';
+        questionItem.classList.add('has-conditional');
+    } else {
+        logicDiv.style.display = 'none';
+        questionItem.classList.remove('has-conditional');
+    }
+}
+
+// Função para selecionar tipo de lógica
+function selectLogicType(questionIndex, type) {
+    const visibilityBtn = document.querySelector(`[data-index="${questionIndex}"] .logic-type-btn:first-child`);
+    const requiredBtn = document.querySelector(`[data-index="${questionIndex}"] .logic-type-btn:last-child`);
+    const visibilityRules = document.getElementById(`visibilityRules-${questionIndex}`);
+    const requiredRules = document.getElementById(`requiredRules-${questionIndex}`);
+    
+    // Reset active states
+    visibilityBtn.classList.remove('active');
+    requiredBtn.classList.remove('active');
+    visibilityRules.style.display = 'none';
+    requiredRules.style.display = 'none';
+    
+    if (type === 'visibility') {
+        visibilityBtn.classList.add('active');
+        visibilityRules.style.display = 'block';
+    } else if (type === 'required') {
+        requiredBtn.classList.add('active');
+        requiredRules.style.display = 'block';
+    }
+    
+    updateLogicPreview();
+}
+
+// Função para adicionar condição
+function addCondition(questionIndex, ruleType) {
+    const container = document.getElementById(`${ruleType}Conditions-${questionIndex}`);
+    const conditionIndex = container.children.length;
+    
+    const availableQuestions = getAvailableQuestionsForCondition(questionIndex);
+    
+    if (availableQuestions.length === 0) {
+        alert('Não há perguntas anteriores disponíveis para criar condições.');
+        return;
+    }
+    
+    const conditionHtml = `
+        <div class="condition-item">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" 
+                            name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"
+                            onchange="updateConditionOperators(${questionIndex}, '${ruleType}', ${conditionIndex})">
+                        <option value="">Pergunta...</option>
+                        ${availableQuestions.map(q => `<option value="${q.index}">${q.title}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" 
+                            name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"
+                            onchange="updateConditionValue(${questionIndex}, '${ruleType}', ${conditionIndex})">
+                        <option value="">Operador...</option>
+                        ${Object.entries(logicOperators).map(([key, value]) => `<option value="${key}">${value}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" class="form-control form-control-sm" 
+                           name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"
+                           placeholder="Valor..." onchange="updateLogicPreview()">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-sm btn-outline-danger w-100" 
+                            onclick="removeCondition(this, ${questionIndex})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', conditionHtml);
+    updateLogicPreview();
+}
+
+// Função para remover condição
+function removeCondition(button, questionIndex) {
+    button.closest('.condition-item').remove();
+    updateLogicPreview();
+}
+
+// Função para obter perguntas disponíveis para condição
+function getAvailableQuestionsForCondition(currentQuestionIndex) {
+    const questions = document.querySelectorAll('.question-item');
+    const available = [];
+    
+    questions.forEach((question, index) => {
+        if (index < currentQuestionIndex) {
+            const textArea = question.querySelector('textarea[name*="[text]"]');
+            const title = textArea ? textArea.value.substring(0, 50) + '...' : `Pergunta ${index + 1}`;
+            available.push({
+                index: index,
+                title: title || `Pergunta ${index + 1}`
+            });
+        }
+    });
+    
+    return available;
+}
+
+// Função para atualizar operadores da condição
+function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
+    const questionSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"]`);
+    const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
+    const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
+    
+    const selectedQuestionIndex = questionSelect.value;
+    if (!selectedQuestionIndex) return;
+    
+    const targetQuestion = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+    const questionType = targetQuestion.querySelector('select[name*="[type]"]').value;
+    
+    // Limpar operadores atuais
+    operatorSelect.innerHTML = '<option value="">Operador...</option>';
+    
+    // Adicionar operadores baseados no tipo de pergunta
+    let availableOperators = [];
+    
+    switch (questionType) {
+        case 'number':
+            availableOperators = ['equals', 'not_equals', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
+            break;
+        case 'radio':
+        case 'select':
+            availableOperators = ['equals', 'not_equals', 'is_empty', 'is_not_empty'];
+            break;
+        case 'checkbox':
+            availableOperators = ['contains', 'not_contains', 'is_empty', 'is_not_empty'];
+            break;
+        default:
+            availableOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty'];
+    }
+    
+    availableOperators.forEach(op => {
+        const option = document.createElement('option');
+        option.value = op;
+        option.textContent = logicOperators[op];
+        operatorSelect.appendChild(option);
+    });
+    
+    updateConditionValue(questionIndex, ruleType, conditionIndex);
+}
+
+// Função para atualizar campo de valor da condição
+function updateConditionValue(questionIndex, ruleType, conditionIndex) {
+    const questionSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"]`);
+    const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
+    const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
+    
+    const selectedQuestionIndex = questionSelect.value;
+    const selectedOperator = operatorSelect.value;
+    
+    if (!selectedQuestionIndex || !selectedOperator) return;
+    
+    // Se operador é "is_empty" ou "is_not_empty", esconder campo de valor
+    if (['is_empty', 'is_not_empty'].includes(selectedOperator)) {
+        valueInput.style.display = 'none';
+        valueInput.value = '';
+        return;
+    } else {
+        valueInput.style.display = 'block';
+    }
+    
+    const targetQuestion = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+    const questionType = targetQuestion.querySelector('select[name*="[type]"]').value;
+    
+    // Se é pergunta de múltipla escolha, converter para select
+    if (['radio', 'checkbox', 'select'].includes(questionType)) {
+        const options = targetQuestion.querySelectorAll('input[name*="[options]"][name*="[text]"]');
+        
+        if (options.length > 0) {
+            // Criar select com as opções
+            const select = document.createElement('select');
+            select.className = 'form-select form-select-sm';
+            select.name = valueInput.name;
+            select.onchange = () => updateLogicPreview();
+            
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Selecione...';
+            select.appendChild(defaultOption);
+            
+            options.forEach(option => {
+                if (option.value.trim()) {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = option.value.trim();
+                    optionElement.textContent = option.value.trim();
+                    select.appendChild(optionElement);
+                }
+            });
+            
+            valueInput.parentNode.replaceChild(select, valueInput);
+        }
+    }
+    
+    updateLogicPreview();
+}
+
+// Função para atualizar opções de pergunta nas condições
+function updateConditionQuestionOptions(questionElement, newIndex) {
+    const conditionSelects = questionElement.querySelectorAll('select[name*="[question]"]');
+    
+    conditionSelects.forEach(select => {
+        // Remover opções que referenciam perguntas posteriores ou a própria pergunta
+        Array.from(select.options).forEach(option => {
+            if (option.value && parseInt(option.value) >= newIndex) {
+                option.remove();
+            }
+        });
+    });
+}
+
+// Função para limpar lógica condicional
+function clearConditionalLogic(questionIndex) {
+    if (confirm('Tem certeza que deseja limpar toda a lógica condicional desta pergunta?')) {
+        const visibilityConditions = document.getElementById(`visibilityConditions-${questionIndex}`);
+        const requiredConditions = document.getElementById(`requiredConditions-${questionIndex}`);
+        const logicDiv = document.getElementById(`conditionalLogic-${questionIndex}`);
+        const questionItem = document.querySelector(`[data-index="${questionIndex}"]`);
+        
+        visibilityConditions.innerHTML = '';
+        requiredConditions.innerHTML = '';
+        logicDiv.style.display = 'none';
+        questionItem.classList.remove('has-conditional');
+        
+        updateLogicPreview();
+    }
+}
+
+// Função para atualizar preview da lógica
+function updateLogicPreview() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        const previewDiv = question.querySelector(`#logicPreview-${index}`);
+        if (!previewDiv) return;
+        
+        const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+        const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+        
+        let previewText = '';
+        
+        if (visibilityConditions.length > 0) {
+            previewText += '<strong>Visibilidade:</strong> ';
+            previewText += generateConditionsPreview(visibilityConditions, index, 'visibility');
+            previewText += '<br>';
+        }
+        
+        if (requiredConditions.length > 0) {
+            previewText += '<strong>Obrigatoriedade:</strong> ';
+            previewText += generateConditionsPreview(requiredConditions, index, 'required');
+        }
+        
+        if (previewText) {
+            previewDiv.innerHTML = previewText;
+            previewDiv.style.display = 'block';
+        } else {
+            previewDiv.style.display = 'none';
+        }
+    });
+}
+
+// Função para gerar preview das condições
+function generateConditionsPreview(conditions, questionIndex, ruleType) {
+    if (conditions.length === 0) return '';
+    
+    const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][operator]"]`);
+    const operator = operatorSelect ? operatorSelect.value : 'AND';
+    
+    const conditionTexts = [];
+    
+    conditions.forEach(condition => {
+        const questionSelect = condition.querySelector('select[name*="[question]"]');
+        const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+        const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+        
+        if (questionSelect && operatorSelect) {
+            const questionText = questionSelect.selectedOptions[0]?.text || 'Pergunta';
+            const operatorText = logicOperators[operatorSelect.value] || 'operador';
+            const valueText = valueField ? valueField.value : '';
+            
+            let conditionText = `<span class="question-reference">${questionText}</span> ${operatorText}`;
+            
+            if (valueText && !['is_empty', 'is_not_empty'].includes(operatorSelect.value)) {
+                conditionText += ` "${valueText}"`;
+            }
+            
+            conditionTexts.push(conditionText);
+        }
+    });
+    
+    if (conditionTexts.length === 0) return '';
+    
+    const operatorText = operator === 'AND' ? ' E ' : ' OU ';
+    return conditionTexts.join(operatorText);
+}
+
+// Função para validar toda a lógica condicional
+function validateAllConditionalLogic() {
+    const questions = document.querySelectorAll('.question-item');
+    const errors = [];
+    const warnings = [];
+    
+    questions.forEach((question, index) => {
+        const validation = validateQuestionConditionalLogic(question, index);
+        errors.push(...validation.errors);
+        warnings.push(...validation.warnings);
+    });
+    
+    // Mostrar erros globais
+    const globalValidation = document.getElementById('globalValidation');
+    if (errors.length > 0 || warnings.length > 0) {
+        let content = '';
+        
+        if (errors.length > 0) {
+            content += '<strong>Erros:</strong><ul>';
+            errors.forEach(error => {
+                content += `<li>${error}</li>`;
+            });
+            content += '</ul>';
+        }
+        
+        if (warnings.length > 0) {
+            content += '<strong>Avisos:</strong><ul>';
+            warnings.forEach(warning => {
+                content += `<li>${warning}</li>`;
+            });
+            content += '</ul>';
+        }
+        
+        globalValidation.innerHTML = content;
+        globalValidation.style.display = 'block';
+    } else {
+        globalValidation.style.display = 'none';
+    }
+    
+    return { valid: errors.length === 0, errors, warnings };
+}
+
+// Função para validar lógica condicional de uma pergunta
+function validateQuestionConditionalLogic(question, questionIndex) {
+    const errors = [];
+    const warnings = [];
+    
+    const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + questionIndex + ' .condition-item');
+    const requiredConditions = question.querySelectorAll('#requiredConditions-' + questionIndex + ' .condition-item');
+    
+    [...visibilityConditions, ...requiredConditions].forEach((condition, condIndex) => {
+        const questionSelect = condition.querySelector('select[name*="[question]"]');
+        const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+        const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+        
+        if (!questionSelect.value) {
+            errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem pergunta selecionada`);
+        }
+        
+        if (!operatorSelect.value) {
+            errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem operador selecionado`);
+        }
+        
+        if (questionSelect.value && parseInt(questionSelect.value) >= questionIndex) {
+            errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+        }
+        
+        if (operatorSelect.value && !['is_empty', 'is_not_empty'].includes(operatorSelect.value) && (!valueField || !valueField.value.trim())) {
+            warnings.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem valor definido`);
+        }
+    });
+    
+    return { errors, warnings };
+}
+
+// Função para visualizar lógica completa
+function previewLogic() {
+    const modal = new bootstrap.Modal(document.getElementById('logicPreviewModal'));
+    const content = document.getElementById('logicPreviewContent');
+    
+    const questions = document.querySelectorAll('.question-item');
+    let previewHtml = '';
+    
+    if (questions.length === 0) {
+        previewHtml = '<p class="text-muted">Nenhuma pergunta criada ainda.</p>';
+    } else {
+        previewHtml = '<div class="row">';
+        
+        questions.forEach((question, index) => {
+            const textArea = question.querySelector('textarea[name*="[text]"]');
+            const typeSelect = question.querySelector('select[name*="[type]"]');
+            const requiredCheckbox = question.querySelector('input[name*="[required]"]');
+            
+            const questionText = textArea ? textArea.value : `Pergunta ${index + 1}`;
+            const questionType = typeSelect ? typeSelect.value : 'text';
+            const isRequired = requiredCheckbox ? requiredCheckbox.checked : false;
+            
+            const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+            const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+            
+            let cardClass = 'border-start border-3 ';
+            if (visibilityConditions.length > 0 && requiredConditions.length > 0) {
+                cardClass += 'border-warning';
+            } else if (visibilityConditions.length > 0) {
+                cardClass += 'border-info';
+            } else if (requiredConditions.length > 0) {
+                cardClass += 'border-primary';
+            } else {
+                cardClass += 'border-secondary';
+            }
+            
+            previewHtml += `
+                <div class="col-12 mb-3">
+                    <div class="card ${cardClass}">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                Pergunta ${index + 1}
+                                ${isRequired ? '<i class="fas fa-asterisk text-danger ms-1" title="Obrigatória"></i>' : ''}
+                            </h6>
+                            <p class="card-text">${questionText || 'Texto não definido'}</p>
+                            <small class="text-muted">Tipo: ${questionType || 'Não definido'}</small>
+                            
+                            ${visibilityConditions.length > 0 ? `
+                                <div class="mt-2">
+                                    <span class="badge bg-info">Lógica de Visibilidade</span>
+                                    <div class="mt-1 small">
+                                        ${generateConditionsPreview(visibilityConditions, index, 'visibility')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${requiredConditions.length > 0 ? `
+                                <div class="mt-2">
+                                    <span class="badge bg-primary">Lógica de Obrigatoriedade</span>
+                                    <div class="mt-1 small">
+                                        ${generateConditionsPreview(requiredConditions, index, 'required')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        previewHtml += '</div>';
+    }
+    
+    content.innerHTML = previewHtml;
+    modal.show();
 }
 
 // Validação do formulário
@@ -893,7 +1082,7 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Validar se pelo menos um aplicador foi selecionado
+    // Validar aplicadores
     const aplicadoresSelect = document.getElementById('aplicadores');
     if (!aplicadoresSelect.selectedOptions.length) {
         e.preventDefault();
@@ -901,13 +1090,13 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Validar se perguntas de múltipla escolha têm pelo menos 2 opções
+    // Validar perguntas de múltipla escolha
     let valid = true;
     questions.forEach((question, index) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
         const type = typeSelect.value;
         
-        if (type === 'radio' || type === 'checkbox') {
+        if (['radio', 'checkbox', 'select'].includes(type)) {
             const options = question.querySelectorAll('input[name*="[options]"][name*="[text]"]');
             if (options.length < 2) {
                 alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções.`);
@@ -921,5 +1110,94 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         e.preventDefault();
         return false;
     }
+    
+    // Validar lógica condicional
+    const logicValidation = validateAllConditionalLogic();
+    if (!logicValidation.valid) {
+        e.preventDefault();
+        alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
+        return false;
+    }
+    
+    // Serializar lógica condicional para envio
+    serializeConditionalLogic();
 });
+
+// Função para serializar lógica condicional
+function serializeConditionalLogic() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        const logicData = {
+            visibility: null,
+            required: null
+        };
+        
+        // Serializar condições de visibilidade
+        const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+        if (visibilityConditions.length > 0) {
+            const visibilityOperator = question.querySelector(`select[name="questions[${index}][logic][visibility][operator]"]`);
+            
+            logicData.visibility = {
+                operator: visibilityOperator ? visibilityOperator.value : 'AND',
+                conditions: []
+            };
+            
+            visibilityConditions.forEach(condition => {
+                const questionSelect = condition.querySelector('select[name*="[question]"]');
+                const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+                const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+                
+                if (questionSelect.value && operatorSelect.value) {
+                    logicData.visibility.conditions.push({
+                        question: parseInt(questionSelect.value),
+                        operator: operatorSelect.value,
+                        value: valueField ? valueField.value : ''
+                    });
+                }
+            });
+        }
+        
+        // Serializar condições de obrigatoriedade
+        const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+        if (requiredConditions.length > 0) {
+            const requiredOperator = question.querySelector(`select[name="questions[${index}][logic][required][operator]"]`);
+            
+            logicData.required = {
+                operator: requiredOperator ? requiredOperator.value : 'AND',
+                conditions: []
+            };
+            
+            requiredConditions.forEach(condition => {
+                const questionSelect = condition.querySelector('select[name*="[question]"]');
+                const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+                const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+                
+                if (questionSelect.value && operatorSelect.value) {
+                    logicData.required.conditions.push({
+                        question: parseInt(questionSelect.value),
+                        operator: operatorSelect.value,
+                        value: valueField ? valueField.value : ''
+                    });
+                }
+            });
+        }
+        
+        // Adicionar campo hidden com a lógica serializada
+        if (logicData.visibility || logicData.required) {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = `questions[${index}][conditional_logic]`;
+            hiddenInput.value = JSON.stringify(logicData);
+            question.appendChild(hiddenInput);
+        }
+    });
+}
+
+// Incluir Bootstrap JS para modals
+if (typeof bootstrap === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
+    document.head.appendChild(script);
+}
 </script>
