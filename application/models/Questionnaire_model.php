@@ -381,387 +381,602 @@ class Questionnaire_model extends CI_Model {
         }
     }
 
-
     /**
-     * Obter histórico de aplicações de questionários de um usuário
+     * Executar lógica condicional para um conjunto de respostas
      * 
-     * @param int $user_id ID do usuário aplicador
-     * @param array $filters Filtros para a consulta
-     * @return array Lista de aplicações
+     * @param array $questions Array de perguntas com lógica condicional
+     * @param array $responses Respostas fornecidas
+     * @return array Estados das perguntas (visível, obrigatória, etc.)
      */
-    public function get_application_history($user_id, $filters = []) {
-        $this->db->select('
-            fr.id,
-            fr.questionnaire_id,
-            fr.respondent_name,
-            fr.respondent_email,
-            fr.latitude,
-            fr.longitude,
-            fr.location_name,
-            fr.photo_path,
-            fr.consent_given,
-            fr.sync_status,
-            fr.started_at,
-            fr.completed_at,
-            fr.created_at,
-            q.title as questionnaire_title,
-            q.id as questionnaire_code
-        ');
+    public function execute_conditional_logic($questions, $responses = []) {
+        $question_states = [];
         
-        $this->db->from('form_responses fr');
-        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('fr.applied_by', $user_id);
-        
-        // Aplicar filtros de período
-        if (!empty($filters['period'])) {
-            switch ($filters['period']) {
-                case 'today':
-                    $this->db->where('DATE(fr.completed_at)', date('Y-m-d'));
-                    break;
-                case 'week':
-                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-7 days')));
-                    break;
-                case 'month':
-                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-30 days')));
-                    break;
-            }
-        }
-        
-        // Filtro por status de sincronização
-        if (!empty($filters['sync_status'])) {
-            $this->db->where('fr.sync_status', $filters['sync_status']);
-        }
-        
-        // Filtro por questionário específico
-        if (!empty($filters['questionnaire_id'])) {
-            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
-        }
-        
-        // Ordenação e paginação
-        $this->db->order_by('fr.completed_at', 'DESC');
-        $this->db->order_by('fr.created_at', 'DESC');
-        
-        if (!empty($filters['limit'])) {
-            $this->db->limit($filters['limit'], $filters['offset'] ?? 0);
-        }
-        
-        return $this->db->get()->result();
-    }
-
-    /**
-     * Obter contadores para os filtros do histórico
-     * 
-     * @param int $user_id ID do usuário aplicador
-     * @return array Contadores por categoria
-     */
-    public function get_history_counters($user_id) {
-        $counters = [];
-        
-        // Total geral
-        $this->db->where('applied_by', $user_id);
-        $counters['total'] = $this->db->count_all_results('form_responses');
-        
-        // Hoje
-        $this->db->where('applied_by', $user_id);
-        $this->db->where('DATE(completed_at)', date('Y-m-d'));
-        $counters['today'] = $this->db->count_all_results('form_responses');
-        
-        // Última semana
-        $this->db->where('applied_by', $user_id);
-        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-7 days')));
-        $counters['week'] = $this->db->count_all_results('form_responses');
-        
-        // Por status de sincronização
-        $sync_statuses = ['pending', 'synced', 'error'];
-        foreach ($sync_statuses as $status) {
-            $this->db->where('applied_by', $user_id);
-            $this->db->where('sync_status', $status);
-            $counters[$status] = $this->db->count_all_results('form_responses');
-        }
-        
-        return $counters;
-    }
-
-    /**
-     * Obter resumo do histórico de um usuário
-     * 
-     * @param int $user_id ID do usuário aplicador
-     * @return array Dados de resumo
-     */
-    public function get_history_summary($user_id) {
-        // Estatísticas gerais
-        $this->db->select('
-            COUNT(*) as total_applications,
-            COUNT(CASE WHEN sync_status = "synced" THEN 1 END) as synced_count,
-            COUNT(CASE WHEN sync_status = "pending" THEN 1 END) as pending_count,
-            COUNT(CASE WHEN sync_status = "error" THEN 1 END) as error_count,
-            COUNT(CASE WHEN photo_path IS NOT NULL AND photo_path != "" THEN 1 END) as photos_captured,
-            COUNT(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 1 END) as locations_captured,
-            COUNT(CASE WHEN consent_given = true THEN 1 END) as consents_given,
-            COUNT(CASE WHEN DATE(completed_at) = CURDATE() THEN 1 END) as today_applications,
-            COUNT(CASE WHEN completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) as week_applications,
-            COUNT(CASE WHEN completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 END) as month_applications,
-            MIN(completed_at) as first_application,
-            MAX(completed_at) as last_application
-        ');
-        
-        $this->db->from('form_responses');
-        $this->db->where('applied_by', $user_id);
-        $this->db->where('completed_at IS NOT NULL');
-        
-        $stats = $this->db->get()->row();
-        
-        if (!$stats) {
-            return [
-                'total_applications' => 0,
-                'success_rate' => 0,
-                'photos_captured' => 0,
-                'locations_captured' => 0,
-                'consents_given' => 0,
-                'period_stats' => [
-                    'today' => 0,
-                    'week' => 0,
-                    'month' => 0
-                ],
-                'sync_stats' => [
-                    'synced' => 0,
-                    'pending' => 0,
-                    'error' => 0
-                ],
-                'activity_period' => [
-                    'first_application' => null,
-                    'last_application' => null,
-                    'days_active' => 0
-                ]
+        // Inicializar estados padrão
+        foreach ($questions as $index => $question) {
+            $question_states["q_$index"] = [
+                'visible' => true,
+                'required' => (bool)$question->is_required,
+                'original_required' => (bool)$question->is_required
             ];
         }
         
-        // Calcular taxa de sucesso
-        $success_rate = $stats->total_applications > 0 
-            ? round(($stats->synced_count / $stats->total_applications) * 100, 1) 
-            : 0;
-        
-        // Calcular dias ativos
-        $days_active = 0;
-        if ($stats->first_application && $stats->last_application) {
-            $first = new DateTime($stats->first_application);
-            $last = new DateTime($stats->last_application);
-            $days_active = $first->diff($last)->days + 1;
-        }
-        
-        return [
-            'total_applications' => (int)$stats->total_applications,
-            'success_rate' => (float)$success_rate,
-            'photos_captured' => (int)$stats->photos_captured,
-            'locations_captured' => (int)$stats->locations_captured,
-            'consents_given' => (int)$stats->consents_given,
-            'period_stats' => [
-                'today' => (int)$stats->today_applications,
-                'week' => (int)$stats->week_applications,
-                'month' => (int)$stats->month_applications
-            ],
-            'sync_stats' => [
-                'synced' => (int)$stats->synced_count,
-                'pending' => (int)$stats->pending_count,
-                'error' => (int)$stats->error_count
-            ],
-            'activity_period' => [
-                'first_application' => $stats->first_application,
-                'last_application' => $stats->last_application,
-                'days_active' => $days_active
-            ]
-        ];
-    }
-
-    /**
-     * Obter aplicações recentes de um usuário
-     * 
-     * @param int $user_id ID do usuário aplicador
-     * @param int $limit Limite de registros
-     * @return array Lista das aplicações mais recentes
-     */
-    public function get_recent_applications($user_id, $limit = 5) {
-        $this->db->select('
-            fr.id,
-            fr.questionnaire_id,
-            fr.respondent_name,
-            fr.location_name,
-            fr.sync_status,
-            fr.completed_at,
-            fr.created_at,
-            q.title as questionnaire_title
-        ');
-        
-        $this->db->from('form_responses fr');
-        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('fr.applied_by', $user_id);
-        $this->db->where('fr.completed_at IS NOT NULL');
-        $this->db->order_by('fr.completed_at', 'DESC');
-        $this->db->limit($limit);
-        
-        return $this->db->get()->result();
-    }
-
-    /**
-     * Obter estatísticas de questionários por usuário
-     * 
-     * @param int $user_id ID do usuário aplicador
-     * @return array Estatísticas por questionário
-     */
-    public function get_user_questionnaire_stats($user_id) {
-        $this->db->select('
-            q.id,
-            q.title,
-            COUNT(fr.id) as total_applications,
-            COUNT(CASE WHEN fr.sync_status = "synced" THEN 1 END) as synced_applications,
-            MAX(fr.completed_at) as last_application,
-            MIN(fr.completed_at) as first_application,
-            AVG(CASE 
-                WHEN fr.started_at IS NOT NULL AND fr.completed_at IS NOT NULL 
-                THEN TIMESTAMPDIFF(MINUTE, fr.started_at, fr.completed_at)
-                ELSE NULL 
-            END) as avg_duration_minutes
-        ');
-        
-        $this->db->from('questionnaires q');
-        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'inner');
-        $this->db->where('fr.completed_at IS NOT NULL');
-        $this->db->group_by('q.id, q.title');
-        $this->db->order_by('total_applications', 'DESC');
-        $this->db->limit(10); // Top 10 questionários mais aplicados
-        
-        $results = $this->db->get()->result();
-        
-        // Formatar os resultados
-        $formatted = [];
-        foreach ($results as $result) {
-            $success_rate = $result->total_applications > 0 
-                ? round(($result->synced_applications / $result->total_applications) * 100, 1) 
-                : 0;
+        // Processar lógica condicional
+        foreach ($questions as $index => $question) {
+            if (!empty($question->conditional_logic_decoded)) {
+                $logic = $question->conditional_logic_decoded;
                 
-            $formatted[] = [
-                'questionnaire_id' => (int)$result->id,
-                'questionnaire_title' => $result->title,
-                'questionnaire_code' => sprintf('#%03d', $result->id),
-                'total_applications' => (int)$result->total_applications,
-                'synced_applications' => (int)$result->synced_applications,
-                'success_rate' => (float)$success_rate,
-                'avg_duration_minutes' => $result->avg_duration_minutes ? round($result->avg_duration_minutes, 1) : null,
-                'first_application' => $result->first_application,
-                'last_application' => $result->last_application
-            ];
-        }
-        
-        return $formatted;
-    }
-
-    /**
-     * Obter dados para gráfico de aplicações por período
-     * 
-     * @param int $user_id ID do usuário aplicador
-     * @param int $days Número de dias para análise
-     * @return array Dados para gráfico
-     */
-    public function get_applications_chart_data($user_id, $days = 30) {
-        $this->db->select('
-            DATE(completed_at) as application_date,
-            COUNT(*) as total_applications,
-            COUNT(CASE WHEN sync_status = "synced" THEN 1 END) as synced_applications,
-            COUNT(CASE WHEN photo_path IS NOT NULL AND photo_path != "" THEN 1 END) as photos_captured
-        ');
-        
-        $this->db->from('form_responses');
-        $this->db->where('applied_by', $user_id);
-        $this->db->where('completed_at IS NOT NULL');
-        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
-        $this->db->group_by('DATE(completed_at)');
-        $this->db->order_by('application_date', 'ASC');
-        
-        return $this->db->get()->result();
-    }
-
-    /**
-     * Obter questionários disponíveis para um usuário aplicador
-     * 
-     * @param int $user_id ID do usuário aplicador
-     * @return array Lista de questionários disponíveis
-     */
-    public function get_available_questionnaires_for_user($user_id) {
-        $this->db->select('
-            q.id,
-            q.title,
-            q.description,
-            q.estimated_time,
-            q.requires_consent,
-            q.requires_location,
-            q.requires_photo,
-            p.name as project_name,
-            COUNT(fr.id) as user_applications
-        ');
-        
-        $this->db->from('questionnaires q');
-        $this->db->join('projects p', 'q.project_id = p.id', 'left');
-        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'left');
-        $this->db->where('q.status', 'active');
-        $this->db->group_by('q.id, q.title, q.description, q.estimated_time, q.requires_consent, q.requires_location, q.requires_photo, p.name');
-        $this->db->order_by('q.title', 'ASC');
-        
-        $questionnaires = $this->db->get()->result();
-        
-        // Filtrar questionários que o usuário pode acessar
-        $available = [];
-        foreach ($questionnaires as $questionnaire) {
-            if ($this->can_aplicador_access($questionnaire->id, $user_id)) {
-                $available[] = $questionnaire;
+                // Processar regras de visibilidade
+                if (isset($logic['visibility'])) {
+                    $visibility_result = $this->evaluate_rule($logic['visibility'], $responses, $questions);
+                    $question_states["q_$index"]['visible'] = $visibility_result;
+                }
+                
+                // Processar regras de obrigatoriedade
+                if (isset($logic['required'])) {
+                    $required_result = $this->evaluate_rule($logic['required'], $responses, $questions);
+                    if ($required_result) {
+                        $question_states["q_$index"]['required'] = true;
+                    }
+                }
+                
+                // Se pergunta não está visível, não deve ser obrigatória
+                if (!$question_states["q_$index"]['visible']) {
+                    $question_states["q_$index"]['required'] = false;
+                }
             }
         }
         
-        return $available;
+        return $question_states;
     }
 
     /**
-     * Obter detalhes de uma aplicação específica
+     * Avaliar uma regra de lógica condicional
      * 
-     * @param int $response_id ID da resposta
-     * @param int $user_id ID do usuário (para verificação de permissão)
-     * @return object|null Detalhes da aplicação
+     * @param array $rule Regra a ser avaliada
+     * @param array $responses Respostas fornecidas
+     * @param array $questions Array de perguntas
+     * @return bool Resultado da avaliação
      */
-    public function get_application_details($response_id, $user_id) {
-        $this->db->select('
-            fr.*,
-            q.title as questionnaire_title,
-            q.description as questionnaire_description,
-            q.estimated_time,
-            p.name as project_name,
-            u.full_name as applied_by_name
-        ');
-        
-        $this->db->from('form_responses fr');
-        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->join('projects p', 'q.project_id = p.id', 'left');
-        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
-        $this->db->where('fr.id', $response_id);
-        $this->db->where('fr.applied_by', $user_id); // Garantir que o usuário só acesse suas próprias aplicações
-        
-        $application = $this->db->get()->row();
-        
-        if ($application) {
-            // Buscar as respostas das perguntas
-            $this->db->select('
-                qr.*,
-                q.question_text,
-                q.question_type
-            ');
-            $this->db->from('question_responses qr');
-            $this->db->join('questions q', 'qr.question_id = q.id', 'left');
-            $this->db->where('qr.form_response_id', $response_id);
-            $this->db->order_by('q.order_index', 'ASC');
-            
-            $application->responses = $this->db->get()->result();
+    private function evaluate_rule($rule, $responses, $questions) {
+        if (!isset($rule['conditions']) || empty($rule['conditions'])) {
+            return true;
         }
         
-        return $application;
+        $operator = isset($rule['operator']) ? $rule['operator'] : 'AND';
+        $results = [];
+        
+        foreach ($rule['conditions'] as $condition) {
+            if (!isset($condition['question'], $condition['operator'])) {
+                continue;
+            }
+            
+            $target_question_index = intval($condition['question']);
+            $condition_operator = $condition['operator'];
+            $condition_value = isset($condition['value']) ? $condition['value'] : '';
+            
+            // Obter resposta da pergunta alvo
+            $response_value = isset($responses["q_$target_question_index"]) ? 
+                            $responses["q_$target_question_index"] : '';
+            
+            // Avaliar condição
+            $condition_result = $this->evaluate_condition(
+                $response_value, 
+                $condition_operator, 
+                $condition_value,
+                isset($questions[$target_question_index]) ? $questions[$target_question_index] : null
+            );
+            
+            $results[] = $condition_result;
+        }
+        
+        // Aplicar operador lógico
+        if ($operator === 'OR') {
+            return in_array(true, $results);
+        } else { // AND
+            return !in_array(false, $results);
+        }
     }
-    
 
+    /**
+     * Avaliar uma condição específica
+     * 
+     * @param mixed $response_value Valor da resposta
+     * @param string $operator Operador da condição
+     * @param mixed $condition_value Valor da condição
+     * @param object $target_question Pergunta alvo (opcional)
+     * @return bool Resultado da avaliação
+     */
+    private function evaluate_condition($response_value, $operator, $condition_value, $target_question = null) {
+        // Normalizar valores
+        $response_str = is_array($response_value) ? implode(',', $response_value) : strval($response_value);
+        $condition_str = strval($condition_value);
+        
+        switch ($operator) {
+            case 'equals':
+                return $response_str === $condition_str;
+                
+            case 'not_equals':
+                return $response_str !== $condition_str;
+                
+            case 'contains':
+                if (is_array($response_value)) {
+                    return in_array($condition_str, $response_value);
+                }
+                return strpos($response_str, $condition_str) !== false;
+                
+            case 'not_contains':
+                if (is_array($response_value)) {
+                    return !in_array($condition_str, $response_value);
+                }
+                return strpos($response_str, $condition_str) === false;
+                
+            case 'greater_than':
+                return is_numeric($response_str) && is_numeric($condition_str) && 
+                       floatval($response_str) > floatval($condition_str);
+                
+            case 'less_than':
+                return is_numeric($response_str) && is_numeric($condition_str) && 
+                       floatval($response_str) < floatval($condition_str);
+                
+            case 'is_empty':
+                return empty($response_str) || trim($response_str) === '';
+                
+            case 'is_not_empty':
+                return !empty($response_str) && trim($response_str) !== '';
+                
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Validar respostas com lógica condicional
+     * 
+     * @param array $questions Array de perguntas
+     * @param array $responses Respostas fornecidas
+     * @return array Resultado da validação
+     */
+    public function validate_responses_with_conditional_logic($questions, $responses) {
+        $validation = [
+            'valid' => true,
+            'errors' => [],
+            'warnings' => []
+        ];
+        
+        try {
+            // Executar lógica condicional para obter estados das perguntas
+            $question_states = $this->execute_conditional_logic($questions, $responses);
+            
+            // Validar cada pergunta
+            foreach ($questions as $index => $question) {
+                $state = $question_states["q_$index"];
+                $response = isset($responses["q_$index"]) ? $responses["q_$index"] : null;
+                
+                // Se pergunta não está visível, pular validação
+                if (!$state['visible']) {
+                    continue;
+                }
+                
+                // Validar obrigatoriedade
+                if ($state['required']) {
+                    if (empty($response) && $response !== '0') {
+                        $validation['errors'][] = "Pergunta " . ($index + 1) . " é obrigatória.";
+                        $validation['valid'] = false;
+                    }
+                }
+                
+                // Validar tipo de resposta
+                if (!empty($response)) {
+                    $type_validation = $this->validate_response_type($question, $response);
+                    if (!$type_validation['valid']) {
+                        $validation['errors'] = array_merge($validation['errors'], $type_validation['errors']);
+                        $validation['valid'] = false;
+                    }
+                }
+            }
+            
+        } catch (Exception $e) {
+            $validation['valid'] = false;
+            $validation['errors'][] = 'Erro na validação: ' . $e->getMessage();
+            log_message('error', 'Erro na validação com lógica condicional: ' . $e->getMessage());
+        }
+        
+        return $validation;
+    }
+
+    /**
+     * Validar tipo de resposta para uma pergunta
+     * 
+     * @param object $question Pergunta
+     * @param mixed $response Resposta
+     * @return array Resultado da validação
+     */
+    private function validate_response_type($question, $response) {
+        $validation = [
+            'valid' => true,
+            'errors' => []
+        ];
+        
+        switch ($question->question_type) {
+            case 'number':
+                if (!is_numeric($response)) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = "Pergunta " . $question->order_index . " deve ser um número.";
+                }
+                break;
+                
+            case 'email':
+                if (!filter_var($response, FILTER_VALIDATE_EMAIL)) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = "Pergunta " . $question->order_index . " deve ser um email válido.";
+                }
+                break;
+                
+            case 'date':
+                if (!$this->validate_date_format($response)) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = "Pergunta " . $question->order_index . " deve ser uma data válida.";
+                }
+                break;
+                
+            case 'radio':
+            case 'select':
+                // Validar se valor está nas opções disponíveis
+                if (!empty($question->options)) {
+                    $valid_values = array_column($question->options, 'option_text');
+                    if (!in_array($response, $valid_values)) {
+                        $validation['valid'] = false;
+                        $validation['errors'][] = "Pergunta " . $question->order_index . " tem valor inválido.";
+                    }
+                }
+                break;
+                
+            case 'checkbox':
+                // Validar se é array e todos os valores estão nas opções
+                if (!is_array($response)) {
+                    $response = [$response];
+                }
+                
+                if (!empty($question->options)) {
+                    $valid_values = array_column($question->options, 'option_text');
+                    foreach ($response as $value) {
+                        if (!in_array($value, $valid_values)) {
+                            $validation['valid'] = false;
+                            $validation['errors'][] = "Pergunta " . $question->order_index . " tem valor inválido: $value";
+                        }
+                    }
+                }
+                break;
+        }
+        
+        return $validation;
+    }
+
+    /**
+     * Validar formato de data
+     * 
+     * @param string $date Data a ser validada
+     * @return bool Válida ou não
+     */
+    private function validate_date_format($date) {
+        $formats = ['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y-m-d H:i:s'];
+        
+        foreach ($formats as $format) {
+            $d = DateTime::createFromFormat($format, $date);
+            if ($d && $d->format($format) === $date) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Helper para exibir resumo da lógica condicional (usado na view)
+     * Método chamado pelo controlador no edit.php
+     * 
+     * @param string $conditional_logic_json JSON da lógica condicional
+     * @return string HTML do resumo
+     */
+    public function display_conditional_logic_summary($conditional_logic_json) {
+        if (empty($conditional_logic_json)) {
+            return '';
+        }
+        
+        $logic = json_decode($conditional_logic_json, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return '<span class="text-danger">Lógica inválida</span>';
+        }
+        
+        $summary = array();
+        
+        if (isset($logic['visibility']) && !empty($logic['visibility']['conditions'])) {
+            $visibility_count = count($logic['visibility']['conditions']);
+            $visibility_operator = isset($logic['visibility']['operator']) ? $logic['visibility']['operator'] : 'AND';
+            $summary[] = "<strong>Visibilidade:</strong> $visibility_count condição(ões) com operador $visibility_operator";
+        }
+        
+        if (isset($logic['required']) && !empty($logic['required']['conditions'])) {
+            $required_count = count($logic['required']['conditions']);
+            $required_operator = isset($logic['required']['operator']) ? $logic['required']['operator'] : 'AND';
+            $summary[] = "<strong>Obrigatória:</strong> $required_count condição(ões) com operador $required_operator";
+        }
+        
+        if (empty($summary)) {
+            return '<span class="text-muted">Lógica vazia</span>';
+        }
+        
+        return implode('<br>', $summary);
+    }
+
+    /**
+     * Verificar se questionário tem lógica condicional
+     * 
+     * @param int $questionnaire_id ID do questionário
+     * @return bool Tem lógica condicional ou não
+     */
+    public function has_conditional_logic($questionnaire_id) {
+        $this->db->where('questionnaire_id', $questionnaire_id);
+        $this->db->where('conditional_logic IS NOT NULL');
+        $this->db->where('conditional_logic !=', '');
+        
+        return $this->db->count_all_results('questions') > 0;
+    }
+
+    /**
+     * Processar respostas com lógica condicional para salvar no banco
+     * 
+     * @param array $questions Array de perguntas
+     * @param array $raw_responses Respostas brutas do formulário
+     * @return array Respostas processadas e validadas
+     */
+    public function process_responses_with_logic($questions, $raw_responses) {
+        $processed = [
+            'responses' => [],
+            'metadata' => [
+                'total_questions' => count($questions),
+                'answered_questions' => 0,
+                'visible_questions' => 0,
+                'required_questions' => 0,
+                'logic_applied' => false
+            ],
+            'validation' => ['valid' => true, 'errors' => []]
+        ];
+        
+        try {
+            // Executar lógica condicional
+            $question_states = $this->execute_conditional_logic($questions, $raw_responses);
+            $processed['metadata']['logic_applied'] = true;
+            
+            // Processar cada pergunta
+            foreach ($questions as $index => $question) {
+                $state = $question_states["q_$index"];
+                $response_key = "q_$index";
+                $raw_response = isset($raw_responses[$response_key]) ? $raw_responses[$response_key] : null;
+                
+                // Contabilizar pergunta visível
+                if ($state['visible']) {
+                    $processed['metadata']['visible_questions']++;
+                    
+                    if ($state['required']) {
+                        $processed['metadata']['required_questions']++;
+                    }
+                    
+                    // Processar resposta se pergunta está visível
+                    if (!empty($raw_response) || $raw_response === '0') {
+                        $processed['responses'][$response_key] = [
+                            'question_id' => $question->id,
+                            'question_text' => $question->question_text,
+                            'question_type' => $question->question_type,
+                            'response_value' => $this->normalize_response_value($raw_response, $question),
+                            'was_visible' => true,
+                            'was_required' => $state['required'],
+                            'order_index' => $question->order_index
+                        ];
+                        $processed['metadata']['answered_questions']++;
+                    } else if ($state['required']) {
+                        // Pergunta obrigatória não respondida
+                        $processed['validation']['valid'] = false;
+                        $processed['validation']['errors'][] = "Pergunta " . ($index + 1) . " é obrigatória.";
+                    }
+                } else {
+                    // Pergunta não visível - registrar como não aplicável
+                    $processed['responses'][$response_key] = [
+                        'question_id' => $question->id,
+                        'question_text' => $question->question_text,
+                        'question_type' => $question->question_type,
+                        'response_value' => null,
+                        'was_visible' => false,
+                        'was_required' => false,
+                        'order_index' => $question->order_index,
+                        'not_applicable' => true
+                    ];
+                }
+            }
+            
+        } catch (Exception $e) {
+            $processed['validation']['valid'] = false;
+            $processed['validation']['errors'][] = 'Erro no processamento: ' . $e->getMessage();
+            log_message('error', 'Erro no processamento de respostas com lógica: ' . $e->getMessage());
+        }
+        
+        return $processed;
+    }
+
+    /**
+     * Normalizar valor de resposta baseado no tipo de pergunta
+     * 
+     * @param mixed $raw_value Valor bruto
+     * @param object $question Pergunta
+     * @return mixed Valor normalizado
+     */
+    private function normalize_response_value($raw_value, $question) {
+        switch ($question->question_type) {
+            case 'checkbox':
+                return is_array($raw_value) ? $raw_value : [$raw_value];
+                
+            case 'number':
+                return is_numeric($raw_value) ? floatval($raw_value) : $raw_value;
+                
+            case 'radio':
+            case 'select':
+            case 'text':
+            case 'textarea':
+            case 'email':
+            case 'date':
+            default:
+                return is_string($raw_value) ? trim($raw_value) : $raw_value;
+        }
+    }
+
+    /**
+     * Gerar relatório de uso da lógica condicional
+     * 
+     * @param int $questionnaire_id ID do questionário (opcional)
+     * @return array Relatório detalhado
+     */
+    public function generate_conditional_logic_report($questionnaire_id = null) {
+        $report = [
+            'generated_at' => date('Y-m-d H:i:s'),
+            'scope' => $questionnaire_id ? 'single_questionnaire' : 'all_questionnaires',
+            'questionnaire_id' => $questionnaire_id,
+            'summary' => [],
+            'questionnaires' => [],
+            'total_logic_usage' => 0,
+            'complexity_analysis' => []
+        ];
+        
+        try {
+            // Query base
+            $this->db->select('q.id, q.title, q.status, COUNT(questions.id) as total_questions');
+            $this->db->from('questionnaires q');
+            $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
+            
+            if ($questionnaire_id) {
+                $this->db->where('q.id', $questionnaire_id);
+            }
+            
+            $this->db->group_by('q.id, q.title, q.status');
+            $questionnaires = $this->db->get()->result();
+            
+            foreach ($questionnaires as $questionnaire) {
+                // Análise detalhada por questionário
+                $questionnaire_analysis = [
+                    'id' => $questionnaire->id,
+                    'title' => $questionnaire->title,
+                    'status' => $questionnaire->status,
+                    'total_questions' => $questionnaire->total_questions,
+                    'questions_with_logic' => 0,
+                    'logic_types' => ['visibility' => 0, 'required' => 0, 'both' => 0],
+                    'complexity_score' => 0,
+                    'dependencies' => []
+                ];
+                
+                // Obter estatísticas de lógica condicional
+                $this->load->model('Question_model');
+                if (method_exists($this->Question_model, 'get_conditional_logic_stats')) {
+                    $logic_stats = $this->Question_model->get_conditional_logic_stats($questionnaire->id);
+                    
+                    $questionnaire_analysis['questions_with_logic'] = $logic_stats['questions_with_logic'];
+                    $questionnaire_analysis['logic_types']['visibility'] = $logic_stats['visibility_rules'];
+                    $questionnaire_analysis['logic_types']['required'] = $logic_stats['required_rules'];
+                    $questionnaire_analysis['complexity_score'] = $logic_stats['complex_logic'];
+                    
+                    $report['total_logic_usage'] += $logic_stats['questions_with_logic'];
+                }
+                
+                $report['questionnaires'][] = $questionnaire_analysis;
+            }
+            
+            // Gerar resumo
+            $report['summary'] = [
+                'total_questionnaires' => count($questionnaires),
+                'questionnaires_with_logic' => count(array_filter($report['questionnaires'], function($q) {
+                    return $q['questions_with_logic'] > 0;
+                })),
+                'total_questions' => array_sum(array_column($report['questionnaires'], 'total_questions')),
+                'total_logic_questions' => $report['total_logic_usage'],
+                'average_complexity' => count($report['questionnaires']) > 0 ? 
+                    array_sum(array_column($report['questionnaires'], 'complexity_score')) / count($report['questionnaires']) : 0
+            ];
+            
+        } catch (Exception $e) {
+            $report['error'] = 'Erro na geração do relatório: ' . $e->getMessage();
+            log_message('error', 'Erro no relatório de lógica condicional: ' . $e->getMessage());
+        }
+        
+        return $report;
+    }
+
+    /**
+     * Simular execução de lógica condicional (para testes)
+     * 
+     * @param int $questionnaire_id ID do questionário
+     * @param array $test_responses Respostas de teste
+     * @return array Resultado da simulação
+     */
+    public function simulate_conditional_logic($questionnaire_id, $test_responses = []) {
+        $simulation = [
+            'questionnaire_id' => $questionnaire_id,
+            'test_responses' => $test_responses,
+            'question_states' => [],
+            'execution_log' => [],
+            'performance' => [
+                'start_time' => microtime(true),
+                'end_time' => null,
+                'execution_time' => null,
+                'memory_usage' => memory_get_usage(true)
+            ],
+            'errors' => []
+        ];
+        
+        try {
+            $this->load->model('Question_model');
+            
+            if (method_exists($this->Question_model, 'get_by_questionnaire_with_logic')) {
+                $questions = $this->Question_model->get_by_questionnaire_with_logic($questionnaire_id);
+                $simulation['execution_log'][] = "Carregadas " . count($questions) . " perguntas";
+                
+                // Executar lógica condicional
+                $question_states = $this->execute_conditional_logic($questions, $test_responses);
+                $simulation['question_states'] = $question_states;
+                $simulation['execution_log'][] = "Lógica condicional executada com sucesso";
+                
+                // Validar respostas
+                $validation = $this->validate_responses_with_conditional_logic($questions, $test_responses);
+                $simulation['validation'] = $validation;
+                $simulation['execution_log'][] = "Validação concluída: " . ($validation['valid'] ? 'VÁLIDA' : 'INVÁLIDA');
+                
+                // Estatísticas da simulação
+                $visible_questions = count(array_filter($question_states, function($state) {
+                    return $state['visible'];
+                }));
+                $required_questions = count(array_filter($question_states, function($state) {
+                    return $state['required'];
+                }));
+                
+                $simulation['statistics'] = [
+                    'total_questions' => count($questions),
+                    'visible_questions' => $visible_questions,
+                    'required_questions' => $required_questions,
+                    'answered_questions' => count(array_filter($test_responses, function($response) {
+                        return !empty($response) || $response === '0';
+                    }))
+                ];
+                
+            } else {
+                $simulation['errors'][] = 'Método de lógica condicional não disponível';
+            }
+            
+        } catch (Exception $e) {
+            $simulation['errors'][] = 'Erro na simulação: ' . $e->getMessage();
+            log_message('error', 'Erro na simulação de lógica condicional: ' . $e->getMessage());
+        }
+        
+        $simulation['performance']['end_time'] = microtime(true);
+        $simulation['performance']['execution_time'] = $simulation['performance']['end_time'] - $simulation['performance']['start_time'];
+        $simulation['performance']['memory_peak'] = memory_get_peak_usage(true);
+        
+        return $simulation;
+    }
 }

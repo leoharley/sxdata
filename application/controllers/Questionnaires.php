@@ -121,6 +121,11 @@ class Questionnaires extends CI_Controller {
             show_404();
         }
 
+        // Debug em desenvolvimento
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Questionnaire data from DB: ' . json_encode($questionnaire));
+        }
+
         // Garantir que os valores sejam tratados como boolean
         $questionnaire->requires_consent = $this->_convert_to_boolean($questionnaire->requires_consent);
         $questionnaire->requires_location = $this->_convert_to_boolean($questionnaire->requires_location);
@@ -273,6 +278,10 @@ class Questionnaires extends CI_Controller {
         if ($questionnaire->aplicadores) {
             $data['aplicadores_selecionados'] = json_decode($questionnaire->aplicadores, true) ?: array();
         }
+
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Data being sent to view - requires_consent: ' . var_export($data['questionnaire']->requires_consent, true));
+        }
         
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/edit', $data);
@@ -280,7 +289,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método helper super robusto para carregar perguntas
+     * Método helper robusto para carregar perguntas com lógica condicional
      */
     private function get_questions_safe($questionnaire_id) {
         // Lista de métodos para tentar, em ordem de preferência
@@ -297,6 +306,7 @@ class Questionnaires extends CI_Controller {
                 if (method_exists($this->Question_model, $method)) {
                     $result = $this->Question_model->$method($questionnaire_id);
                     if (!empty($result)) {
+                        log_message('debug', "Sucesso com método: $method");
                         return $result;
                     }
                 }
@@ -307,11 +317,12 @@ class Questionnaires extends CI_Controller {
         }
         
         // Se todos os métodos falharam, usar o método mais básico possível
+        log_message('warning', 'Todos os métodos avançados falharam, usando método básico');
         return $this->get_questions_basic_fallback($questionnaire_id);
     }
 
     /**
-     * Método básico de emergência
+     * Método básico de emergência para carregar perguntas
      */
     private function get_questions_basic_fallback($questionnaire_id) {
         try {
@@ -331,7 +342,7 @@ class Questionnaires extends CI_Controller {
                 
                 $question->options = $this->db->get()->result();
                 
-                // Adicionar campos necessários
+                // Adicionar campos necessários para lógica condicional
                 $question->conditional_logic_decoded = null;
                 if (!empty($question->conditional_logic)) {
                     $logic = json_decode($question->conditional_logic, true);
@@ -350,7 +361,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Validar e processar lógica condicional
+     * Processar e validar lógica condicional
      */
     private function process_conditional_logic($questions) {
         $processed_questions = [];
@@ -422,18 +433,15 @@ class Questionnaires extends CI_Controller {
         $errors = [];
         $warnings = [];
         
-        // Verificar se tem operador válido
         if (!isset($rule['operator']) || !in_array($rule['operator'], ['AND', 'OR'])) {
             $errors[] = "Operador lógico inválido para regra de {$rule_type}";
         }
         
-        // Verificar se tem condições
         if (!isset($rule['conditions']) || !is_array($rule['conditions']) || empty($rule['conditions'])) {
             $errors[] = "Nenhuma condição definida para regra de {$rule_type}";
             return ['errors' => $errors, 'warnings' => $warnings];
         }
         
-        // Validar cada condição
         foreach ($rule['conditions'] as $condition_index => $condition) {
             $condition_validation = $this->validate_condition_structure($condition, $current_index, $all_questions, $condition_index + 1);
             $errors = array_merge($errors, $condition_validation['errors']);
@@ -450,7 +458,6 @@ class Questionnaires extends CI_Controller {
         $errors = [];
         $warnings = [];
         
-        // Verificar campos obrigatórios
         if (!isset($condition['question']) || !is_numeric($condition['question'])) {
             $errors[] = "Condição {$condition_number}: Pergunta de referência inválida";
             return ['errors' => $errors, 'warnings' => $warnings];
@@ -465,7 +472,6 @@ class Questionnaires extends CI_Controller {
         $operator = $condition['operator'];
         $value = isset($condition['value']) ? $condition['value'] : '';
         
-        // Verificar se a pergunta referenciada existe e é anterior
         if ($target_question_index >= $current_index) {
             $errors[] = "Condição {$condition_number}: Não pode referenciar pergunta posterior ou a si mesma";
         }
@@ -474,13 +480,11 @@ class Questionnaires extends CI_Controller {
             $errors[] = "Condição {$condition_number}: Pergunta referenciada não existe";
         }
         
-        // Verificar se operador é válido
         $valid_operators = ['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
         if (!in_array($operator, $valid_operators)) {
             $errors[] = "Condição {$condition_number}: Operador '{$operator}' inválido";
         }
         
-        // Verificar valor baseado no operador
         if (!in_array($operator, ['is_empty', 'is_not_empty']) && empty($value)) {
             $warnings[] = "Condição {$condition_number}: Valor não definido para operador '{$operator}'";
         }
@@ -497,10 +501,8 @@ class Questionnaires extends CI_Controller {
             show_404();
         }
         
-        // Usar método seguro para carregar perguntas
         $questions = $this->get_questions_safe($questionnaire_id);
         
-        // Se é POST, processar respostas de teste
         if ($this->input->post()) {
             $test_responses = $this->input->post('responses', array());
             
@@ -515,7 +517,6 @@ class Questionnaires extends CI_Controller {
                         'validation' => $validation
                     );
                 } else {
-                    // Criar resultados básicos se métodos não existem
                     $data['test_results'] = array(
                         'responses' => $test_responses,
                         'states' => $this->create_basic_states($questions),
@@ -537,7 +538,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Criar estados básicos se métodos avançados não existirem
+     * Criar estados básicos para perguntas
      */
     private function create_basic_states($questions) {
         $states = array();
@@ -598,7 +599,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Preview da lógica condicional
+     * Preview da lógica condicional via AJAX
      */
     public function preview_conditional_logic() {
         if (!$this->input->is_ajax_request()) {
@@ -662,7 +663,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Converte diversos tipos de valor para boolean
+     * Converter valor para boolean
      */
     private function _convert_to_boolean($value) {
         if (is_bool($value)) {
@@ -681,7 +682,9 @@ class Questionnaires extends CI_Controller {
         return false;
     }
 
-    // Método para filtrar questionários por projeto
+    /**
+     * Filtrar questionários por projeto
+     */
     public function by_project($project_id) {
         $project = $this->Project_model->get_by_id($project_id);
         if (!$project) {
@@ -704,7 +707,6 @@ class Questionnaires extends CI_Controller {
             show_404();
         }
 
-        // Converter valores para boolean antes de duplicar
         $original->requires_consent = $this->_convert_to_boolean($original->requires_consent);
         $original->requires_location = $this->_convert_to_boolean($original->requires_location);
         $original->requires_photo = $this->_convert_to_boolean($original->requires_photo);
@@ -768,7 +770,9 @@ class Questionnaires extends CI_Controller {
         redirect('questionnaires');
     }
 
-    // Método para API que inclui informações do projeto
+    /**
+     * API para obter dados dos questionários
+     */
     public function get_api_data() {
         $user_role = $this->input->get('role');
         $questionnaires = $this->Questionnaire_model->get_for_api($user_role);
@@ -780,7 +784,9 @@ class Questionnaires extends CI_Controller {
         ]);
     }
 
-    // Método para busca AJAX
+    /**
+     * Busca AJAX de questionários
+     */
     public function search() {
         $term = $this->input->get('term');
         $project_id = $this->input->get('project_id');
@@ -801,13 +807,17 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para debug de banco de dados
+     * Debug do banco de dados
      */
     public function debug_database($questionnaire_id) {
+        if (ENVIRONMENT !== 'development') {
+            show_404();
+        }
+        
         echo "<h2>Debug do Banco de Dados</h2>";
         echo "<p><strong>Questionnaire ID:</strong> $questionnaire_id</p>";
         
-        // Teste 1: Informações da tabela
+        // Teste 1: Estrutura da tabela
         echo "<h3>1. Estrutura da tabela questions:</h3>";
         try {
             $result = $this->db->query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'questions'")->result();
@@ -839,7 +849,7 @@ class Questionnaires extends CI_Controller {
             echo "<p><strong>Número de perguntas carregadas:</strong> " . count($safe_result) . "</p>";
             if (!empty($safe_result)) {
                 echo "<pre>";
-                print_r($safe_result[0]); // Mostrar apenas a primeira para não sobrecarregar
+                print_r($safe_result[0]);
                 echo "</pre>";
             }
         } catch (Exception $e) {
@@ -850,7 +860,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para exportar questionário com lógica condicional
+     * Exportar questionário com lógica condicional
      */
     public function export_with_logic($questionnaire_id) {
         $questionnaire = $this->Questionnaire_model->get_by_id($questionnaire_id);
@@ -885,7 +895,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para importar questionário com lógica condicional
+     * Importar questionário com lógica condicional
      */
     public function import_with_logic() {
         if ($this->input->post() && isset($_FILES['import_file'])) {
@@ -904,7 +914,6 @@ class Questionnaires extends CI_Controller {
                 redirect('questionnaires');
             }
             
-            // Validar estrutura do arquivo
             if (!isset($import_data['questionnaire']) || !isset($import_data['questions'])) {
                 $this->session->set_flashdata('error', 'Estrutura do arquivo inválida.');
                 redirect('questionnaires');
@@ -913,7 +922,6 @@ class Questionnaires extends CI_Controller {
             try {
                 $this->db->trans_start();
                 
-                // Criar questionário
                 $questionnaire_data = array(
                     'title' => $import_data['questionnaire']->title . ' (Importado)',
                     'description' => $import_data['questionnaire']->description,
@@ -928,7 +936,6 @@ class Questionnaires extends CI_Controller {
                 $new_questionnaire_id = $this->Questionnaire_model->create($questionnaire_data);
                 
                 if ($new_questionnaire_id) {
-                    // Criar perguntas
                     foreach ($import_data['questions'] as $question_data) {
                         $new_question_data = array(
                             'questionnaire_id' => $new_questionnaire_id,
@@ -941,7 +948,6 @@ class Questionnaires extends CI_Controller {
                         
                         $new_question_id = $this->Question_model->create($new_question_data);
                         
-                        // Criar opções se existirem
                         if (!empty($question_data['options'])) {
                             foreach ($question_data['options'] as $option_index => $option) {
                                 $this->Question_model->create_option(array(
@@ -974,7 +980,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para obter estatísticas de lógica condicional
+     * Obter estatísticas de lógica condicional
      */
     public function conditional_logic_stats($questionnaire_id = null) {
         try {
@@ -1003,7 +1009,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para validar integridade da lógica condicional
+     * Validar integridade da lógica condicional
      */
     public function validate_logic_integrity($questionnaire_id) {
         try {
@@ -1032,7 +1038,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para limpar lógica condicional inválida
+     * Limpar lógica condicional inválida
      */
     public function clean_invalid_logic($questionnaire_id) {
         try {
@@ -1051,7 +1057,7 @@ class Questionnaires extends CI_Controller {
     }
 
     /**
-     * Método para visualizar análise detalhada da lógica
+     * Análise detalhada da lógica condicional
      */
     public function logic_analysis($questionnaire_id) {
         $questionnaire = $this->Questionnaire_model->get_by_id($questionnaire_id);
@@ -1084,6 +1090,49 @@ class Questionnaires extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
+    /**
+     * Página de ajuda sobre lógica condicional
+     */
+    public function conditional_logic_help() {
+        $data['title'] = 'Ajuda - Lógica Condicional - SXData';
+        
+        $this->load->view('admin/header', $data);
+        $this->load->view('admin/questionnaires/conditional_logic_help', $data);
+        $this->load->view('admin/footer');
+    }
+
+    /**
+     * Migrar lógica condicional (para atualizações futuras)
+     */
+    public function migrate_logic($questionnaire_id = null) {
+        if (ENVIRONMENT !== 'development') {
+            show_404();
+        }
+        
+        try {
+            if (method_exists($this->Question_model, 'migrate_conditional_logic')) {
+                if ($questionnaire_id) {
+                    $migrated_count = $this->Question_model->migrate_conditional_logic($questionnaire_id);
+                    $this->session->set_flashdata('success', "Migração concluída! $migrated_count pergunta(s) foram migradas.");
+                    redirect('questionnaires/edit/' . $questionnaire_id);
+                } else {
+                    echo "<h2>Migração de Lógica Condicional</h2>";
+                    echo "<p>Esta função migraria todas as lógicas condicionais do sistema.</p>";
+                    echo "<p><strong>Disponível apenas em desenvolvimento.</strong></p>";
+                }
+            } else {
+                $this->session->set_flashdata('error', 'Método de migração não disponível.');
+                redirect('questionnaires');
+            }
+        } catch (Exception $e) {
+            $this->session->set_flashdata('error', 'Erro na migração: ' . $e->getMessage());
+            redirect('questionnaires');
+        }
+    }
+
+    /**
+     * Verificação de autenticação
+     */
     private function check_auth() {
         if (!$this->session->userdata('admin_logged_in')) {
             redirect('auth/login');

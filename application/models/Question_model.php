@@ -1,931 +1,956 @@
-<?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
-class Question_model extends CI_Model {
+class Questionnaire_model extends CI_Model {
 
     public function __construct() {
         parent::__construct();
         $this->load->database();
     }
 
+    public function get_all() {
+        $this->db->select('q.*, u.full_name as created_by_name, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->order_by('q.created_at', 'DESC');
+        return $this->db->get()->result();
+    }
+
     /**
-     * Obter perguntas de um questionário com suas opções
+     * Buscar questionários por termo
+     * 
+     * @param string $term Termo de busca
+     * @param int $project_id ID do projeto (opcional)
+     * @return array Lista de questionários encontrados
+     */
+    public function search($term, $project_id = null) {
+        $this->db->select('q.*, u.full_name as created_by_name, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        
+        $this->db->group_start();
+            $this->db->like('q.title', $term);
+            $this->db->or_like('q.description', $term);
+        $this->db->group_end();
+        
+        if ($project_id) {
+            $this->db->where('q.project_id', $project_id);
+        }
+        
+        $this->db->order_by('q.created_at', 'DESC');
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Método para verificar se os campos existem na tabela
+     * (método auxiliar para debug - remover em produção)
+     */
+    public function verify_table_structure() {
+        if (ENVIRONMENT === 'development') {
+            $query = $this->db->query("DESCRIBE questionnaires");
+            $fields = $query->result();
+            
+            log_message('debug', 'Questionnaires table structure:');
+            foreach ($fields as $field) {
+                log_message('debug', 'Field: ' . $field->Field . ', Type: ' . $field->Type . ', Null: ' . $field->Null . ', Default: ' . $field->Default);
+            }
+        }
+    }
+
+    /**
+     * Executar lógica condicional para um conjunto de respostas
+     * 
+     * @param array $questions Array de perguntas com lógica condicional
+     * @param array $responses Respostas fornecidas
+     * @return array Estados das perguntas (visível, obrigatória, etc.)
+     */
+    public function execute_conditional_logic($questions, $responses = []) {
+        $question_states = [];
+        
+        // Inicializar estados padrão
+        foreach ($questions as $index => $question) {
+            $question_states["q_$index"] = [
+                'visible' => true,
+                'required' => (bool)$question->is_required,
+                'original_required' => (bool)$question->is_required
+            ];
+        }
+        
+        // Processar lógica condicional
+        foreach ($questions as $index => $question) {
+            if (!empty($question->conditional_logic_decoded)) {
+                $logic = $question->conditional_logic_decoded;
+                
+                // Processar regras de visibilidade
+                if (isset($logic['visibility'])) {
+                    $visibility_result = $this->evaluate_rule($logic['visibility'], $responses, $questions);
+                    $question_states["q_$index"]['visible'] = $visibility_result;
+                }
+                
+                // Processar regras de obrigatoriedade
+                if (isset($logic['required'])) {
+                    $required_result = $this->evaluate_rule($logic['required'], $responses, $questions);
+                    if ($required_result) {
+                        $question_states["q_$index"]['required'] = true;
+                    }
+                }
+                
+                // Se pergunta não está visível, não deve ser obrigatória
+                if (!$question_states["q_$index"]['visible']) {
+                    $question_states["q_$index"]['required'] = false;
+                }
+            }
+        }
+        
+        return $question_states;
+    }
+
+    /**
+     * Avaliar uma regra de lógica condicional
+     * 
+     * @param array $rule Regra a ser avaliada
+     * @param array $responses Respostas fornecidas
+     * @param array $questions Array de perguntas
+     * @return bool Resultado da avaliação
+     */
+    private function evaluate_rule($rule, $responses, $questions) {
+        if (!isset($rule['conditions']) || empty($rule['conditions'])) {
+            return true;
+        }
+        
+        $operator = isset($rule['operator']) ? $rule['operator'] : 'AND';
+        $results = [];
+        
+        foreach ($rule['conditions'] as $condition) {
+            if (!isset($condition['question'], $condition['operator'])) {
+                continue;
+            }
+            
+            $target_question_index = intval($condition['question']);
+            $condition_operator = $condition['operator'];
+            $condition_value = isset($condition['value']) ? $condition['value'] : '';
+            
+            // Obter resposta da pergunta alvo
+            $response_value = isset($responses["q_$target_question_index"]) ? 
+                            $responses["q_$target_question_index"] : '';
+            
+            // Avaliar condição
+            $condition_result = $this->evaluate_condition(
+                $response_value, 
+                $condition_operator, 
+                $condition_value,
+                isset($questions[$target_question_index]) ? $questions[$target_question_index] : null
+            );
+            
+            $results[] = $condition_result;
+        }
+        
+        // Aplicar operador lógico
+        if ($operator === 'OR') {
+            return in_array(true, $results);
+        } else { // AND
+            return !in_array(false, $results);
+        }
+    }
+
+    /**
+     * Avaliar uma condição específica
+     * 
+     * @param mixed $response_value Valor da resposta
+     * @param string $operator Operador da condição
+     * @param mixed $condition_value Valor da condição
+     * @param object $target_question Pergunta alvo (opcional)
+     * @return bool Resultado da avaliação
+     */
+    private function evaluate_condition($response_value, $operator, $condition_value, $target_question = null) {
+        // Normalizar valores
+        $response_str = is_array($response_value) ? implode(',', $response_value) : strval($response_value);
+        $condition_str = strval($condition_value);
+        
+        switch ($operator) {
+            case 'equals':
+                return $response_str === $condition_str;
+                
+            case 'not_equals':
+                return $response_str !== $condition_str;
+                
+            case 'contains':
+                if (is_array($response_value)) {
+                    return in_array($condition_str, $response_value);
+                }
+                return strpos($response_str, $condition_str) !== false;
+                
+            case 'not_contains':
+                if (is_array($response_value)) {
+                    return !in_array($condition_str, $response_value);
+                }
+                return strpos($response_str, $condition_str) === false;
+                
+            case 'greater_than':
+                return is_numeric($response_str) && is_numeric($condition_str) && 
+                       floatval($response_str) > floatval($condition_str);
+                
+            case 'less_than':
+                return is_numeric($response_str) && is_numeric($condition_str) && 
+                       floatval($response_str) < floatval($condition_str);
+                
+            case 'is_empty':
+                return empty($response_str) || trim($response_str) === '';
+                
+            case 'is_not_empty':
+                return !empty($response_str) && trim($response_str) !== '';
+                
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Validar respostas com lógica condicional
+     * 
+     * @param array $questions Array de perguntas
+     * @param array $responses Respostas fornecidas
+     * @return array Resultado da validação
+     */
+    public function validate_responses_with_conditional_logic($questions, $responses) {
+        $validation = [
+            'valid' => true,
+            'errors' => [],
+            'warnings' => []
+        ];
+        
+        try {
+            // Executar lógica condicional para obter estados das perguntas
+            $question_states = $this->execute_conditional_logic($questions, $responses);
+            
+            // Validar cada pergunta
+            foreach ($questions as $index => $question) {
+                $state = $question_states["q_$index"];
+                $response = isset($responses["q_$index"]) ? $responses["q_$index"] : null;
+                
+                // Se pergunta não está visível, pular validação
+                if (!$state['visible']) {
+                    continue;
+                }
+                
+                // Validar obrigatoriedade
+                if ($state['required']) {
+                    if (empty($response) && $response !== '0') {
+                        $validation['errors'][] = "Pergunta " . ($index + 1) . " é obrigatória.";
+                        $validation['valid'] = false;
+                    }
+                }
+                
+                // Validar tipo de resposta
+                if (!empty($response)) {
+                    $type_validation = $this->validate_response_type($question, $response);
+                    if (!$type_validation['valid']) {
+                        $validation['errors'] = array_merge($validation['errors'], $type_validation['errors']);
+                        $validation['valid'] = false;
+                    }
+                }
+            }
+            
+        } catch (Exception $e) {
+            $validation['valid'] = false;
+            $validation['errors'][] = 'Erro na validação: ' . $e->getMessage();
+            log_message('error', 'Erro na validação com lógica condicional: ' . $e->getMessage());
+        }
+        
+        return $validation;
+    }
+
+    /**
+     * Validar tipo de resposta para uma pergunta
+     * 
+     * @param object $question Pergunta
+     * @param mixed $response Resposta
+     * @return array Resultado da validação
+     */
+    private function validate_response_type($question, $response) {
+        $validation = [
+            'valid' => true,
+            'errors' => []
+        ];
+        
+        switch ($question->question_type) {
+            case 'number':
+                if (!is_numeric($response)) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = "Pergunta " . $question->order_index . " deve ser um número.";
+                }
+                break;
+                
+            case 'email':
+                if (!filter_var($response, FILTER_VALIDATE_EMAIL)) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = "Pergunta " . $question->order_index . " deve ser um email válido.";
+                }
+                break;
+                
+            case 'date':
+                if (!$this->validate_date_format($response)) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = "Pergunta " . $question->order_index . " deve ser uma data válida.";
+                }
+                break;
+                
+            case 'radio':
+            case 'select':
+                // Validar se valor está nas opções disponíveis
+                if (!empty($question->options)) {
+                    $valid_values = array_column($question->options, 'option_text');
+                    if (!in_array($response, $valid_values)) {
+                        $validation['valid'] = false;
+                        $validation['errors'][] = "Pergunta " . $question->order_index . " tem valor inválido.";
+                    }
+                }
+                break;
+                
+            case 'checkbox':
+                // Validar se é array e todos os valores estão nas opções
+                if (!is_array($response)) {
+                    $response = [$response];
+                }
+                
+                if (!empty($question->options)) {
+                    $valid_values = array_column($question->options, 'option_text');
+                    foreach ($response as $value) {
+                        if (!in_array($value, $valid_values)) {
+                            $validation['valid'] = false;
+                            $validation['errors'][] = "Pergunta " . $question->order_index . " tem valor inválido: $value";
+                        }
+                    }
+                }
+                break;
+        }
+        
+        return $validation;
+    }
+
+    /**
+     * Validar formato de data
+     * 
+     * @param string $date Data a ser validada
+     * @return bool Válida ou não
+     */
+    private function validate_date_format($date) {
+        $formats = ['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y-m-d H:i:s'];
+        
+        foreach ($formats as $format) {
+            $d = DateTime::createFromFormat($format, $date);
+            if ($d && $d->format($format) === $date) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Processar respostas com lógica condicional para salvar no banco
+     * 
+     * @param array $questions Array de perguntas
+     * @param array $raw_responses Respostas brutas do formulário
+     * @return array Respostas processadas e validadas
+     */
+    public function process_responses_with_logic($questions, $raw_responses) {
+        $processed = [
+            'responses' => [],
+            'metadata' => [
+                'total_questions' => count($questions),
+                'answered_questions' => 0,
+                'visible_questions' => 0,
+                'required_questions' => 0,
+                'logic_applied' => false
+            ],
+            'validation' => ['valid' => true, 'errors' => []]
+        ];
+        
+        try {
+            // Executar lógica condicional
+            $question_states = $this->execute_conditional_logic($questions, $raw_responses);
+            $processed['metadata']['logic_applied'] = true;
+            
+            // Processar cada pergunta
+            foreach ($questions as $index => $question) {
+                $state = $question_states["q_$index"];
+                $response_key = "q_$index";
+                $raw_response = isset($raw_responses[$response_key]) ? $raw_responses[$response_key] : null;
+                
+                // Contabilizar pergunta visível
+                if ($state['visible']) {
+                    $processed['metadata']['visible_questions']++;
+                    
+                    if ($state['required']) {
+                        $processed['metadata']['required_questions']++;
+                    }
+                    
+                    // Processar resposta se pergunta está visível
+                    if (!empty($raw_response) || $raw_response === '0') {
+                        $processed['responses'][$response_key] = [
+                            'question_id' => $question->id,
+                            'question_text' => $question->question_text,
+                            'question_type' => $question->question_type,
+                            'response_value' => $this->normalize_response_value($raw_response, $question),
+                            'was_visible' => true,
+                            'was_required' => $state['required'],
+                            'order_index' => $question->order_index
+                        ];
+                        $processed['metadata']['answered_questions']++;
+                    } else if ($state['required']) {
+                        // Pergunta obrigatória não respondida
+                        $processed['validation']['valid'] = false;
+                        $processed['validation']['errors'][] = "Pergunta " . ($index + 1) . " é obrigatória.";
+                    }
+                } else {
+                    // Pergunta não visível - registrar como não aplicável
+                    $processed['responses'][$response_key] = [
+                        'question_id' => $question->id,
+                        'question_text' => $question->question_text,
+                        'question_type' => $question->question_type,
+                        'response_value' => null,
+                        'was_visible' => false,
+                        'was_required' => false,
+                        'order_index' => $question->order_index,
+                        'not_applicable' => true
+                    ];
+                }
+            }
+            
+        } catch (Exception $e) {
+            $processed['validation']['valid'] = false;
+            $processed['validation']['errors'][] = 'Erro no processamento: ' . $e->getMessage();
+            log_message('error', 'Erro no processamento de respostas com lógica: ' . $e->getMessage());
+        }
+        
+        return $processed;
+    }
+
+    /**
+     * Normalizar valor de resposta baseado no tipo de pergunta
+     * 
+     * @param mixed $raw_value Valor bruto
+     * @param object $question Pergunta
+     * @return mixed Valor normalizado
+     */
+    private function normalize_response_value($raw_value, $question) {
+        switch ($question->question_type) {
+            case 'checkbox':
+                return is_array($raw_value) ? $raw_value : [$raw_value];
+                
+            case 'number':
+                return is_numeric($raw_value) ? floatval($raw_value) : $raw_value;
+                
+            case 'radio':
+            case 'select':
+            case 'text':
+            case 'textarea':
+            case 'email':
+            case 'date':
+            default:
+                return is_string($raw_value) ? trim($raw_value) : $raw_value;
+        }
+    }
+
+    /**
+     * Gerar relatório de uso da lógica condicional
+     * 
+     * @param int $questionnaire_id ID do questionário (opcional)
+     * @return array Relatório detalhado
+     */
+    public function generate_conditional_logic_report($questionnaire_id = null) {
+        $report = [
+            'generated_at' => date('Y-m-d H:i:s'),
+            'scope' => $questionnaire_id ? 'single_questionnaire' : 'all_questionnaires',
+            'questionnaire_id' => $questionnaire_id,
+            'summary' => [],
+            'questionnaires' => [],
+            'total_logic_usage' => 0,
+            'complexity_analysis' => []
+        ];
+        
+        try {
+            // Query base
+            $this->db->select('q.id, q.title, q.status, COUNT(questions.id) as total_questions');
+            $this->db->from('questionnaires q');
+            $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
+            
+            if ($questionnaire_id) {
+                $this->db->where('q.id', $questionnaire_id);
+            }
+            
+            $this->db->group_by('q.id, q.title, q.status');
+            $questionnaires = $this->db->get()->result();
+            
+            foreach ($questionnaires as $questionnaire) {
+                // Análise detalhada por questionário
+                $questionnaire_analysis = [
+                    'id' => $questionnaire->id,
+                    'title' => $questionnaire->title,
+                    'status' => $questionnaire->status,
+                    'total_questions' => $questionnaire->total_questions,
+                    'questions_with_logic' => 0,
+                    'logic_types' => ['visibility' => 0, 'required' => 0, 'both' => 0],
+                    'complexity_score' => 0,
+                    'dependencies' => []
+                ];
+                
+                // Obter estatísticas de lógica condicional
+                if (method_exists($this->load->model('Question_model'), 'get_conditional_logic_stats')) {
+                    $this->load->model('Question_model');
+                    $logic_stats = $this->Question_model->get_conditional_logic_stats($questionnaire->id);
+                    
+                    $questionnaire_analysis['questions_with_logic'] = $logic_stats['questions_with_logic'];
+                    $questionnaire_analysis['logic_types']['visibility'] = $logic_stats['visibility_rules'];
+                    $questionnaire_analysis['logic_types']['required'] = $logic_stats['required_rules'];
+                    $questionnaire_analysis['complexity_score'] = $logic_stats['complex_logic'];
+                    
+                    $report['total_logic_usage'] += $logic_stats['questions_with_logic'];
+                }
+                
+                $report['questionnaires'][] = $questionnaire_analysis;
+            }
+            
+            // Gerar resumo
+            $report['summary'] = [
+                'total_questionnaires' => count($questionnaires),
+                'questionnaires_with_logic' => count(array_filter($report['questionnaires'], function($q) {
+                    return $q['questions_with_logic'] > 0;
+                })),
+                'total_questions' => array_sum(array_column($report['questionnaires'], 'total_questions')),
+                'total_logic_questions' => $report['total_logic_usage'],
+                'average_complexity' => count($report['questionnaires']) > 0 ? 
+                    array_sum(array_column($report['questionnaires'], 'complexity_score')) / count($report['questionnaires']) : 0
+            ];
+            
+        } catch (Exception $e) {
+            $report['error'] = 'Erro na geração do relatório: ' . $e->getMessage();
+            log_message('error', 'Erro no relatório de lógica condicional: ' . $e->getMessage());
+        }
+        
+        return $report;
+    }
+
+    /**
+     * Otimizar performance de questionários com lógica condicional
      * 
      * @param int $questionnaire_id ID do questionário
-     * @return array Array de perguntas com opções
+     * @return array Resultado da otimização
      */
-    public function get_by_questionnaire($questionnaire_id) {
+    public function optimize_conditional_logic_performance($questionnaire_id) {
+        $optimization = [
+            'questionnaire_id' => $questionnaire_id,
+            'optimizations_applied' => [],
+            'performance_impact' => [],
+            'recommendations' => []
+        ];
+        
+        try {
+            // Carregar perguntas com lógica
+            $this->load->model('Question_model');
+            
+            if (method_exists($this->Question_model, 'get_by_questionnaire_with_logic')) {
+                $questions = $this->Question_model->get_by_questionnaire_with_logic($questionnaire_id);
+                
+                // Analisar complexidade
+                $complex_questions = 0;
+                $total_conditions = 0;
+                $circular_dependencies = [];
+                
+                foreach ($questions as $index => $question) {
+                    if (!empty($question->conditional_logic_decoded)) {
+                        $logic = $question->conditional_logic_decoded;
+                        $question_conditions = 0;
+                        
+                        if (isset($logic['visibility']['conditions'])) {
+                            $question_conditions += count($logic['visibility']['conditions']);
+                        }
+                        if (isset($logic['required']['conditions'])) {
+                            $question_conditions += count($logic['required']['conditions']);
+                        }
+                        
+                        $total_conditions += $question_conditions;
+                        
+                        if ($question_conditions > 5) {
+                            $complex_questions++;
+                            $optimization['recommendations'][] = 
+                                "Pergunta " . ($index + 1) . " tem muitas condições ($question_conditions). Considere simplificar.";
+                        }
+                    }
+                }
+                
+                // Gerar recomendações
+                if ($complex_questions > 0) {
+                    $optimization['recommendations'][] = 
+                        "Encontradas $complex_questions perguntas com lógica complexa. Isso pode impactar a performance.";
+                }
+                
+                if ($total_conditions > 20) {
+                    $optimization['recommendations'][] = 
+                        "Total de $total_conditions condições no questionário. Considere revisar para otimizar performance.";
+                }
+                
+                $optimization['performance_impact'] = [
+                    'total_questions' => count($questions),
+                    'questions_with_logic' => count(array_filter($questions, function($q) {
+                        return !empty($q->conditional_logic_decoded);
+                    })),
+                    'total_conditions' => $total_conditions,
+                    'complex_questions' => $complex_questions,
+                    'estimated_load' => $this->calculate_logic_load($total_conditions, count($questions))
+                ];
+                
+            } else {
+                $optimization['error'] = 'Método de carregamento de lógica condicional não disponível.';
+            }
+            
+        } catch (Exception $e) {
+            $optimization['error'] = 'Erro na otimização: ' . $e->getMessage();
+            log_message('error', 'Erro na otimização de lógica condicional: ' . $e->getMessage());
+        }
+        
+        return $optimization;
+    }
+
+    /**
+     * Calcular carga estimada da lógica condicional
+     * 
+     * @param int $total_conditions Total de condições
+     * @param int $total_questions Total de perguntas
+     * @return string Classificação da carga
+     */
+    private function calculate_logic_load($total_conditions, $total_questions) {
+        if ($total_questions == 0) return 'unknown';
+        
+        $ratio = $total_conditions / $total_questions;
+        
+        if ($ratio < 0.5) return 'low';
+        if ($ratio < 1.5) return 'medium';
+        if ($ratio < 3) return 'high';
+        return 'very_high';
+    } $this->db->get()->result();
+    }
+
+    public function get_all_with_stats() {
+        $questionnaires = $this->get_all();
+        
+        foreach ($questionnaires as &$questionnaire) {
+            // Contar perguntas
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $questionnaire->question_count = $this->db->count_all_results('questions');
+            
+            // Contar respostas
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $questionnaire->response_count = $this->db->count_all_results('form_responses');
+            
+            // Última resposta
+            $this->db->select('MAX(completed_at) as last_response');
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $this->db->where('completed_at IS NOT NULL');
+            $last = $this->db->get('form_responses')->row();
+            $questionnaire->last_response = $last ? $last->last_response : NULL;
+        }
+        
+        return $questionnaires;
+    }
+
+    public function get_by_id($id) {
+        // CORREÇÃO: Incluir explicitamente os campos de checkbox e project_id
+        $this->db->select('q.id, q.title, q.description, q.status, q.version, 
+                          q.requires_consent, q.requires_location, q.requires_photo,
+                          q.estimated_time, q.aplicadores, q.created_by, q.created_at, q.updated_at,
+                          q.project_id, p.name as project_name,
+                          u.full_name as created_by_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where('q.id', $id);
+        
+        $result = $this->db->get()->row();
+        
+        // Debug: Log da query executada (remover em produção)
+        if (ENVIRONMENT === 'development' && $result) {
+            log_message('debug', 'SQL Query: ' . $this->db->last_query());
+            log_message('debug', 'Raw result from DB: ' . json_encode($result));
+        }
+        
+        return $result;
+    }
+
+    public function get_active() {
+        $this->db->select('q.*, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->order_by('q.title', 'ASC');
+        return $this->db->get()->result();
+    }
+
+    public function get_by_project($project_id) {
+        $this->db->select('q.*, u.full_name as created_by_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->where('q.project_id', $project_id);
+        $this->db->order_by('q.created_at', 'DESC');
+        
+        $questionnaires = $this->db->get()->result();
+        
+        // Adicionar contagem de perguntas e respostas
+        foreach ($questionnaires as &$questionnaire) {
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $questionnaire->question_count = $this->db->count_all_results('questions');
+            
+            $this->db->where('questionnaire_id', $questionnaire->id);
+            $questionnaire->response_count = $this->db->count_all_results('form_responses');
+        }
+        
+        return $questionnaires;
+    }
+
+    public function count_by_project($project_id) {
+        $this->db->where('project_id', $project_id);
+        return $this->db->count_all_results('questionnaires');
+    }
+
+    public function create($data) {
+        $data['created_at'] = date('Y-m-d H:i:s');
+        $data['updated_at'] = date('Y-m-d H:i:s');
+        
+        // Debug: Log dos dados que serão inseridos (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Creating questionnaire with data: ' . json_encode($data));
+        }
+        
+        return $this->db->insert('questionnaires', $data) ? $this->db->insert_id() : FALSE;
+    }
+
+    public function update($id, $data) {
+        $data['updated_at'] = date('Y-m-d H:i:s');
+        
+        // Buscar versão atual antes de atualizar
+        $this->db->select('version');
+        $this->db->where('id', $id);
+        $current = $this->db->get('questionnaires')->row();
+        
+        if ($current) {
+            $data['version'] = $current->version + 1;
+        }
+        
+        // Debug: Log dos dados que serão atualizados (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Updating questionnaire ID ' . $id . ' with data: ' . json_encode($data));
+        }
+        
+        $this->db->where('id', $id);
+        $result = $this->db->update('questionnaires', $data);
+        
+        // Debug: Log da query executada (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Update SQL Query: ' . $this->db->last_query());
+            log_message('debug', 'Update result: ' . var_export($result, true));
+        }
+        
+        return $result;
+    }
+
+    public function delete($id) {
+        // Verificar se tem respostas associadas
+        $this->db->where('questionnaire_id', $id);
+        $has_responses = $this->db->count_all_results('form_responses') > 0;
+        
+        if ($has_responses) {
+            // Apenas marcar como inativo se tiver respostas
+            return $this->update($id, array('status' => 'inactive'));
+        } else {
+            // Deletar completamente se não tiver respostas
+            $this->db->where('id', $id);
+            return $this->db->delete('questionnaires');
+        }
+    }
+
+    public function count_all() {
+        return $this->db->count_all('questionnaires');
+    }
+
+    public function count_active() {
+        $this->db->where('status', 'active');
+        return $this->db->count_all_results('questionnaires');
+    }
+
+    public function get_usage_stats() {
+        $this->db->select('q.title, COUNT(fr.id) as response_count');
+        $this->db->from('questionnaires q');
+        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id', 'left');
+        $this->db->group_by('q.id, q.title');
+        $this->db->order_by('response_count', 'DESC');
+        $this->db->limit(10);
+        
+        return $this->db->get()->result();
+    }
+
+    public function get_for_api($user_role = null) {
+        $this->db->select('q.*, COUNT(questions.id) as question_count, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->group_by('q.id,p.name');
+        $this->db->order_by('q.title', 'ASC');
+        
+        $questionnaires = $this->db->get()->result();
+        
+        // Adicionar perguntas para cada questionário
+        foreach ($questionnaires as &$questionnaire) {
+            $questionnaire->questions = $this->get_questions_with_options($questionnaire->id);
+        }
+        
+        return $questionnaires;
+    }
+
+    private function get_questions_with_options($questionnaire_id) {
+        // Primeiro, buscar as questões
         $this->db->select('*');
         $this->db->from('questions');
         $this->db->where('questionnaire_id', $questionnaire_id);
         $this->db->order_by('order_index', 'ASC');
+        
         $questions = $this->db->get()->result();
         
-        // Para cada pergunta, buscar suas opções
-        foreach ($questions as $question) {
-            $question->options = $this->get_options($question->id);
+        // Para cada questão, buscar suas opções
+        foreach ($questions as &$question) {
+            $this->db->select('*');
+            $this->db->from('question_options');
+            $this->db->where('question_id', $question->id);
+            $this->db->order_by('order_index', 'ASC');
+            
+            $question->options = $this->db->get()->result();
         }
         
         return $questions;
     }
 
-    /**
-     * Obter pergunta por ID com suas opções
-     * 
-     * @param int $id ID da pergunta
-     * @return object|null Pergunta com opções
-     */
-    public function get_by_id($id) {
-        $question = $this->db->get_where('questions', array('id' => $id))->row();
-        if ($question) {
-            $question->options = $this->get_options($id);
+    public function can_aplicador_access($questionnaire_id, $aplicador_id) {
+        $questionnaire = $this->get_by_id($questionnaire_id);
+        
+        if (!$questionnaire || $questionnaire->status !== 'active') {
+            return FALSE;
         }
-        return $question;
+        
+        // Se não há restrição de aplicadores (NULL), todos podem acessar
+        if (empty($questionnaire->aplicadores)) {
+            return TRUE;
+        }
+        
+        // Decodificar JSON e verificar se o aplicador está na lista
+        $aplicadores_permitidos = json_decode($questionnaire->aplicadores, true);
+        
+        if (!is_array($aplicadores_permitidos)) {
+            return TRUE; // Fallback: se não conseguir decodificar, permite acesso
+        }
+        
+        return in_array($aplicador_id, $aplicadores_permitidos);
     }
 
     /**
-     * Obter opções de uma pergunta
+     * Retorna questionários que um aplicador específico pode acessar
      * 
-     * @param int $question_id ID da pergunta
-     * @return array Array de opções
+     * @param int $aplicador_id ID do aplicador
+     * @return array Lista de questionários disponíveis para o aplicador
      */
-    public function get_options($question_id) {
-        $this->db->select('*');
-        $this->db->from('question_options');
-        $this->db->where('question_id', $question_id);
-        $this->db->order_by('order_index', 'ASC');
+    public function get_for_aplicador($aplicador_id) {
+        $this->db->select('q.*, COUNT(questions.id) as question_count, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->group_by('q.id');
+        $this->db->order_by('q.title', 'ASC');
+        
+        $all_questionnaires = $this->db->get()->result();
+        
+        // Filtrar questionários que o aplicador pode acessar
+        $accessible_questionnaires = array();
+        
+        foreach ($all_questionnaires as $questionnaire) {
+            if ($this->can_aplicador_access($questionnaire->id, $aplicador_id)) {
+                // Adicionar perguntas para cada questionário
+                $questionnaire->questions = $this->get_questions_with_options($questionnaire->id);
+                $accessible_questionnaires[] = $questionnaire;
+            }
+        }
+        
+        return $accessible_questionnaires;
+    }
+
+    /**
+     * Retorna estatísticas de uso por aplicador
+     * 
+     * @param int $questionnaire_id ID do questionário (opcional)
+     * @return array Estatísticas de aplicadores
+     */
+    public function get_aplicador_stats($questionnaire_id = null) {
+        $this->db->select('u.id, u.full_name, u.username, COUNT(fr.id) as total_responses');
+        $this->db->from('users u');
+        $this->db->join('form_responses fr', 'u.id = fr.applied_by', 'left');
+        $this->db->where('u.role', 'aplicador');
+        $this->db->where('u.is_active', TRUE);
+        
+        if ($questionnaire_id) {
+            $this->db->where('fr.questionnaire_id', $questionnaire_id);
+        }
+        
+        $this->db->group_by('u.id, u.full_name, u.username');
+        $this->db->order_by('total_responses', 'DESC');
+        
         return $this->db->get()->result();
     }
 
-    
     /**
-     * Excluir pergunta e suas opções
+     * Retorna os nomes dos aplicadores permitidos para um questionário
      * 
-     * @param int $question_id ID da pergunta
-     * @return bool Sucesso da operação
+     * @param object $questionnaire Objeto do questionário
+     * @return string Nomes dos aplicadores separados por vírgula
      */
-    public function delete($question_id) {
-        // Primeiro excluir as opções
-        $this->delete_options($question_id);
+    public function get_aplicadores_names($questionnaire) {
+        if (empty($questionnaire->aplicadores)) {
+            return 'Todos os aplicadores';
+        }
         
-        // Depois excluir a pergunta
-        $this->db->where('id', $question_id);
-        return $this->db->delete('questions');
-    }
-
-    /**
-     * Criar nova opção de pergunta
-     * 
-     * @param array $data Dados da opção
-     * @return int|false ID da opção criada ou false
-     */
-    public function create_option($data) {
-        $data['created_at'] = date('Y-m-d H:i:s');
-        return $this->db->insert('question_options', $data) ? $this->db->insert_id() : FALSE;
-    }
-
-    /**
-     * Atualizar opção
-     * 
-     * @param int $option_id ID da opção
-     * @param array $data Dados para atualização
-     * @return bool Sucesso da operação
-     */
-    public function update_option($option_id, $data) {
-        $this->db->where('id', $option_id);
-        return $this->db->update('question_options', $data);
+        $aplicadores_ids = json_decode($questionnaire->aplicadores, true);
+        
+        if (!is_array($aplicadores_ids) || empty($aplicadores_ids)) {
+            return 'Todos os aplicadores';
+        }
+        
+        $this->db->select('full_name');
+        $this->db->where_in('id', $aplicadores_ids);
+        $this->db->where('role', 'aplicador');
+        $this->db->where('is_active', TRUE);
+        $aplicadores = $this->db->get('users')->result();
+        
+        if (empty($aplicadores)) {
+            return 'Nenhum aplicador válido';
+        }
+        
+        $nomes = array_column($aplicadores, 'full_name');
+        return implode(', ', $nomes);
     }
 
     /**
-     * Excluir opção específica
+     * Retorna estatísticas de questionários por projeto
      * 
-     * @param int $option_id ID da opção
-     * @return bool Sucesso da operação
+     * @return array Estatísticas agrupadas por projeto
      */
-    public function delete_option($option_id) {
-        $this->db->where('id', $option_id);
-        return $this->db->delete('question_options');
-    }
-
-    /**
-     * Excluir todas as opções de uma pergunta
-     * 
-     * @param int $question_id ID da pergunta
-     * @return bool Sucesso da operação
-     */
-    public function delete_options($question_id) {
-        $this->db->where('question_id', $question_id);
-        return $this->db->delete('question_options');
-    }
-
-    /**
-     * Reordenar perguntas de um questionário
-     * 
-     * @param int $questionnaire_id ID do questionário
-     * @param array $question_orders Array com ID da pergunta e nova ordem
-     * @return bool Sucesso da operação
-     */
-    public function reorder_questions($questionnaire_id, $question_orders) {
-        $this->db->trans_start();
+    public function get_stats_by_project() {
+        $this->db->select('p.id, p.name, COUNT(q.id) as questionnaire_count, 
+                          SUM(CASE WHEN q.status = "active" THEN 1 ELSE 0 END) as active_count');
+        $this->db->from('projects p');
+        $this->db->join('questionnaires q', 'p.id = q.project_id', 'left');
+        $this->db->group_by('p.id, p.name');
+        $this->db->order_by('questionnaire_count', 'DESC');
         
-        foreach ($question_orders as $question_id => $order) {
-            $this->db->where('id', $question_id);
-            $this->db->where('questionnaire_id', $questionnaire_id);
-            $this->db->update('questions', ['order_index' => $order]);
-        }
+        return
         
-        $this->db->trans_complete();
-        return $this->db->trans_status();
-    }
-
-    /**
-     * Duplicar pergunta com suas opções
-     * 
-     * @param int $question_id ID da pergunta original
-     * @param int $new_questionnaire_id ID do novo questionário
-     * @return int|false ID da nova pergunta ou false
-     */
-    public function duplicate_question($question_id, $new_questionnaire_id) {
-        // Buscar pergunta original
-        $original_question = $this->db->get_where('questions', ['id' => $question_id])->row();
-        
-        if (!$original_question) {
-            return false;
-        }
-        
-        // Criar nova pergunta
-        $new_question_data = [
-            'questionnaire_id' => $new_questionnaire_id,
-            'question_text' => $original_question->question_text,
-            'question_type' => $original_question->question_type,
-            'is_required' => $original_question->is_required,
-            'order_index' => $original_question->order_index,
-            'conditional_logic' => $original_question->conditional_logic
-        ];
-        
-        $new_question_id = $this->create($new_question_data);
-        
-        if ($new_question_id) {
-            // Duplicar opções se existirem
-            $options = $this->get_options($question_id);
-            foreach ($options as $option) {
-                $this->create_option([
-                    'question_id' => $new_question_id,
-                    'option_text' => $option->option_text,
-                    'option_value' => $option->option_value,
-                    'order_index' => $option->order_index
-                ]);
-            }
-        }
-        
-        return $new_question_id;
-    }
-
-    /**
-     * Validar estrutura de pergunta
-     * 
-     * @param array $question_data Dados da pergunta
-     * @return array Array com status e mensagens de erro
-     */
-    public function validate_question($question_data) {
-        $errors = [];
-        
-        // Validar texto da pergunta
-        if (empty(trim($question_data['question_text']))) {
-            $errors[] = 'O texto da pergunta é obrigatório.';
-        }
-        
-        // Validar tipo
-        $allowed_types = ['text', 'textarea', 'number', 'radio', 'checkbox', 'select', 'date', 'time', 'email', 'phone'];
-        if (!in_array($question_data['question_type'], $allowed_types)) {
-            $errors[] = 'Tipo de pergunta inválido.';
-        }
-        
-        // Validar se perguntas de múltipla escolha têm opções
-        if (in_array($question_data['question_type'], ['radio', 'checkbox', 'select'])) {
-            if (empty($question_data['options']) || !is_array($question_data['options'])) {
-                $errors[] = 'Perguntas de múltipla escolha devem ter pelo menos uma opção.';
-            } else {
-                $valid_options = 0;
-                foreach ($question_data['options'] as $option) {
-                    if (!empty(trim($option['option_text']))) {
-                        $valid_options++;
-                    }
-                }
-                if ($valid_options === 0) {
-                    $errors[] = 'Pelo menos uma opção deve ter texto válido.';
-                }
-            }
-        }
-        
-        return [
-            'valid' => empty($errors),
-            'errors' => $errors
-        ];
-    }
-
-    /**
-     * Obter estatísticas de perguntas por tipo
-     * 
-     * @param int $questionnaire_id ID do questionário
-     * @return array Estatísticas
-     */
-    public function get_question_stats($questionnaire_id) {
-        $this->db->select('question_type, COUNT(*) as count');
-        $this->db->from('questions');
-        $this->db->where('questionnaire_id', $questionnaire_id);
-        $this->db->group_by('question_type');
-        $stats = $this->db->get()->result();
-        
-        $formatted_stats = [];
-        foreach ($stats as $stat) {
-            $formatted_stats[$stat->question_type] = $stat->count;
-        }
-        
-        return $formatted_stats;
-    }
-
-
- /***
- * Buscar perguntas com lógica condicional
- */
-public function get_by_questionnaire_with_logic($questionnaire_id) {
-    // 1. Buscar todas as perguntas
-    $this->db->select('*');
-    $this->db->from('questions');
-    $this->db->where('questionnaire_id', $questionnaire_id);
-    $this->db->order_by('order_index', 'ASC');
-    
-    $questions = $this->db->get()->result();
-    
-    if (empty($questions)) {
-        return array();
-    }
-    
-    // 2. Buscar todas as opções de uma vez
-    $question_ids = array();
-    foreach ($questions as $question) {
-        $question_ids[] = $question->id;
-    }
-    
-    $options_map = array();
-    if (!empty($question_ids)) {
-        $this->db->select('*');
-        $this->db->from('question_options');
-        $this->db->where_in('question_id', $question_ids);
-        $this->db->order_by('question_id ASC, order_index ASC');
-        
-        $options_result = $this->db->get()->result();
-        
-        // Organizar opções por question_id
-        foreach ($options_result as $option) {
-            if (!isset($options_map[$option->question_id])) {
-                $options_map[$option->question_id] = array();
-            }
-            $options_map[$option->question_id][] = $option;
-        }
-    }
-    
-    // 3. Combinar perguntas com suas opções e processar lógica
-    foreach ($questions as &$question) {
-        // Adicionar opções
-        $question->options = isset($options_map[$question->id]) ? 
-                           $options_map[$question->id] : array();
-        
-        // Processar lógica condicional
-        $question->conditional_logic_decoded = null;
-        if (!empty($question->conditional_logic)) {
-            $decoded_logic = json_decode($question->conditional_logic, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $question->conditional_logic_decoded = $decoded_logic;
-            }
-        }
-    }
-    
-    return $questions;
-}
-
-/**
- * Criar pergunta com lógica condicional
- */
-public function create($data) {
-    // Validar lógica condicional antes de salvar
-    if (isset($data['conditional_logic']) && !empty($data['conditional_logic'])) {
-        $this->validate_conditional_logic_json($data['conditional_logic']);
-    }
-    
-    $data['created_at'] = date('Y-m-d H:i:s');
-
-    return $this->db->insert('questions', $data) ? $this->db->insert_id() : FALSE;
-}
-
-/**
- * Atualizar pergunta com lógica condicional
- */
-public function update($id, $data) {
-    // Validar lógica condicional antes de salvar
-    if (isset($data['conditional_logic']) && !empty($data['conditional_logic'])) {
-        $this->validate_conditional_logic_json($data['conditional_logic']);
-    }
-        
-    $this->db->where('id', $id);
-    return $this->db->update('questions', $data);
-}
-
-/**
- * Validar JSON da lógica condicional
- */
-private function validate_conditional_logic_json($conditional_logic) {
-    if (is_string($conditional_logic)) {
-        $decoded = json_decode($conditional_logic, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('Lógica condicional contém JSON inválido: ' . json_last_error_msg());
-        }
-        
-        // Validar estrutura básica
-        if (!is_array($decoded)) {
-            throw new Exception('Lógica condicional deve ser um objeto JSON válido');
-        }
-        
-        // Validar estrutura das regras
-        foreach (['visibility', 'required'] as $rule_type) {
-            if (isset($decoded[$rule_type])) {
-                $this->validate_rule_structure($decoded[$rule_type], $rule_type);
-            }
-        }
-    }
-    
-    return true;
-}
-
-/**
- * Validar estrutura de uma regra
- */
-private function validate_rule_structure($rule, $rule_type) {
-    if (!is_array($rule)) {
-        throw new Exception("Regra de {$rule_type} deve ser um array");
-    }
-    
-    if (!isset($rule['operator']) || !in_array($rule['operator'], ['AND', 'OR'])) {
-        throw new Exception("Regra de {$rule_type} deve ter operador válido (AND ou OR)");
-    }
-    
-    if (!isset($rule['conditions']) || !is_array($rule['conditions'])) {
-        throw new Exception("Regra de {$rule_type} deve ter array de condições");
-    }
-    
-    foreach ($rule['conditions'] as $index => $condition) {
-        $this->validate_condition_structure($condition, $rule_type, $index + 1);
-    }
-    
-    return true;
-}
-
-/**
- * Validar estrutura de uma condição
- */
-private function validate_condition_structure($condition, $rule_type, $condition_number) {
-    if (!is_array($condition)) {
-        throw new Exception("Condição {$condition_number} da regra {$rule_type} deve ser um array");
-    }
-    
-    $required_fields = ['question', 'operator'];
-    foreach ($required_fields as $field) {
-        if (!isset($condition[$field])) {
-            throw new Exception("Condição {$condition_number} da regra {$rule_type} deve ter campo '{$field}'");
-        }
-    }
-    
-    if (!is_numeric($condition['question'])) {
-        throw new Exception("Condição {$condition_number} da regra {$rule_type}: campo 'question' deve ser numérico");
-    }
-    
-    $valid_operators = ['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
-    if (!in_array($condition['operator'], $valid_operators)) {
-        throw new Exception("Condição {$condition_number} da regra {$rule_type}: operador inválido");
-    }
-    
-    return true;
-}
-
-/**
- * Buscar perguntas que dependem de uma pergunta específica
- */
-public function get_dependent_questions($question_id, $questionnaire_id) {
-    // Buscar todas as perguntas do questionário
-    $this->db->select('*');
-    $this->db->where('questionnaire_id', $questionnaire_id);
-    $this->db->where('conditional_logic IS NOT NULL');
-    $this->db->where('conditional_logic != ""');
-    $questions = $this->db->get('questions')->result();
-    
-    $dependent_questions = array();
-    
-    // Buscar índice da pergunta alvo
-    $this->db->select('order_index');
-    $this->db->where('id', $question_id);
-    $target_question = $this->db->get('questions')->row();
-    
-    if (!$target_question) {
-        return $dependent_questions;
-    }
-    
-    $target_index = $target_question->order_index - 1; // Converter para índice base 0
-    
-    foreach ($questions as $question) {
-        if (empty($question->conditional_logic)) {
-            continue;
-        }
-        
-        $logic = json_decode($question->conditional_logic, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            continue;
-        }
-        
-        // Verificar se esta pergunta depende da pergunta alvo
-        $depends_on_target = false;
-        
-        foreach (['visibility', 'required'] as $rule_type) {
-            if (isset($logic[$rule_type]['conditions'])) {
-                foreach ($logic[$rule_type]['conditions'] as $condition) {
-                    if (isset($condition['question']) && $condition['question'] == $target_index) {
-                        $depends_on_target = true;
-                        break 2;
-                    }
-                }
-            }
-        }
-        
-        if ($depends_on_target) {
-            $dependent_questions[] = $question;
-        }
-    }
-    
-    return $dependent_questions;
-}
-
-/**
- * Validar integridade da lógica condicional do questionário
- */
-public function validate_questionnaire_logic_integrity($questionnaire_id) {
-    $questions = $this->get_by_questionnaire_with_logic($questionnaire_id);
-    $errors = array();
-    $warnings = array();
-    
-    foreach ($questions as $index => $question) {
-        if (empty($question->conditional_logic_decoded)) {
-            continue;
-        }
-        
-        $logic = $question->conditional_logic_decoded;
-        
-        foreach (['visibility', 'required'] as $rule_type) {
-            if (!isset($logic[$rule_type]['conditions'])) {
-                continue;
-            }
-            
-            foreach ($logic[$rule_type]['conditions'] as $condition_index => $condition) {
-                $target_question_index = $condition['question'];
-                
-                // Verificar se a pergunta referenciada existe
-                if ($target_question_index >= count($questions)) {
-                    $errors[] = "Pergunta " . ($index + 1) . ", condição " . ($condition_index + 1) . ": Referencia pergunta inexistente (índice {$target_question_index})";
-                    continue;
-                }
-                
-                // Verificar se não está referenciando pergunta posterior
-                if ($target_question_index >= $index) {
-                    $errors[] = "Pergunta " . ($index + 1) . ", condição " . ($condition_index + 1) . ": Não pode referenciar pergunta posterior ou a si mesma";
-                    continue;
-                }
-                
-                $target_question = $questions[$target_question_index];
-                
-                // Verificar compatibilidade do operador com o tipo de pergunta
-                $operator = $condition['operator'];
-                $target_type = $target_question->question_type;
-                
-                if (in_array($operator, ['greater_than', 'less_than']) && $target_type !== 'number') {
-                    $warnings[] = "Pergunta " . ($index + 1) . ", condição " . ($condition_index + 1) . ": Operador numérico usado em pergunta não numérica";
-                }
-                
-                // Verificar se valor existe nas opções (para perguntas de múltipla escolha)
-                if (in_array($target_type, ['radio', 'checkbox', 'select']) && 
-                    !in_array($operator, ['is_empty', 'is_not_empty']) && 
-                    !empty($condition['value'])) {
-                    
-                    $valid_values = array_column($target_question->options, 'option_text');
-                    if (!in_array($condition['value'], $valid_values)) {
-                        $warnings[] = "Pergunta " . ($index + 1) . ", condição " . ($condition_index + 1) . ": Valor '{$condition['value']}' não existe nas opções da pergunta referenciada";
-                    }
-                }
-            }
-        }
-    }
-    
-    return array(
-        'valid' => empty($errors),
-        'errors' => $errors,
-        'warnings' => $warnings
-    );
-}
-
-/**
- * Limpar lógica condicional inválida
- */
-public function clean_invalid_conditional_logic($questionnaire_id) {
-    $questions = $this->get_by_questionnaire_with_logic($questionnaire_id);
-    $cleaned_count = 0;
-    
-    foreach ($questions as $question) {
-        if (empty($question->conditional_logic)) {
-            continue;
-        }
-        
-        $logic = json_decode($question->conditional_logic, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            // JSON inválido - remover
-            $this->update($question->id, array('conditional_logic' => null));
-            $cleaned_count++;
-            continue;
-        }
-        
-        $cleaned_logic = $this->clean_logic_structure($logic, $question->order_index - 1, count($questions));
-        
-        if ($cleaned_logic !== $logic) {
-            if (empty($cleaned_logic['visibility']) && empty($cleaned_logic['required'])) {
-                // Se não sobrou nenhuma regra válida, remover completamente
-                $this->update($question->id, array('conditional_logic' => null));
-            } else {
-                // Salvar lógica limpa
-                $this->update($question->id, array('conditional_logic' => json_encode($cleaned_logic)));
-            }
-            $cleaned_count++;
-        }
-    }
-    
-    return $cleaned_count;
-}
-
-/**
- * Limpar estrutura de lógica removendo regras inválidas
- */
-private function clean_logic_structure($logic, $current_index, $total_questions) {
-    $cleaned = array();
-    
-    foreach (['visibility', 'required'] as $rule_type) {
-        if (!isset($logic[$rule_type]) || !isset($logic[$rule_type]['conditions'])) {
-            continue;
-        }
-        
-        $valid_conditions = array();
-        
-        foreach ($logic[$rule_type]['conditions'] as $condition) {
-            if ($this->is_condition_valid($condition, $current_index, $total_questions)) {
-                $valid_conditions[] = $condition;
-            }
-        }
-        
-        if (!empty($valid_conditions)) {
-            $cleaned[$rule_type] = array(
-                'operator' => $logic[$rule_type]['operator'] ?? 'AND',
-                'conditions' => $valid_conditions
-            );
-        }
-    }
-    
-    return $cleaned;
-}
-
-/**
- * Verificar se uma condição é válida
- */
-private function is_condition_valid($condition, $current_index, $total_questions) {
-    // Verificar campos obrigatórios
-    if (!isset($condition['question']) || !isset($condition['operator'])) {
-        return false;
-    }
-    
-    $target_index = $condition['question'];
-    
-    // Verificar se índice é válido
-    if (!is_numeric($target_index) || $target_index < 0 || $target_index >= $total_questions) {
-        return false;
-    }
-    
-    // Verificar se não está referenciando pergunta posterior
-    if ($target_index >= $current_index) {
-        return false;
-    }
-    
-    // Verificar se operador é válido
-    $valid_operators = ['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
-    if (!in_array($condition['operator'], $valid_operators)) {
-        return false;
-    }
-    
-    return true;
-}
-
-/**
- * Migrar lógica condicional para nova estrutura (se necessário)
- */
-public function migrate_conditional_logic($questionnaire_id) {
-    $questions = $this->get_by_questionnaire($questionnaire_id);
-    $migrated_count = 0;
-    
-    foreach ($questions as $question) {
-        if (empty($question->conditional_logic)) {
-            continue;
-        }
-        
-        $logic = json_decode($question->conditional_logic, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            continue;
-        }
-        
-        // Verificar se precisa migrar (exemplo: estrutura antiga)
-        $needs_migration = false;
-        $migrated_logic = $logic;
-        
-        // Exemplo de migração: converter IDs de pergunta para índices
-        if (isset($logic['visibility']['conditions'])) {
-            foreach ($logic['visibility']['conditions'] as &$condition) {
-                if (isset($condition['question_id']) && !isset($condition['question'])) {
-                    // Converter question_id para question (índice)
-                    $question_index = $this->get_question_index_by_id($condition['question_id'], $questionnaire_id);
-                    if ($question_index !== false) {
-                        $condition['question'] = $question_index;
-                        unset($condition['question_id']);
-                        $needs_migration = true;
-                    }
-                }
-            }
-        }
-        
-        if (isset($logic['required']['conditions'])) {
-            foreach ($logic['required']['conditions'] as &$condition) {
-                if (isset($condition['question_id']) && !isset($condition['question'])) {
-                    $question_index = $this->get_question_index_by_id($condition['question_id'], $questionnaire_id);
-                    if ($question_index !== false) {
-                        $condition['question'] = $question_index;
-                        unset($condition['question_id']);
-                        $needs_migration = true;
-                    }
-                }
-            }
-        }
-        
-        if ($needs_migration) {
-            $this->update($question->id, array('conditional_logic' => json_encode($migrated_logic)));
-            $migrated_count++;
-        }
-    }
-    
-    return $migrated_count;
-}
-
-/**
- * Obter índice da pergunta pelo ID
- */
-private function get_question_index_by_id($question_id, $questionnaire_id) {
-    $this->db->select('order_index');
-    $this->db->where('id', $question_id);
-    $this->db->where('questionnaire_id', $questionnaire_id);
-    $question = $this->db->get('questions')->row();
-    
-    return $question ? ($question->order_index - 1) : false; // Converter para índice base 0
-}
-
-/**
- * Clonar pergunta com lógica condicional para outro questionário
- */
-public function clone_with_logic($question_id, $new_questionnaire_id, $order_index, $question_mapping = array()) {
-    // Buscar pergunta original
-    $original = $this->get_by_id($question_id);
-    if (!$original) {
-        return false;
-    }
-    
-    // Preparar dados da nova pergunta
-    $new_question_data = array(
-        'questionnaire_id' => $new_questionnaire_id,
-        'question_text' => $original->question_text,
-        'question_type' => $original->question_type,
-        'is_required' => $original->is_required,
-        'order_index' => $order_index,
-        'conditional_logic' => $this->map_conditional_logic($original->conditional_logic, $question_mapping)
-    );
-    
-    // Criar nova pergunta
-    $new_question_id = $this->create($new_question_data);
-    
-    if ($new_question_id) {
-        // Clonar opções se existirem
-        $options = $this->get_options($question_id);
-        foreach ($options as $option) {
-            $this->create_option(array(
-                'question_id' => $new_question_id,
-                'option_text' => $option->option_text,
-                'option_value' => $option->option_value,
-                'order_index' => $option->order_index
-            ));
-        }
-    }
-    
-    return $new_question_id;
-}
-
-/**
- * Mapear lógica condicional para novos índices de pergunta
- */
-private function map_conditional_logic($conditional_logic, $question_mapping) {
-    if (empty($conditional_logic)) {
-        return null;
-    }
-    
-    $logic = json_decode($conditional_logic, true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        return null;
-    }
-    
-    $mapped_logic = $logic;
-    
-    foreach (['visibility', 'required'] as $rule_type) {
-        if (isset($mapped_logic[$rule_type]['conditions'])) {
-            foreach ($mapped_logic[$rule_type]['conditions'] as &$condition) {
-                if (isset($condition['question']) && isset($question_mapping[$condition['question']])) {
-                    $condition['question'] = $question_mapping[$condition['question']];
-                } else {
-                    // Se não há mapeamento, remover a condição (será limpa depois)
-                    $condition = null;
-                }
-            }
-            
-            // Remover condições nulas
-            $mapped_logic[$rule_type]['conditions'] = array_filter($mapped_logic[$rule_type]['conditions']);
-            
-            // Se não sobrou nenhuma condição, remover a regra
-            if (empty($mapped_logic[$rule_type]['conditions'])) {
-                unset($mapped_logic[$rule_type]);
-            }
-        }
-    }
-    
-    // Se não sobrou nenhuma regra, retornar null
-    if (empty($mapped_logic['visibility']) && empty($mapped_logic['required'])) {
-        return null;
-    }
-    
-    return json_encode($mapped_logic);
-}
-
-/**
- * Estatísticas de uso da lógica condicional
- */
-public function get_conditional_logic_stats($questionnaire_id = null) {
-    $this->db->select('
-        COUNT(*) as total_questions,
-        COUNT(CASE WHEN conditional_logic IS NOT NULL AND conditional_logic != "" THEN 1 END) as questions_with_logic,
-        COUNT(CASE WHEN conditional_logic LIKE "%visibility%" THEN 1 END) as questions_with_visibility_logic,
-        COUNT(CASE WHEN conditional_logic LIKE "%required%" THEN 1 END) as questions_with_required_logic
-    ');
-    
-    if ($questionnaire_id) {
-        $this->db->where('questionnaire_id', $questionnaire_id);
-    }
-    
-    $stats = $this->db->get('questions')->row();
-    
-    // Adicionar estatísticas mais detalhadas
-    $detailed_stats = array(
-        'total_questions' => (int)$stats->total_questions,
-        'questions_with_logic' => (int)$stats->questions_with_logic,
-        'questions_with_visibility_logic' => (int)$stats->questions_with_visibility_logic,
-        'questions_with_required_logic' => (int)$stats->questions_with_required_logic,
-        'logic_usage_percentage' => $stats->total_questions > 0 ? round(($stats->questions_with_logic / $stats->total_questions) * 100, 1) : 0
-    );
-    
-    // Buscar estatísticas de operadores mais usados
-    if ($questionnaire_id) {
-        $this->db->where('questionnaire_id', $questionnaire_id);
-    }
-    $this->db->where('conditional_logic IS NOT NULL');
-    $this->db->where('conditional_logic != ""');
-    $questions_with_logic = $this->db->get('questions')->result();
-    
-    $operator_usage = array();
-    $total_conditions = 0;
-    
-    foreach ($questions_with_logic as $question) {
-        $logic = json_decode($question->conditional_logic, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-            foreach (['visibility', 'required'] as $rule_type) {
-                if (isset($logic[$rule_type]['conditions'])) {
-                    foreach ($logic[$rule_type]['conditions'] as $condition) {
-                        if (isset($condition['operator'])) {
-                            $operator = $condition['operator'];
-                            $operator_usage[$operator] = ($operator_usage[$operator] ?? 0) + 1;
-                            $total_conditions++;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    $detailed_stats['total_conditions'] = $total_conditions;
-    $detailed_stats['operator_usage'] = $operator_usage;
-    
-    return $detailed_stats;
-}
-
-/**
- * Buscar perguntas com lógica condicional complexa
- */
-public function get_questions_with_complex_logic($questionnaire_id, $min_conditions = 3) {
-    $this->db->select('*');
-    $this->db->where('questionnaire_id', $questionnaire_id);
-    $this->db->where('conditional_logic IS NOT NULL');
-    $this->db->where('conditional_logic != ""');
-    $questions = $this->db->get('questions')->result();
-    
-    $complex_questions = array();
-    
-    foreach ($questions as $question) {
-        $logic = json_decode($question->conditional_logic, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            continue;
-        }
-        
-        $total_conditions = 0;
-        
-        foreach (['visibility', 'required'] as $rule_type) {
-            if (isset($logic[$rule_type]['conditions'])) {
-                $total_conditions += count($logic[$rule_type]['conditions']);
-            }
-        }
-        
-        if ($total_conditions >= $min_conditions) {
-            $question->condition_count = $total_conditions;
-            $complex_questions[] = $question;
-        }
-    }
-    
-    // Ordenar por número de condições (decrescente)
-    usort($complex_questions, function($a, $b) {
-        return $b->condition_count <=> $a->condition_count;
-    });
-    
-    return $complex_questions;
-}
-
-/**
- * Exportar lógica condicional para análise
- */
-public function export_conditional_logic_analysis($questionnaire_id) {
-    $questions = $this->get_by_questionnaire_with_logic($questionnaire_id);
-    $analysis = array();
-    
-    foreach ($questions as $index => $question) {
-        if (empty($question->conditional_logic_decoded)) {
-            continue;
-        }
-        
-        $logic = $question->conditional_logic_decoded;
-        $question_analysis = array(
-            'question_id' => $question->id,
-            'question_index' => $index,
-            'question_text' => $question->question_text,
-            'question_type' => $question->question_type,
-            'rules' => array()
-        );
-        
-        foreach (['visibility', 'required'] as $rule_type) {
-            if (isset($logic[$rule_type])) {
-                $rule_analysis = array(
-                    'type' => $rule_type,
-                    'operator' => $logic[$rule_type]['operator'],
-                    'conditions_count' => count($logic[$rule_type]['conditions']),
-                    'conditions' => array()
-                );
-                
-                foreach ($logic[$rule_type]['conditions'] as $condition) {
-                    $rule_analysis['conditions'][] = array(
-                        'target_question_index' => $condition['question'],
-                        'operator' => $condition['operator'],
-                        'value' => $condition['value'] ?? null
-                    );
-                }
-                
-                $question_analysis['rules'][] = $rule_analysis;
-            }
-        }
-        
-        $analysis[] = $question_analysis;
-    }
-    
-    return $analysis;
-}
-    
-}
