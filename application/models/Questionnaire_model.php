@@ -100,7 +100,6 @@ class Questionnaire_model extends CI_Model {
 
     public function create($data) {
         $data['created_at'] = date('Y-m-d H:i:s');
-        $data['updated_at'] = date('Y-m-d H:i:s');
         
         // Debug: Log dos dados que serão inseridos (remover em produção)
         if (ENVIRONMENT === 'development') {
@@ -111,8 +110,7 @@ class Questionnaire_model extends CI_Model {
     }
 
     public function update($id, $data) {
-        $data['updated_at'] = date('Y-m-d H:i:s');
-        
+       
         // Buscar versão atual antes de atualizar
         $this->db->select('version');
         $this->db->where('id', $id);

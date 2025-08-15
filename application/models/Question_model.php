@@ -27,7 +27,6 @@ class Question_model extends CI_Model {
      * @return bool Sucesso da operação
      */
     public function update($id, $data) {
-        $data['updated_at'] = date('Y-m-d H:i:s');
         $this->db->where('id', $id);
         return $this->db->update('questions', $data);
     }
