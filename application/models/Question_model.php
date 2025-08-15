@@ -57,29 +57,7 @@ class Question_model extends CI_Model {
         return $this->db->get()->result();
     }
 
-    /**
-     * Criar nova pergunta
-     * 
-     * @param array $data Dados da pergunta
-     * @return int|false ID da pergunta criada ou false
-     */
-    public function create($data) {
-        $data['created_at'] = date('Y-m-d H:i:s');
-        return $this->db->insert('questions', $data) ? $this->db->insert_id() : FALSE;
-    }
-
-    /**
-     * Atualizar pergunta
-     * 
-     * @param int $question_id ID da pergunta
-     * @param array $data Dados para atualização
-     * @return bool Sucesso da operação
-     */
-    public function update($question_id, $data) {
-        $this->db->where('id', $question_id);
-        return $this->db->update('questions', $data);
-    }
-
+    
     /**
      * Excluir pergunta e suas opções
      * 
