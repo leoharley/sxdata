@@ -115,7 +115,7 @@ class Questionnaires extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
-    public function edit($id) {
+     public function edit($id) {
         $questionnaire = $this->Questionnaire_model->get_by_id($id);
         if (!$questionnaire) {
             show_404();
@@ -270,6 +270,15 @@ class Questionnaires extends CI_Controller {
         // Usar método seguro para carregar perguntas com lógica condicional
         $data['questions'] = $this->get_questions_safe($id);
         
+        // Processar resumo da lógica condicional para cada pergunta
+        foreach ($data['questions'] as $question) {
+            if (!empty($question->conditional_logic)) {
+                $question->logic_summary = $this->generate_logic_summary($question->conditional_logic);
+            } else {
+                $question->logic_summary = '';
+            }
+        }
+        
         $data['aplicadores'] = $this->User_model->get_aplicadores();
         $data['projects'] = $this->Project_model->get_for_select();
         
@@ -281,11 +290,49 @@ class Questionnaires extends CI_Controller {
 
         if (ENVIRONMENT === 'development') {
             log_message('debug', 'Data being sent to view - requires_consent: ' . var_export($data['questionnaire']->requires_consent, true));
+            log_message('debug', 'Questions loaded: ' . count($data['questions']));
         }
         
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/edit', $data);
         $this->load->view('admin/footer');
+    }
+
+    /**
+     * Gerar resumo da lógica condicional
+     * 
+     * @param string $conditional_logic_json JSON da lógica condicional
+     * @return string Resumo formatado
+     */
+    private function generate_logic_summary($conditional_logic_json) {
+        if (empty($conditional_logic_json)) {
+            return '';
+        }
+        
+        $logic = json_decode($conditional_logic_json, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return '<span class="text-danger">Lógica inválida</span>';
+        }
+        
+        $summary = array();
+        
+        if (isset($logic['visibility']) && !empty($logic['visibility']['conditions'])) {
+            $visibility_count = count($logic['visibility']['conditions']);
+            $visibility_operator = isset($logic['visibility']['operator']) ? $logic['visibility']['operator'] : 'AND';
+            $summary[] = "<strong>Visibilidade:</strong> $visibility_count condição(ões) com operador $visibility_operator";
+        }
+        
+        if (isset($logic['required']) && !empty($logic['required']['conditions'])) {
+            $required_count = count($logic['required']['conditions']);
+            $required_operator = isset($logic['required']['operator']) ? $logic['required']['operator'] : 'AND';
+            $summary[] = "<strong>Obrigatória:</strong> $required_count condição(ões) com operador $required_operator";
+        }
+        
+        if (empty($summary)) {
+            return '<span class="text-muted">Lógica vazia</span>';
+        }
+        
+        return implode('<br>', $summary);
     }
 
     /**

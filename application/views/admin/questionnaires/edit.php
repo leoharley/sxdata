@@ -319,11 +319,11 @@ function is_checkbox_checked($value) {
                                     </div>
                                 <?php endif; ?>
                                 
-                                <?php if (!empty($question->conditional_logic)): ?>
+                                <?php if (!empty($question->logic_summary)): ?>
                                     <div class="mb-3">
                                         <strong>Lógica Condicional:</strong>
                                         <div class="logic-preview">
-                                            <?= $this->display_conditional_logic_summary($question->conditional_logic) ?>
+                                            <?= $question->logic_summary ?>
                                         </div>
                                     </div>
                                 <?php endif; ?>
@@ -774,10 +774,14 @@ function loadExistingConditionalLogic() {
 // Função para carregar lógica condicional de uma pergunta
 function loadConditionalLogicForQuestion(questionIndex, logic) {
     if (logic.visibility) {
+        // Ativar seção de visibilidade
+        selectLogicType(questionIndex, 'visibility');
         loadConditionsForRule(questionIndex, 'visibility', logic.visibility);
     }
     
     if (logic.required) {
+        // Ativar seção de obrigatoriedade
+        selectLogicType(questionIndex, 'required');
         loadConditionsForRule(questionIndex, 'required', logic.required);
     }
 }
@@ -790,33 +794,46 @@ function loadConditionsForRule(questionIndex, ruleType, ruleData) {
     }
     
     if (ruleData.conditions && ruleData.conditions.length > 0) {
-        ruleData.conditions.forEach(condition => {
+        ruleData.conditions.forEach((conditionData, condIndex) => {
+            // Adicionar nova condição
             addCondition(questionIndex, ruleType);
             
-            const conditionsContainer = document.getElementById(`${ruleType}Conditions-${questionIndex}`);
-            const lastCondition = conditionsContainer.lastElementChild;
-            
-            if (lastCondition) {
-                const questionSelect = lastCondition.querySelector('select[name*="[question]"]');
-                const operatorSelect = lastCondition.querySelector('select[name*="[operator]"]');
-                const valueField = lastCondition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+            // Aguardar um pouco para que o DOM seja atualizado
+            setTimeout(() => {
+                const conditionsContainer = document.getElementById(`${ruleType}Conditions-${questionIndex}`);
+                const conditionItems = conditionsContainer.querySelectorAll('.condition-item');
+                const lastCondition = conditionItems[conditionItems.length - 1];
                 
-                if (questionSelect) questionSelect.value = condition.question;
-                if (operatorSelect) operatorSelect.value = condition.operator;
-                if (valueField) valueField.value = condition.value;
-                
-                // Atualizar operadores baseado no tipo de pergunta
-                if (questionSelect.value) {
-                    updateConditionOperators(questionIndex, ruleType, conditionsContainer.children.length - 1);
+                if (lastCondition) {
+                    const questionSelect = lastCondition.querySelector('select[name*="[question]"]');
+                    const operatorSelect = lastCondition.querySelector('select[name*="[operator]"]');
+                    const valueField = lastCondition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+                    
+                    if (questionSelect && conditionData.question !== undefined) {
+                        questionSelect.value = conditionData.question;
+                        
+                        // Trigger change para atualizar operadores
+                        updateConditionOperators(questionIndex, ruleType, conditionItems.length - 1);
+                        
+                        setTimeout(() => {
+                            if (operatorSelect && conditionData.operator) {
+                                operatorSelect.value = conditionData.operator;
+                                
+                                // Trigger change para atualizar campo de valor
+                                updateConditionValue(questionIndex, ruleType, conditionItems.length - 1);
+                                
+                                setTimeout(() => {
+                                    const updatedValueField = lastCondition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+                                    if (updatedValueField && conditionData.value !== undefined) {
+                                        updatedValueField.value = conditionData.value;
+                                    }
+                                }, 100);
+                            }
+                        }, 100);
+                    }
                 }
-            }
+            }, 50);
         });
-        
-        // Marcar pergunta como tendo lógica condicional
-        const questionItem = document.querySelector(`[data-index="${questionIndex}"]`);
-        if (questionItem) {
-            questionItem.classList.add('has-conditional');
-        }
     }
 }
 
@@ -1354,24 +1371,30 @@ function generateConditionsPreview(conditions, questionIndex, ruleType) {
         const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
         
         if (questionSelect && operatorSelect) {
-            const questionText = questionSelect.selectedOptions[0]?.text || 'Pergunta';
-            const operatorText = logicOperators[operatorSelect.value] || 'operador';
-            const valueText = valueField ? valueField.value : '';
-            
-            let conditionText = `<span class="question-reference">${questionText}</span> ${operatorText}`;
-            
-            if (valueText && !['is_empty', 'is_not_empty'].includes(operatorSelect.value)) {
-                conditionText += ` "${valueText}"`;
-            }
-            
-            conditionTexts.push(conditionText);
-        }
-    });
-    
-    if (conditionTexts.length === 0) return '';
-    
-    const operatorText = operator === 'AND' ? ' E ' : ' OU ';
-    return conditionTexts.join(operatorText);
+            const questionText = questionSelect.selectedOptions[0]?.// Função para carregar lógica condicional existente
+                function loadExistingConditionalLogic() {
+                    existingQuestions.forEach((question, index) => {
+                        if (question.conditional_logic) {
+                            try {
+                                const logic = typeof question.conditional_logic === 'string' ? 
+                                            JSON.parse(question.conditional_logic) : 
+                                            question.conditional_logic;
+                                            
+                                loadConditionalLogicForQuestion(index, logic);
+                                
+                                // Marcar pergunta como tendo lógica
+                                const questionItem = document.querySelector(`[data-index="${index}"]`);
+                                if (questionItem) {
+                                    questionItem.classList.add('has-conditional');
+                                }
+                            } catch (e) {
+                                console.error('Erro ao carregar lógica condicional da pergunta ' + (index + 1), e);
+                            }
+                        }
+                    });
+                    
+    // Atualizar preview inicial
+    updateLogicPreview();
 }
 
 function validateAllConditionalLogic() {
