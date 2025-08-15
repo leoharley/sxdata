@@ -298,10 +298,9 @@ function is_checkbox_checked($value) {
                                 <div class="row mb-3">
                                     <div class="col-md-6">
                                         <strong>Tipo:</strong> <?= ucfirst($question->question_type) ?>
-                                        <?= $question->is_required ?>
                                     </div>
                                     <div class="col-md-6">
-                                        <?php if ($question->is_required): ?>
+                                        <?php if ($question->is_required == 't'): ?>
                                             <span class="badge bg-danger">Obrigatória</span>
                                         <?php else: ?>
                                             <span class="badge bg-secondary">Opcional</span>
