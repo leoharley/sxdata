@@ -23,162 +23,161 @@ class Stats extends CI_Controller {
      * Retorna estatísticas específicas de um usuário aplicador
      */
     public function user($user_id = null) {
-    if ($this->input->method() !== 'get') {
-        $this->output->set_status_header(405);
-        echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-        return;
-    }
-
-    // Verificar autenticação
-    $authenticated_user = $this->verify_auth();
-    if (!$authenticated_user) {
-        return;
-    }
-
-    // Se não foi especificado user_id, usar o do token
-    if (!$user_id) {
-        $user_id = $authenticated_user;
-    }
-
-    // CORREÇÃO: Administradores podem ver dados agregados de todos os aplicadores
-    $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
-    
-    
-    // Verificar se o usuário pode acessar essas estatísticas
-    if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
-        $this->output->set_status_header(403);
-        echo json_encode(['success' => false, 'message' => 'Access denied']);
-        return;
-    }
-
-    try {
-        // CORREÇÃO: Para administradores, mostrar dados agregados se não especificar user_id
-        if ($is_admin_or_supervisor && !$this->input->get('user_id')) {
-            // Dados agregados para administradores/supervisores
-            $filters = [];
-            
-            $total_forms = $this->Response_model->count_by_filters($filters);
-            $today_forms = $this->Response_model->count_by_filters([
-                'date_from' => date('Y-m-d'),
-                'date_to' => date('Y-m-d')
-            ]);
-            $pending_sync = $this->Response_model->count_by_filters([
-                'sync_status' => 'pending'
-            ]);
-            $photos_captured = $this->Response_model->count_photos($filters);
-            
-            // Taxa de sucesso geral
-            $synced_forms = $this->Response_model->count_by_filters([
-                'sync_status' => 'synced'
-            ]);
-            $success_rate = $total_forms > 0 ? round(($synced_forms / $total_forms) * 100) : 100;
-            
-            // Dados agregados de todos os aplicadores
-            $total_applicators = $this->Response_model->count_applicators('active');
-            $active_days = $this->get_system_active_days(30);
-            
-            // Atividade recente de todo o sistema
-            $recent_activity = $this->format_system_recent_activity(
-                $this->Response_model->get_recent(10)
-            );
-            
-            // Estatísticas de período do sistema
-            $weekly_stats = $this->get_system_period_stats(7);
-            $monthly_stats = $this->get_system_period_stats(30);
-            
-            // Top questionários do sistema
-            $top_questionnaires = $this->format_top_questionnaires(
-                $this->Response_model->get_questionnaires_popularity([], 5)
-            );
-
-            $stats = [
-                'user_id' => (int)$authenticated_user,
-                'user_type' => 'admin_aggregated',
-                'summary' => [
-                    'total_forms' => (int)$total_forms,
-                    'today_forms' => (int)$today_forms,
-                    'pending_sync' => (int)$pending_sync,
-                    'success_rate' => (int)$success_rate,
-                    'active_days' => (int)$active_days,
-                    'photos_captured' => (int)$photos_captured
-                ],
-                'recent_activity' => $recent_activity,
-                'period_stats' => [
-                    'weekly' => $weekly_stats,
-                    'monthly' => $monthly_stats
-                ],
-                'top_questionnaires' => $top_questionnaires,
-                'system_info' => [
-                    'total_applicators' => (int)$total_applicators,
-                    'data_source' => 'aggregated_from_all_applicators'
-                ],
-                'updated_at' => date('Y-m-d H:i:s')
-            ];
-        } else {
-            // Dados específicos de um usuário (comportamento original)
-            $filters = ['applied_by' => $user_id];
-            
-            $total_forms = $this->Response_model->count_by_filters($filters);
-            $today_forms = $this->Response_model->count_by_filters(array_merge($filters, [
-                'date_from' => date('Y-m-d'),
-                'date_to' => date('Y-m-d')
-            ]));
-            $pending_sync = $this->Response_model->count_by_filters(array_merge($filters, [
-                'sync_status' => 'pending'
-            ]));
-            $photos_captured = $this->Response_model->count_photos($filters);
-
-            // Taxa de sucesso
-            $synced_forms = $this->Response_model->count_by_filters(array_merge($filters, [
-                'sync_status' => 'synced'
-            ]));
-            $success_rate = $total_forms > 0 ? round(($synced_forms / $total_forms) * 100) : 100;
-
-            // Dados usando métodos específicos do model
-            $active_days = $this->Response_model->get_active_days($user_id, 30);
-            $recent_activity = $this->format_recent_activity(
-                $this->Response_model->get_recent_activity($user_id, 10)
-            );
-            $weekly_stats = $this->Response_model->get_period_stats($user_id, 7);
-            $monthly_stats = $this->Response_model->get_period_stats($user_id, 30);
-            $top_questionnaires = $this->format_top_questionnaires(
-                $this->Response_model->get_top_questionnaires_by_user($user_id, 5)
-            );
-
-            $stats = [
-                'user_id' => (int)$user_id,
-                'user_type' => 'individual',
-                'summary' => [
-                    'total_forms' => (int)$total_forms,
-                    'today_forms' => (int)$today_forms,
-                    'pending_sync' => (int)$pending_sync,
-                    'success_rate' => (int)$success_rate,
-                    'active_days' => (int)$active_days,
-                    'photos_captured' => (int)$photos_captured
-                ],
-                'recent_activity' => $recent_activity,
-                'period_stats' => [
-                    'weekly' => $weekly_stats,
-                    'monthly' => $monthly_stats
-                ],
-                'top_questionnaires' => $top_questionnaires,
-                'updated_at' => date('Y-m-d H:i:s')
-            ];
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
         }
 
-        echo json_encode([
-            'success' => true,
-            'data' => $stats
-        ]);
+        // Verificar autenticação
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) {
+            return;
+        }
 
-    } catch (Exception $e) {
-        $this->output->set_status_header(500);
-        echo json_encode([
-            'success' => false,
-            'message' => 'Failed to get user stats: ' . $e->getMessage()
-        ]);
+        // Se não foi especificado user_id, usar o do token
+        if (!$user_id) {
+            $user_id = $authenticated_user;
+        }
+
+        // CORREÇÃO: Administradores podem ver dados agregados de todos os aplicadores
+        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
+        
+        // Verificar se o usuário pode acessar essas estatísticas
+        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
+            $this->output->set_status_header(403);
+            echo json_encode(['success' => false, 'message' => 'Access denied']);
+            return;
+        }
+
+        try {
+            // CORREÇÃO: Para administradores, mostrar dados agregados se não especificar user_id
+            if ($is_admin_or_supervisor && !$this->input->get('user_id')) {
+                // Dados agregados para administradores/supervisores
+                $filters = [];
+                
+                $total_forms = $this->Response_model->count_by_filters($filters);
+                $today_forms = $this->Response_model->count_by_filters([
+                    'date_from' => date('Y-m-d'),
+                    'date_to' => date('Y-m-d')
+                ]);
+                $pending_sync = $this->Response_model->count_by_filters([
+                    'sync_status' => 'pending'
+                ]);
+                $photos_captured = $this->Response_model->count_photos($filters);
+                
+                // Taxa de sucesso geral
+                $synced_forms = $this->Response_model->count_by_filters([
+                    'sync_status' => 'synced'
+                ]);
+                $success_rate = $total_forms > 0 ? round(($synced_forms / $total_forms) * 100) : 100;
+                
+                // Dados agregados de todos os aplicadores
+                $total_applicators = $this->Response_model->count_applicators('active');
+                $active_days = $this->get_system_active_days(30);
+                
+                // Atividade recente de todo o sistema
+                $recent_activity = $this->format_system_recent_activity(
+                    $this->Response_model->get_recent(10)
+                );
+                
+                // Estatísticas de período do sistema
+                $weekly_stats = $this->get_system_period_stats(7);
+                $monthly_stats = $this->get_system_period_stats(30);
+                
+                // Top questionários do sistema
+                $top_questionnaires = $this->format_top_questionnaires(
+                    $this->Response_model->get_questionnaires_popularity([], 5)
+                );
+
+                $stats = [
+                    'user_id' => (int)$authenticated_user,
+                    'user_type' => 'admin_aggregated',
+                    'summary' => [
+                        'total_forms' => (int)$total_forms,
+                        'today_forms' => (int)$today_forms,
+                        'pending_sync' => (int)$pending_sync,
+                        'success_rate' => (int)$success_rate,
+                        'active_days' => (int)$active_days,
+                        'photos_captured' => (int)$photos_captured
+                    ],
+                    'recent_activity' => $recent_activity,
+                    'period_stats' => [
+                        'weekly' => $weekly_stats,
+                        'monthly' => $monthly_stats
+                    ],
+                    'top_questionnaires' => $top_questionnaires,
+                    'system_info' => [
+                        'total_applicators' => (int)$total_applicators,
+                        'data_source' => 'aggregated_from_all_applicators'
+                    ],
+                    'updated_at' => date('Y-m-d H:i:s')
+                ];
+            } else {
+                // Dados específicos de um usuário (comportamento original)
+                $filters = ['applied_by' => $user_id];
+                
+                $total_forms = $this->Response_model->count_by_filters($filters);
+                $today_forms = $this->Response_model->count_by_filters(array_merge($filters, [
+                    'date_from' => date('Y-m-d'),
+                    'date_to' => date('Y-m-d')
+                ]));
+                $pending_sync = $this->Response_model->count_by_filters(array_merge($filters, [
+                    'sync_status' => 'pending'
+                ]));
+                $photos_captured = $this->Response_model->count_photos($filters);
+
+                // Taxa de sucesso
+                $synced_forms = $this->Response_model->count_by_filters(array_merge($filters, [
+                    'sync_status' => 'synced'
+                ]));
+                $success_rate = $total_forms > 0 ? round(($synced_forms / $total_forms) * 100) : 100;
+
+                // Dados usando métodos específicos do model
+                $active_days = $this->Response_model->get_active_days($user_id, 30);
+                $recent_activity = $this->format_recent_activity(
+                    $this->Response_model->get_recent_activity($user_id, 10)
+                );
+                $weekly_stats = $this->Response_model->get_period_stats($user_id, 7);
+                $monthly_stats = $this->Response_model->get_period_stats($user_id, 30);
+                $top_questionnaires = $this->format_top_questionnaires(
+                    $this->Response_model->get_top_questionnaires_by_user($user_id, 5)
+                );
+
+                $stats = [
+                    'user_id' => (int)$user_id,
+                    'user_type' => 'individual',
+                    'summary' => [
+                        'total_forms' => (int)$total_forms,
+                        'today_forms' => (int)$today_forms,
+                        'pending_sync' => (int)$pending_sync,
+                        'success_rate' => (int)$success_rate,
+                        'active_days' => (int)$active_days,
+                        'photos_captured' => (int)$photos_captured
+                    ],
+                    'recent_activity' => $recent_activity,
+                    'period_stats' => [
+                        'weekly' => $weekly_stats,
+                        'monthly' => $monthly_stats
+                    ],
+                    'top_questionnaires' => $top_questionnaires,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to get user stats: ' . $e->getMessage()
+            ]);
+        }
     }
-}
 
     /**
      * GET /api/stats/overview
@@ -371,6 +370,148 @@ class Stats extends CI_Controller {
     }
 
     /**
+     * GET /api/stats/history/{user_id}
+     * Retorna histórico de aplicação de questionários de um usuário
+     */
+    public function history($user_id = null) {
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        // Verificar autenticação
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) {
+            return;
+        }
+
+        // Se não foi especificado user_id, usar o do token
+        if (!$user_id) {
+            $user_id = $authenticated_user;
+        }
+
+        // Verificar permissões
+        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
+        
+        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
+            $this->output->set_status_header(403);
+            echo json_encode(['success' => false, 'message' => 'Access denied']);
+            return;
+        }
+
+        try {
+            // Obter filtros da URL
+            $filters = [
+                'period' => $this->input->get('period') ?: 'all', // all, today, week, month
+                'sync_status' => $this->input->get('sync_status'), // pending, synced, error
+                'questionnaire_id' => $this->input->get('questionnaire_id'),
+                'limit' => $this->input->get('limit') ?: 50,
+                'offset' => $this->input->get('offset') ?: 0
+            ];
+
+            // Buscar histórico usando o Questionnaire_model
+            $history_data = $this->Questionnaire_model->get_application_history($user_id, $filters);
+            
+            // Buscar contadores para os filtros
+            $counters = $this->Questionnaire_model->get_history_counters($user_id);
+
+            // Formatar resposta
+            $response = [
+                'success' => true,
+                'data' => [
+                    'user_id' => (int)$user_id,
+                    'total_applications' => (int)$counters['total'],
+                    'counters' => [
+                        'all' => (int)$counters['total'],
+                        'today' => (int)$counters['today'],
+                        'week' => (int)$counters['week'],
+                        'pending' => (int)$counters['pending'],
+                        'synced' => (int)$counters['synced'],
+                        'error' => (int)$counters['error']
+                    ],
+                    'applications' => $this->format_history_applications($history_data),
+                    'pagination' => [
+                        'limit' => (int)$filters['limit'],
+                        'offset' => (int)$filters['offset'],
+                        'has_more' => count($history_data) === (int)$filters['limit']
+                    ],
+                    'filters_applied' => $filters,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]
+            ];
+
+            echo json_encode($response);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to get application history: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * GET /api/stats/history/{user_id}/summary
+     * Retorna resumo do histórico de aplicações
+     */
+    public function history_summary($user_id = null) {
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        // Verificar autenticação
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) {
+            return;
+        }
+
+        // Se não foi especificado user_id, usar o do token
+        if (!$user_id) {
+            $user_id = $authenticated_user;
+        }
+
+        // Verificar permissões
+        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
+        
+        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
+            $this->output->set_status_header(403);
+            echo json_encode(['success' => false, 'message' => 'Access denied']);
+            return;
+        }
+
+        try {
+            // Buscar dados de resumo
+            $summary = $this->Questionnaire_model->get_history_summary($user_id);
+            $recent_activity = $this->Questionnaire_model->get_recent_applications($user_id, 5);
+            $questionnaires_stats = $this->Questionnaire_model->get_user_questionnaire_stats($user_id);
+
+            $response = [
+                'success' => true,
+                'data' => [
+                    'user_id' => (int)$user_id,
+                    'summary' => $summary,
+                    'recent_activity' => $this->format_recent_applications($recent_activity),
+                    'questionnaires_stats' => $questionnaires_stats,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]
+            ];
+
+            echo json_encode($response);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to get history summary: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Formatar dados de atividade recente
      */
     private function format_recent_activity($activities) {
@@ -455,6 +596,160 @@ class Stats extends CI_Controller {
         }
         
         return $map_points;
+    }
+
+    /**
+     * Formatar dados das aplicações para o frontend
+     */
+    private function format_history_applications($applications) {
+        $formatted = [];
+        
+        foreach ($applications as $app) {
+            $status_info = $this->get_sync_status_info($app->sync_status);
+            
+            $formatted[] = [
+                'id' => (int)$app->id,
+                'questionnaire' => [
+                    'id' => (int)$app->questionnaire_id,
+                    'title' => $app->questionnaire_title,
+                    'code' => $app->questionnaire_code ?: sprintf('#%03d', $app->questionnaire_id)
+                ],
+                'respondent' => [
+                    'name' => $app->respondent_name,
+                    'email' => $app->respondent_email
+                ],
+                'location' => [
+                    'name' => $app->location_name,
+                    'latitude' => $app->latitude ? (float)$app->latitude : null,
+                    'longitude' => $app->longitude ? (float)$app->longitude : null,
+                    'full_address' => $this->format_location_address($app)
+                ],
+                'timing' => [
+                    'started_at' => $app->started_at,
+                    'completed_at' => $app->completed_at,
+                    'duration_minutes' => $this->calculate_duration($app->started_at, $app->completed_at),
+                    'completed_at_formatted' => $this->format_datetime_for_app($app->completed_at),
+                    'time_ago' => $this->time_elapsed_string($app->completed_at)
+                ],
+                'sync' => [
+                    'status' => $app->sync_status,
+                    'status_label' => $status_info['label'],
+                    'status_color' => $status_info['color'],
+                    'icon' => $status_info['icon']
+                ],
+                'additional_data' => [
+                    'has_photo' => !empty($app->photo_path),
+                    'photo_path' => $app->photo_path,
+                    'consent_given' => (bool)$app->consent_given,
+                    'has_location' => !empty($app->latitude) && !empty($app->longitude)
+                ],
+                'created_at' => $app->created_at
+            ];
+        }
+        
+        return $formatted;
+    }
+
+    /**
+     * Formatar aplicações recentes para resumo
+     */
+    private function format_recent_applications($applications) {
+        $formatted = [];
+        
+        foreach ($applications as $app) {
+            $formatted[] = [
+                'id' => (int)$app->id,
+                'questionnaire_title' => $app->questionnaire_title,
+                'questionnaire_code' => $app->questionnaire_code ?: sprintf('#%03d', $app->questionnaire_id),
+                'respondent_name' => $app->respondent_name,
+                'location_name' => $app->location_name,
+                'completed_at' => $app->completed_at,
+                'completed_at_formatted' => $this->format_datetime_for_app($app->completed_at),
+                'sync_status' => $app->sync_status,
+                'time_ago' => $this->time_elapsed_string($app->completed_at)
+            ];
+        }
+        
+        return $formatted;
+    }
+
+    /**
+     * Obter informações visuais do status de sincronização
+     */
+    private function get_sync_status_info($status) {
+        switch ($status) {
+            case 'synced':
+                return [
+                    'label' => 'Sincronizado',
+                    'color' => '#4CAF50',
+                    'icon' => 'check_circle'
+                ];
+            case 'pending':
+                return [
+                    'label' => 'Pendente',
+                    'color' => '#FF9800',
+                    'icon' => 'sync'
+                ];
+            case 'error':
+                return [
+                    'label' => 'Erro',
+                    'color' => '#F44336',
+                    'icon' => 'error'
+                ];
+            default:
+                return [
+                    'label' => 'Sincronizando',
+                    'color' => '#2196F3',
+                    'icon' => 'sync'
+                ];
+        }
+    }
+
+    /**
+     * Formatar endereço da localização
+     */
+    private function format_location_address($app) {
+        $parts = [];
+        
+        if ($app->location_name) {
+            $parts[] = $app->location_name;
+        }
+        
+        // Adicionar coordenadas se disponíveis
+        if ($app->latitude && $app->longitude) {
+            $parts[] = sprintf('%.6f, %.6f', $app->latitude, $app->longitude);
+        }
+        
+        return implode(' • ', $parts) ?: 'Localização não informada';
+    }
+
+    /**
+     * Calcular duração em minutos
+     */
+    private function calculate_duration($started_at, $completed_at) {
+        if (!$started_at || !$completed_at) {
+            return null;
+        }
+        
+        $start = new DateTime($started_at);
+        $end = new DateTime($completed_at);
+        $diff = $start->diff($end);
+        
+        return ($diff->h * 60) + $diff->i;
+    }
+
+    /**
+     * Formatar data/hora para o app
+     */
+    private function format_datetime_for_app($datetime) {
+        if (!$datetime) {
+            return null;
+        }
+        
+        $date = new DateTime($datetime);
+        
+        // Formato: 09/06/2025 09:50
+        return $date->format('d/m/Y H:i');
     }
 
     /**
@@ -563,7 +858,6 @@ class Stats extends CI_Controller {
         return $string ? implode(', ', $string) . ' atrás' : 'agora mesmo';
     }
 
-
     /**
      * Obter dias ativos do sistema (todos os aplicadores)
      */
@@ -622,605 +916,4 @@ class Stats extends CI_Controller {
         
         return $formatted_activities;
     }
-
-
-
-    // Adicione estes métodos ao final da classe Stats, antes da chave de fechamento }
-
-    /**
-     * GET /api/stats/history/{user_id}
-     * Retorna histórico de aplicação de questionários de um usuário
-     */
-    public function history($user_id = null) {
-        if ($this->input->method() !== 'get') {
-            $this->output->set_status_header(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
-        }
-
-        // Verificar autenticação
-        $authenticated_user = $this->verify_auth();
-        if (!$authenticated_user) {
-            return;
-        }
-
-        // Se não foi especificado user_id, usar o do token
-        if (!$user_id) {
-            $user_id = $authenticated_user;
-        }
-
-        // Verificar permissões
-        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
-        
-        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
-            $this->output->set_status_header(403);
-            echo json_encode(['success' => false, 'message' => 'Access denied']);
-            return;
-        }
-
-        try {
-            // Obter filtros da URL
-            $filters = [
-                'period' => $this->input->get('period') ?: 'all', // all, today, week, month
-                'sync_status' => $this->input->get('sync_status'), // pending, synced, error
-                'questionnaire_id' => $this->input->get('questionnaire_id'),
-                'limit' => $this->input->get('limit') ?: 50,
-                'offset' => $this->input->get('offset') ?: 0
-            ];
-
-            // Buscar histórico usando o Questionnaire_model
-            $history_data = $this->Questionnaire_model->get_application_history($user_id, $filters);
-            
-            // Buscar contadores para os filtros
-            $counters = $this->Questionnaire_model->get_history_counters($user_id);
-
-            // Formatar resposta
-            $response = [
-                'success' => true,
-                'data' => [
-                    'user_id' => (int)$user_id,
-                    'total_applications' => (int)$counters['total'],
-                    'counters' => [
-                        'all' => (int)$counters['total'],
-                        'today' => (int)$counters['today'],
-                        'week' => (int)$counters['week'],
-                        'pending' => (int)$counters['pending'],
-                        'synced' => (int)$counters['synced'],
-                        'error' => (int)$counters['error']
-                    ],
-                    'applications' => $this->format_history_applications($history_data),
-                    'pagination' => [
-                        'limit' => (int)$filters['limit'],
-                        'offset' => (int)$filters['offset'],
-                        'has_more' => count($history_data) === (int)$filters['limit']
-                    ],
-                    'filters_applied' => $filters,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]
-            ];
-
-            echo json_encode($response);
-
-        } catch (Exception $e) {
-            $this->output->set_status_header(500);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Failed to get application history: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * GET /api/stats/history/{user_id}/summary
-     * Retorna resumo do histórico de aplicações
-     */
-    public function history_summary($user_id = null) {
-        if ($this->input->method() !== 'get') {
-            $this->output->set_status_header(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
-        }
-
-        // Verificar autenticação
-        $authenticated_user = $this->verify_auth();
-        if (!$authenticated_user) {
-            return;
-        }
-
-        // Se não foi especificado user_id, usar o do token
-        if (!$user_id) {
-            $user_id = $authenticated_user;
-        }
-
-        // Verificar permissões
-        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
-        
-        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
-            $this->output->set_status_header(403);
-            echo json_encode(['success' => false, 'message' => 'Access denied']);
-            return;
-        }
-
-        try {
-            // Buscar dados de resumo
-            $summary = $this->Questionnaire_model->get_history_summary($user_id);
-            $recent_activity = $this->Questionnaire_model->get_recent_applications($user_id, 5);
-            $questionnaires_stats = $this->Questionnaire_model->get_user_questionnaire_stats($user_id);
-
-            $response = [
-                'success' => true,
-                'data' => [
-                    'user_id' => (int)$user_id,
-                    'summary' => $summary,
-                    'recent_activity' => $this->format_recent_applications($recent_activity),
-                    'questionnaires_stats' => $questionnaires_stats,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]
-            ];
-
-            echo json_encode($response);
-
-        } catch (Exception $e) {
-            $this->output->set_status_header(500);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Failed to get history summary: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Formatar dados das aplicações para o frontend
-     */
-    private function format_history_applications($applications) {
-        $formatted = [];
-        
-        foreach ($applications as $app) {
-            $status_info = $this->get_sync_status_info($app->sync_status);
-            
-            $formatted[] = [
-                'id' => (int)$app->id,
-                'questionnaire' => [
-                    'id' => (int)$app->questionnaire_id,
-                    'title' => $app->questionnaire_title,
-                    'code' => $app->questionnaire_code ?: sprintf('#%03d', $app->questionnaire_id)
-                ],
-                'respondent' => [
-                    'name' => $app->respondent_name,
-                    'email' => $app->respondent_email
-                ],
-                'location' => [
-                    'name' => $app->location_name,
-                    'latitude' => $app->latitude ? (float)$app->latitude : null,
-                    'longitude' => $app->longitude ? (float)$app->longitude : null,
-                    'full_address' => $this->format_location_address($app)
-                ],
-                'timing' => [
-                    'started_at' => $app->started_at,
-                    'completed_at' => $app->completed_at,
-                    'duration_minutes' => $this->calculate_duration($app->started_at, $app->completed_at),
-                    'completed_at_formatted' => $this->format_datetime_for_app($app->completed_at),
-                    'time_ago' => $this->time_elapsed_string($app->completed_at)
-                ],
-                'sync' => [
-                    'status' => $app->sync_status,
-                    'status_label' => $status_info['label'],
-                    'status_color' => $status_info['color'],
-                    'icon' => $status_info['icon']
-                ],
-                'additional_data' => [
-                    'has_photo' => !empty($app->photo_path),
-                    'photo_path' => $app->photo_path,
-                    'consent_given' => (bool)$app->consent_given,
-                    'has_location' => !empty($app->latitude) && !empty($app->longitude)
-                ],
-                'created_at' => $app->created_at
-            ];
-        }
-        
-        return $formatted;
-    }
-
-    /**
-     * Formatar aplicações recentes para resumo
-     */
-    private function format_recent_applications($applications) {
-        $formatted = [];
-        
-        foreach ($applications as $app) {
-            $formatted[] = [
-                'id' => (int)$app->id,
-                'questionnaire_title' => $app->questionnaire_title,
-                'questionnaire_code' => $app->questionnaire_code ?: sprintf('#%03d', $app->questionnaire_id),
-                'respondent_name' => $app->respondent_name,
-                'location_name' => $app->location_name,
-                'completed_at' => $app->completed_at,
-                'completed_at_formatted' => $this->format_datetime_for_app($app->completed_at),
-                'sync_status' => $app->sync_status,
-                'time_ago' => $this->time_elapsed_string($app->completed_at)
-            ];
-        }
-        
-        return $formatted;
-    }
-
-    /**
-     * Obter informações visuais do status de sincronização
-     */
-    private function get_sync_status_info($status) {
-        switch ($status) {
-            case 'synced':
-                return [
-                    'label' => 'Sincronizado',
-                    'color' => '#4CAF50',
-                    'icon' => 'check_circle'
-                ];
-            case 'pending':
-                return [
-                    'label' => 'Pendente',
-                    'color' => '#FF9800',
-                    'icon' => 'sync'
-                ];
-            case 'error':
-                return [
-                    'label' => 'Erro',
-                    'color' => '#F44336',
-                    'icon' => 'error'
-                ];
-            default:
-                return [
-                    'label' => 'Sincronizando',
-                    'color' => '#2196F3',
-                    'icon' => 'sync'
-                ];
-        }
-    }
-
-    /**
-     * Formatar endereço da localização
-     */
-    private function format_location_address($app) {
-        $parts = [];
-        
-        if ($app->location_name) {
-            $parts[] = $app->location_name;
-        }
-        
-        // Adicionar coordenadas se disponíveis
-        if ($app->latitude && $app->longitude) {
-            $parts[] = sprintf('%.6f, %.6f', $app->latitude, $app->longitude);
-        }
-        
-        return implode(' • ', $parts) ?: 'Localização não informada';
-    }
-
-    /**
-     * Calcular duração em minutos
-     */
-    private function calculate_duration($started_at, $completed_at) {
-        if (!$started_at || !$completed_at) {
-            return null;
-        }
-        
-        $start = new DateTime($started_at);
-        $end = new DateTime($completed_at);
-        $diff = $start->diff($end);
-        
-        return ($diff->h * 60) + $diff->i;
-    }
-
-    /**
-     * Formatar data/hora para o app
-     */
-    private function format_datetime_for_app($datetime) {
-        if (!$datetime) {
-            return null;
-        }
-        
-        $date = new DateTime($datetime);
-        
-        // Formato: 09/06/2025 09:50
-        return $date->format('d/m/Y H:i');
-    }
-
-
-    // Adicione estes métodos ao final da classe Stats, antes da chave de fechamento }
-
-    /**
-     * GET /api/stats/history/{user_id}
-     * Retorna histórico de aplicação de questionários de um usuário
-     */
-    public function history($user_id = null) {
-        if ($this->input->method() !== 'get') {
-            $this->output->set_status_header(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
-        }
-
-        // Verificar autenticação
-        $authenticated_user = $this->verify_auth();
-        if (!$authenticated_user) {
-            return;
-        }
-
-        // Se não foi especificado user_id, usar o do token
-        if (!$user_id) {
-            $user_id = $authenticated_user;
-        }
-
-        // Verificar permissões
-        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
-        
-        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
-            $this->output->set_status_header(403);
-            echo json_encode(['success' => false, 'message' => 'Access denied']);
-            return;
-        }
-
-        try {
-            // Obter filtros da URL
-            $filters = [
-                'period' => $this->input->get('period') ?: 'all', // all, today, week, month
-                'sync_status' => $this->input->get('sync_status'), // pending, synced, error
-                'questionnaire_id' => $this->input->get('questionnaire_id'),
-                'limit' => $this->input->get('limit') ?: 50,
-                'offset' => $this->input->get('offset') ?: 0
-            ];
-
-            // Buscar histórico usando o Questionnaire_model
-            $history_data = $this->Questionnaire_model->get_application_history($user_id, $filters);
-            
-            // Buscar contadores para os filtros
-            $counters = $this->Questionnaire_model->get_history_counters($user_id);
-
-            // Formatar resposta
-            $response = [
-                'success' => true,
-                'data' => [
-                    'user_id' => (int)$user_id,
-                    'total_applications' => (int)$counters['total'],
-                    'counters' => [
-                        'all' => (int)$counters['total'],
-                        'today' => (int)$counters['today'],
-                        'week' => (int)$counters['week'],
-                        'pending' => (int)$counters['pending'],
-                        'synced' => (int)$counters['synced'],
-                        'error' => (int)$counters['error']
-                    ],
-                    'applications' => $this->format_history_applications($history_data),
-                    'pagination' => [
-                        'limit' => (int)$filters['limit'],
-                        'offset' => (int)$filters['offset'],
-                        'has_more' => count($history_data) === (int)$filters['limit']
-                    ],
-                    'filters_applied' => $filters,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]
-            ];
-
-            echo json_encode($response);
-
-        } catch (Exception $e) {
-            $this->output->set_status_header(500);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Failed to get application history: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * GET /api/stats/history/{user_id}/summary
-     * Retorna resumo do histórico de aplicações
-     */
-    public function history_summary($user_id = null) {
-        if ($this->input->method() !== 'get') {
-            $this->output->set_status_header(405);
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            return;
-        }
-
-        // Verificar autenticação
-        $authenticated_user = $this->verify_auth();
-        if (!$authenticated_user) {
-            return;
-        }
-
-        // Se não foi especificado user_id, usar o do token
-        if (!$user_id) {
-            $user_id = $authenticated_user;
-        }
-
-        // Verificar permissões
-        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
-        
-        if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
-            $this->output->set_status_header(403);
-            echo json_encode(['success' => false, 'message' => 'Access denied']);
-            return;
-        }
-
-        try {
-            // Buscar dados de resumo
-            $summary = $this->Questionnaire_model->get_history_summary($user_id);
-            $recent_activity = $this->Questionnaire_model->get_recent_applications($user_id, 5);
-            $questionnaires_stats = $this->Questionnaire_model->get_user_questionnaire_stats($user_id);
-
-            $response = [
-                'success' => true,
-                'data' => [
-                    'user_id' => (int)$user_id,
-                    'summary' => $summary,
-                    'recent_activity' => $this->format_recent_applications($recent_activity),
-                    'questionnaires_stats' => $questionnaires_stats,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]
-            ];
-
-            echo json_encode($response);
-
-        } catch (Exception $e) {
-            $this->output->set_status_header(500);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Failed to get history summary: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Formatar dados das aplicações para o frontend
-     */
-    private function format_history_applications($applications) {
-        $formatted = [];
-        
-        foreach ($applications as $app) {
-            $status_info = $this->get_sync_status_info($app->sync_status);
-            
-            $formatted[] = [
-                'id' => (int)$app->id,
-                'questionnaire' => [
-                    'id' => (int)$app->questionnaire_id,
-                    'title' => $app->questionnaire_title,
-                    'code' => $app->questionnaire_code ?: sprintf('#%03d', $app->questionnaire_id)
-                ],
-                'respondent' => [
-                    'name' => $app->respondent_name,
-                    'email' => $app->respondent_email
-                ],
-                'location' => [
-                    'name' => $app->location_name,
-                    'latitude' => $app->latitude ? (float)$app->latitude : null,
-                    'longitude' => $app->longitude ? (float)$app->longitude : null,
-                    'full_address' => $this->format_location_address($app)
-                ],
-                'timing' => [
-                    'started_at' => $app->started_at,
-                    'completed_at' => $app->completed_at,
-                    'duration_minutes' => $this->calculate_duration($app->started_at, $app->completed_at),
-                    'completed_at_formatted' => $this->format_datetime_for_app($app->completed_at),
-                    'time_ago' => $this->time_elapsed_string($app->completed_at)
-                ],
-                'sync' => [
-                    'status' => $app->sync_status,
-                    'status_label' => $status_info['label'],
-                    'status_color' => $status_info['color'],
-                    'icon' => $status_info['icon']
-                ],
-                'additional_data' => [
-                    'has_photo' => !empty($app->photo_path),
-                    'photo_path' => $app->photo_path,
-                    'consent_given' => (bool)$app->consent_given,
-                    'has_location' => !empty($app->latitude) && !empty($app->longitude)
-                ],
-                'created_at' => $app->created_at
-            ];
-        }
-        
-        return $formatted;
-    }
-
-    /**
-     * Formatar aplicações recentes para resumo
-     */
-    private function format_recent_applications($applications) {
-        $formatted = [];
-        
-        foreach ($applications as $app) {
-            $formatted[] = [
-                'id' => (int)$app->id,
-                'questionnaire_title' => $app->questionnaire_title,
-                'questionnaire_code' => $app->questionnaire_code ?: sprintf('#%03d', $app->questionnaire_id),
-                'respondent_name' => $app->respondent_name,
-                'location_name' => $app->location_name,
-                'completed_at' => $app->completed_at,
-                'completed_at_formatted' => $this->format_datetime_for_app($app->completed_at),
-                'sync_status' => $app->sync_status,
-                'time_ago' => $this->time_elapsed_string($app->completed_at)
-            ];
-        }
-        
-        return $formatted;
-    }
-
-    /**
-     * Obter informações visuais do status de sincronização
-     */
-    private function get_sync_status_info($status) {
-        switch ($status) {
-            case 'synced':
-                return [
-                    'label' => 'Sincronizado',
-                    'color' => '#4CAF50',
-                    'icon' => 'check_circle'
-                ];
-            case 'pending':
-                return [
-                    'label' => 'Pendente',
-                    'color' => '#FF9800',
-                    'icon' => 'sync'
-                ];
-            case 'error':
-                return [
-                    'label' => 'Erro',
-                    'color' => '#F44336',
-                    'icon' => 'error'
-                ];
-            default:
-                return [
-                    'label' => 'Sincronizando',
-                    'color' => '#2196F3',
-                    'icon' => 'sync'
-                ];
-        }
-    }
-
-    /**
-     * Formatar endereço da localização
-     */
-    private function format_location_address($app) {
-        $parts = [];
-        
-        if ($app->location_name) {
-            $parts[] = $app->location_name;
-        }
-        
-        // Adicionar coordenadas se disponíveis
-        if ($app->latitude && $app->longitude) {
-            $parts[] = sprintf('%.6f, %.6f', $app->latitude, $app->longitude);
-        }
-        
-        return implode(' • ', $parts) ?: 'Localização não informada';
-    }
-
-    /**
-     * Calcular duração em minutos
-     */
-    private function calculate_duration($started_at, $completed_at) {
-        if (!$started_at || !$completed_at) {
-            return null;
-        }
-        
-        $start = new DateTime($started_at);
-        $end = new DateTime($completed_at);
-        $diff = $start->diff($end);
-        
-        return ($diff->h * 60) + $diff->i;
-    }
-
-    /**
-     * Formatar data/hora para o app
-     */
-    private function format_datetime_for_app($datetime) {
-        if (!$datetime) {
-            return null;
-        }
-        
-        $date = new DateTime($datetime);
-        
-        // Formato: 09/06/2025 09:50
-        return $date->format('d/m/Y H:i');
-    }
-
-
 }
