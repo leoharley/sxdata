@@ -37,7 +37,7 @@ $route['api/stats/overview'] = 'api/stats/overview';
 $route['api/stats/applicators'] = 'api/stats/applicators';
 $route['api/stats/locations'] = 'api/stats/locations';
 
-$route['api/stats/history'] = 'stats/history';
-$route['api/stats/history/(:num)'] = 'stats/history/$1';
-$route['api/stats/history/(:num)/summary'] = 'stats/history_summary/$1';
-$route['api/stats/history/summary'] = 'stats/history_summary';
+$route['api/stats/history'] = 'api/stats/history';
+$route['api/stats/history/(:num)'] = 'api/stats/history/$1';
+$route['api/stats/history/(:num)/summary'] = 'api/stats/history_summary/$1';
+$route['api/stats/history/summary'] = 'api/stats/history_summary';
