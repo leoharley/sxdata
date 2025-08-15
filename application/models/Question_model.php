@@ -61,15 +61,11 @@ class Question_model extends CI_Model {
      */
     public function get_by_questionnaire_with_logic_robust($questionnaire_id) {
         try {
-            $this->db->select('q.*, 
-                              CASE 
-                                WHEN q.conditional_logic IS NOT NULL AND q.conditional_logic != "" 
-                                THEN q.conditional_logic 
-                                ELSE NULL 
-                              END as conditional_logic_safe');
-            $this->db->from('questions q');
-            $this->db->where('q.questionnaire_id', $questionnaire_id);
-            $this->db->order_by('q.order_index', 'ASC');
+            // Versão compatível com PostgreSQL - sem CASE WHEN complexo
+            $this->db->select('*');
+            $this->db->from('questions');
+            $this->db->where('questionnaire_id', $questionnaire_id);
+            $this->db->order_by('order_index', 'ASC');
             
             $questions = $this->db->get()->result();
             
@@ -77,18 +73,19 @@ class Question_model extends CI_Model {
                 // Buscar opções
                 $question->options = $this->get_options($question->id);
                 
-                // Processar lógica condicional
+                // Processar lógica condicional de forma mais segura
                 $question->conditional_logic_decoded = null;
-                if (!empty($question->conditional_logic_safe)) {
-                    $logic = json_decode($question->conditional_logic_safe, true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
+                
+                // Verificar se existe lógica condicional válida
+                if (isset($question->conditional_logic) && 
+                    !is_null($question->conditional_logic) && 
+                    trim($question->conditional_logic) !== '') {
+                    
+                    $logic = json_decode($question->conditional_logic, true);
+                    if (json_last_error() === JSON_ERROR_NONE && !empty($logic)) {
                         $question->conditional_logic_decoded = $logic;
                     }
                 }
-                
-                // Manter campo original
-                $question->conditional_logic = $question->conditional_logic_safe;
-                unset($question->conditional_logic_safe);
             }
             
             return $questions;
