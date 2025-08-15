@@ -8,139 +8,13 @@ class Question_model extends CI_Model {
         $this->load->database();
     }
 
-    public function get_by_questionnaire($questionnaire_id) {
-        $this->db->where('questionnaire_id', $questionnaire_id);
-        $this->db->order_by('order_index', 'ASC');
-        $questions = $this->db->get('questions')->result();
-        
-        // Adicionar opções para cada pergunta
-        foreach ($questions as &$question) {
-            $question->options = $this->get_options($question->id);
-        }
-        
-        return $questions;
-    }
-
-    public function get_by_id($id) {
-        $question = $this->db->get_where('questions', array('id' => $id))->row();
-        if ($question) {
-            $question->options = $this->get_options($id);
-        }
-        return $question;
-    }
-
-    public function get_options($question_id) {
-        $this->db->where('question_id', $question_id);
-        $this->db->order_by('order_index', 'ASC');
-        return $this->db->get('question_options')->result();
-    }
-
-    public function create($data) {
-        $data['created_at'] = date('Y-m-d H:i:s');
-        return $this->db->insert('questions', $data) ? $this->db->insert_id() : FALSE;
-    }
-
-    public function update($id, $data) {
-        $this->db->where('id', $id);
-        return $this->db->update('questions', $data);
-    }
-
-    public function delete($id) {
-        // Deletar opções primeiro
-        $this->db->where('question_id', $id);
-        $this->db->delete('question_options');
-        
-        // Deletar pergunta
-        $this->db->where('id', $id);
-        return $this->db->delete('questions');
-    }
-
-    public function create_option($data) {
-        $data['created_at'] = date('Y-m-d H:i:s');
-        return $this->db->insert('question_options', $data) ? $this->db->insert_id() : FALSE;
-    }
-
-    public function update_option($id, $data) {
-        $this->db->where('id', $id);
-        return $this->db->update('question_options', $data);
-    }
-
-    public function delete_option($id) {
-        $this->db->where('id', $id);
-        return $this->db->delete('question_options');
-    }
-
-    public function reorder_questions($questionnaire_id, $order_data) {
-        foreach ($order_data as $index => $question_id) {
-            $this->db->where('id', $question_id);
-            $this->db->update('questions', array('order_index' => $index + 1));
-        }
-        return TRUE;
-    }
-
-
-    public function update($question_id, $data) {
-        $this->db->where('id', $question_id);
-        return $this->db->update('questions', $data);
-    }
-
     /**
-     * Excluir uma pergunta e suas opções
-     * 
-     * @param int $question_id ID da pergunta
-     * @return bool Sucesso da operação
-     */
-    public function delete($question_id) {
-        // Primeiro excluir as opções
-        $this->delete_options($question_id);
-        
-        // Depois excluir a pergunta
-        $this->db->where('id', $question_id);
-        return $this->db->delete('questions');
-    }
-
-    /**
-     * Excluir todas as opções de uma pergunta
-     * 
-     * @param int $question_id ID da pergunta
-     * @return bool Sucesso da operação
-     */
-    public function delete_options($question_id) {
-        $this->db->where('question_id', $question_id);
-        return $this->db->delete('question_options');
-    }
-
-    /**
-     * Atualizar uma opção
-     * 
-     * @param int $option_id ID da opção
-     * @param array $data Dados para atualização
-     * @return bool Sucesso da operação
-     */
-    public function update_option($option_id, $data) {
-        $this->db->where('id', $option_id);
-        return $this->db->update('question_options', $data);
-    }
-
-    /**
-     * Excluir uma opção específica
-     * 
-     * @param int $option_id ID da opção
-     * @return bool Sucesso da operação
-     */
-    public function delete_option($option_id) {
-        $this->db->where('id', $option_id);
-        return $this->db->delete('question_options');
-    }
-
-    /**
-     * Obter pergunta com suas opções (versão melhorada)
+     * Obter perguntas de um questionário com suas opções
      * 
      * @param int $questionnaire_id ID do questionário
      * @return array Array de perguntas com opções
      */
     public function get_by_questionnaire($questionnaire_id) {
-        // Buscar perguntas
         $this->db->select('*');
         $this->db->from('questions');
         $this->db->where('questionnaire_id', $questionnaire_id);
@@ -156,6 +30,20 @@ class Question_model extends CI_Model {
     }
 
     /**
+     * Obter pergunta por ID com suas opções
+     * 
+     * @param int $id ID da pergunta
+     * @return object|null Pergunta com opções
+     */
+    public function get_by_id($id) {
+        $question = $this->db->get_where('questions', array('id' => $id))->row();
+        if ($question) {
+            $question->options = $this->get_options($id);
+        }
+        return $question;
+    }
+
+    /**
      * Obter opções de uma pergunta
      * 
      * @param int $question_id ID da pergunta
@@ -167,6 +55,89 @@ class Question_model extends CI_Model {
         $this->db->where('question_id', $question_id);
         $this->db->order_by('order_index', 'ASC');
         return $this->db->get()->result();
+    }
+
+    /**
+     * Criar nova pergunta
+     * 
+     * @param array $data Dados da pergunta
+     * @return int|false ID da pergunta criada ou false
+     */
+    public function create($data) {
+        $data['created_at'] = date('Y-m-d H:i:s');
+        return $this->db->insert('questions', $data) ? $this->db->insert_id() : FALSE;
+    }
+
+    /**
+     * Atualizar pergunta
+     * 
+     * @param int $question_id ID da pergunta
+     * @param array $data Dados para atualização
+     * @return bool Sucesso da operação
+     */
+    public function update($question_id, $data) {
+        $this->db->where('id', $question_id);
+        return $this->db->update('questions', $data);
+    }
+
+    /**
+     * Excluir pergunta e suas opções
+     * 
+     * @param int $question_id ID da pergunta
+     * @return bool Sucesso da operação
+     */
+    public function delete($question_id) {
+        // Primeiro excluir as opções
+        $this->delete_options($question_id);
+        
+        // Depois excluir a pergunta
+        $this->db->where('id', $question_id);
+        return $this->db->delete('questions');
+    }
+
+    /**
+     * Criar nova opção de pergunta
+     * 
+     * @param array $data Dados da opção
+     * @return int|false ID da opção criada ou false
+     */
+    public function create_option($data) {
+        $data['created_at'] = date('Y-m-d H:i:s');
+        return $this->db->insert('question_options', $data) ? $this->db->insert_id() : FALSE;
+    }
+
+    /**
+     * Atualizar opção
+     * 
+     * @param int $option_id ID da opção
+     * @param array $data Dados para atualização
+     * @return bool Sucesso da operação
+     */
+    public function update_option($option_id, $data) {
+        $this->db->where('id', $option_id);
+        return $this->db->update('question_options', $data);
+    }
+
+    /**
+     * Excluir opção específica
+     * 
+     * @param int $option_id ID da opção
+     * @return bool Sucesso da operação
+     */
+    public function delete_option($option_id) {
+        $this->db->where('id', $option_id);
+        return $this->db->delete('question_options');
+    }
+
+    /**
+     * Excluir todas as opções de uma pergunta
+     * 
+     * @param int $question_id ID da pergunta
+     * @return bool Sucesso da operação
+     */
+    public function delete_options($question_id) {
+        $this->db->where('question_id', $question_id);
+        return $this->db->delete('question_options');
     }
 
     /**
@@ -295,5 +266,4 @@ class Question_model extends CI_Model {
         
         return $formatted_stats;
     }
-
 }
