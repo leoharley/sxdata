@@ -1371,32 +1371,24 @@ function generateConditionsPreview(conditions, questionIndex, ruleType) {
         const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
         
         if (questionSelect && operatorSelect) {
-            const questionText = questionSelect.selectedOptions[0]?.// Função para carregar lógica condicional existente
-                function loadExistingConditionalLogic() {
-                    existingQuestions.forEach((question, index) => {
-                        if (question.conditional_logic) {
-                            try {
-                                const logic = typeof question.conditional_logic === 'string' ? 
-                                            JSON.parse(question.conditional_logic) : 
-                                            question.conditional_logic;
-                                            
-                                loadConditionalLogicForQuestion(index, logic);
-                                
-                                // Marcar pergunta como tendo lógica
-                                const questionItem = document.querySelector(`[data-index="${index}"]`);
-                                if (questionItem) {
-                                    questionItem.classList.add('has-conditional');
-                                }
-                            } catch (e) {
-                                console.error('Erro ao carregar lógica condicional da pergunta ' + (index + 1), e);
-                            }
-                        }
-                    });
-                    
-    // Atualizar preview inicial
-    updateLogicPreview();
-} }
-});
+            const questionText = questionSelect.selectedOptions[0]?.text || 'Pergunta';
+            const operatorText = logicOperators[operatorSelect.value] || 'operador';
+            const valueText = valueField ? valueField.value : '';
+            
+            let conditionText = `<span class="question-reference">${questionText}</span> ${operatorText}`;
+            
+            if (valueText && !['is_empty', 'is_not_empty'].includes(operatorSelect.value)) {
+                conditionText += ` "${valueText}"`;
+            }
+            
+            conditionTexts.push(conditionText);
+        }
+    });
+    
+    if (conditionTexts.length === 0) return '';
+    
+    const operatorText = operator === 'AND' ? ' E ' : ' OU ';
+    return conditionTexts.join(operatorText);
 }
 
 function validateAllConditionalLogic() {
