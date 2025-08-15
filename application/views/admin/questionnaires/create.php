@@ -387,10 +387,10 @@ function updateProjectInfo(projectId) {
     projectInfoCard.style.display = 'block';
 }
 
-function addQuestion() {
+function addQuestion() {function addQuestion() {
     const container = document.getElementById('questions-container') || document.getElementById('questionsContainer');
     const questionHtml = `
-        <div class="question-item border rounded p-3 mb-3" data-question-index="${questionIndex}" data-question-id="q_${questionIndex}">
+        <div class="question-item border rounded p-3 mb-3" data-question-index="${questionIndex}">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div class="d-flex align-items-center">
                     <span class="question-number badge bg-primary me-2">${questionIndex + 1}</span>
@@ -414,7 +414,7 @@ function addQuestion() {
             </div>
             
             <input type="hidden" name="questions[${questionIndex}][id]" value="">
-            <input type="hidden" name="questions[${questionIndex}][conditional_logic]" value="" data-conditional-logic="true">
+            <input type="hidden" name="questions[${questionIndex}][conditional_logic]" value="">
             
             <div class="row mb-3">
                 <div class="col-md-8">
@@ -504,66 +504,258 @@ function addQuestion() {
     updateQuestionCount();
 }
 
+// Função para atualizar template de pergunta existente (para edit.php)
+function updateExistingQuestionTemplate(questionElement, index) {
+    const header = questionElement.querySelector('.d-flex.justify-content-between');
+    const existingLogicBtn = header.querySelector('.btn-outline-info');
+    
+    if (!existingLogicBtn) {
+        const logicBtn = document.createElement('button');
+        logicBtn.type = 'button';
+        logicBtn.className = 'btn btn-outline-info btn-sm me-1';
+        logicBtn.onclick = () => openConditionalLogicModal(index);
+        logicBtn.title = 'Configurar lógica condicional';
+        logicBtn.innerHTML = '<i class="fas fa-sitemap"></i>';
+        
+        const btnGroup = header.querySelector('.btn-group');
+        btnGroup.insertBefore(logicBtn, btnGroup.firstChild);
+    }
+    
+    // Adicionar campo hidden para lógica condicional se não existir
+    let conditionalInput = questionElement.querySelector('input[name*="[conditional_logic]"]');
+    if (!conditionalInput) {
+        conditionalInput = document.createElement('input');
+        conditionalInput.type = 'hidden';
+        conditionalInput.name = `questions[${index}][conditional_logic]`;
+        conditionalInput.value = '';
+        questionElement.appendChild(conditionalInput);
+    }
+    
+    // Adicionar checkbox para obrigatória condicionalmente se não existir
+    const requiredSection = questionElement.querySelector('.form-check');
+    if (requiredSection && !questionElement.querySelector('input[name*="[conditional_required]"]')) {
+        const conditionalRequiredHtml = `
+            <div class="col-md-6">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="questions[${index}][conditional_required]" value="1">
+                    <label class="form-check-label">
+                        <strong>Obrigatória condicionalmente</strong>
+                        <br><small class="text-muted">Use lógica condicional para definir quando é obrigatória</small>
+                    </label>
+                </div>
+            </div>
+        `;
+        
+        // Converter a seção atual em uma row
+        const currentCheck = requiredSection.closest('.form-check');
+        const newRow = document.createElement('div');
+        newRow.className = 'row mb-3';
+        
+        const col1 = document.createElement('div');
+        col1.className = 'col-md-6';
+        col1.appendChild(currentCheck.cloneNode(true));
+        
+        newRow.appendChild(col1);
+        newRow.insertAdjacentHTML('beforeend', conditionalRequiredHtml);
+        
+        currentCheck.parentNode.replaceChild(newRow, currentCheck);
+    }
+    
+    // Adicionar área de preview se não existir
+    if (!questionElement.querySelector('.conditional-logic-preview')) {
+        const previewHtml = `
+            <div class="conditional-logic-preview mt-3" style="display: none;">
+                <div class="alert alert-info">
+                    <i class="fas fa-sitemap me-2"></i>
+                    <strong>Lógica Condicional:</strong>
+                    <div class="logic-preview-text mt-1"></div>
+                </div>
+            </div>
+        `;
+        
+        questionElement.insertAdjacentHTML('beforeend', previewHtml);
+    }
+    
+    // Verificar se há lógica condicional existente e mostrar indicador
+    const conditionalLogic = conditionalInput.value;
+    if (conditionalLogic) {
+        try {
+            const logic = JSON.parse(conditionalLogic);
+            if (Object.keys(logic).length > 0) {
+                updateConditionalLogicIndicator(index, true);
+                showConditionalLogicPreview(index, logic);
+            }
+        } catch (e) {
+            console.warn('Erro ao parsing da lógica condicional:', e);
+        }
+    }
+}
+
+// Função para mostrar preview da lógica condicional na pergunta
+function showConditionalLogicPreview(questionIndex, logic) {
+    const question = document.querySelector(`[data-question-index="${questionIndex}"]`);
+    const preview = question.querySelector('.conditional-logic-preview');
+    const previewText = question.querySelector('.logic-preview-text');
+    
+    if (!preview || !previewText) return;
+    
+    let text = '';
+    
+    if (logic.visibility) {
+        text += '<strong>Visibilidade:</strong> Aparece quando ';
+        const conditions = logic.visibility.conditions.map(c => {
+            const questionElement = document.querySelector(`[data-question-index="${c.question}"]`);
+            const questionText = questionElement ? 
+                questionElement.querySelector('.question-text').value.substring(0, 30) + '...' : 
+                `Pergunta ${c.question + 1}`;
+            return `"${questionText}" ${c.operator} "${c.value}"`;
+        });
+        text += conditions.join(logic.visibility.operator === 'AND' ? ' E ' : ' OU ');
+        text += '<br>';
+    }
+    
+    if (logic.required) {
+        text += '<strong>Obrigatória:</strong> Quando ';
+        const conditions = logic.required.conditions.map(c => {
+            const questionElement = document.querySelector(`[data-question-index="${c.question}"]`);
+            const questionText = questionElement ? 
+                questionElement.querySelector('.question-text').value.substring(0, 30) + '...' : 
+                `Pergunta ${c.question + 1}`;
+            return `"${questionText}" ${c.operator} "${c.value}"`;
+        });
+        text += conditions.join(logic.required.operator === 'AND' ? ' E ' : ' OU ');
+    }
+    
+    previewText.innerHTML = text;
+    preview.style.display = text ? 'block' : 'none';
+}
+
+// Atualizar validação do formulário para incluir lógica condicional
+const originalFormValidation = document.getElementById('questionnaireForm')?.addEventListener;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Para perguntas existentes (edit.php)
+    // Atualizar perguntas existentes (para edit.php)
     const existingQuestions = document.querySelectorAll('.question-item');
     existingQuestions.forEach((question, index) => {
-        // Adicionar data-question-id se não existir
-        if (!question.dataset.questionId) {
-            question.dataset.questionId = `q_${index}`;
-        }
-        
-        // Adicionar botão de lógica condicional se não existir
-        const header = question.querySelector('.d-flex.justify-content-between');
-        const existingLogicBtn = header.querySelector('.btn-outline-info');
-        
-        if (!existingLogicBtn) {
-            const btnGroup = header.querySelector('.btn-group');
-            const logicBtn = document.createElement('button');
-            logicBtn.type = 'button';
-            logicBtn.className = 'btn btn-outline-info btn-sm';
-            logicBtn.onclick = () => openConditionalLogicModal(index);
-            logicBtn.title = 'Configurar lógica condicional';
-            logicBtn.innerHTML = '<i class="fas fa-sitemap"></i>';
-            
-            btnGroup.insertBefore(logicBtn, btnGroup.firstChild);
-        }
-        
-        // Adicionar campo hidden para lógica condicional se não existir
-        let conditionalInput = question.querySelector('input[data-conditional-logic="true"]');
-        if (!conditionalInput) {
-            conditionalInput = document.createElement('input');
-            conditionalInput.type = 'hidden';
-            conditionalInput.name = `questions[${index}][conditional_logic]`;
-            conditionalInput.setAttribute('data-conditional-logic', 'true');
-            conditionalInput.value = '';
-            question.appendChild(conditionalInput);
-        }
-        
-        // Verificar se há lógica condicional existente
-        const existingLogic = conditionalInput.value;
-        if (existingLogic) {
-            try {
-                const logic = JSON.parse(existingLogic);
-                if (Object.keys(logic).length > 0) {
-                    updateConditionalLogicIndicator(index, true);
-                    showConditionalLogicPreview(index, logic);
-                }
-            } catch (e) {
-                console.warn('Erro ao parsing da lógica condicional:', e);
-            }
-        }
+        updateExistingQuestionTemplate(question, index);
     });
     
-    // Inicializar sistema de lógica condicional após um breve delay
-    setTimeout(() => {
-        if (typeof initConditionalLogic === 'function') {
-            initConditionalLogic();
-        }
-    }, 1000);
+    // Sobrescrever validação do formulário
+    const form = document.getElementById('questionnaireForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // Validações existentes...
+            const aplicadoresSelect = document.getElementById('aplicadores');
+            if (aplicadoresSelect && !aplicadoresSelect.selectedOptions.length) {
+                e.preventDefault();
+                alert('Selecione pelo menos um aplicador para este questionário.');
+                return false;
+            }
+            
+            const questions = document.querySelectorAll('.question-item');
+            if (questions.length === 0) {
+                e.preventDefault();
+                alert('Adicione pelo menos uma pergunta ao questionário.');
+                return false;
+            }
+            
+            // Validar lógica condicional
+            if (!validateConditionalLogic()) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Validar cada pergunta
+            let isValid = true;
+            questions.forEach((question, index) => {
+                const questionText = question.querySelector('.question-text');
+                const questionType = question.querySelector('.question-type');
+                
+                if (!questionText.value.trim()) {
+                    isValid = false;
+                    questionText.focus();
+                    alert(`O texto da pergunta ${index + 1} é obrigatório.`);
+                    return;
+                }
+                
+                // Validar opções para perguntas de múltipla escolha
+                if (['radio', 'checkbox', 'select'].includes(questionType.value)) {
+                    const options = question.querySelectorAll('.option-item input[type="text"]');
+                    let hasValidOption = false;
+                    
+                    options.forEach(option => {
+                        if (option.value.trim()) {
+                            hasValidOption = true;
+                            const valueInput = option.parentNode.querySelector('input[type="hidden"][name*="[value]"]');
+                            if (!valueInput.value) {
+                                valueInput.value = option.value.toLowerCase().replace(/\s+/g, '_');
+                            }
+                        }
+                    });
+                    
+                    if (!hasValidOption) {
+                        isValid = false;
+                        alert(`A pergunta ${index + 1} precisa ter pelo menos uma opção válida.`);
+                        return;
+                    }
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                return false;
+            }
+            
+            updateQuestionNumbers();
+        });
+    }
 });
 
-const originalFormSubmit = document.getElementById('questionnaireForm')?.addEventListener;
+// CSS adicional para melhorar a aparência
+const additionalCSS = `
+<style>
+.conditional-logic-indicator {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.condition-item {
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.condition-item:hover {
+    background-color: #e9ecef;
+}
+
+.modal-lg {
+    max-width: 900px;
+}
+
+.btn-group .btn-outline-info {
+    border-color: #0dcaf0;
+    color: #0dcaf0;
+}
+
+.btn-group .btn-outline-info:hover {
+    background-color: #0dcaf0;
+    color: white;
+}
+
+.conditional-logic-preview .alert {
+    margin-bottom: 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+</style>
+`;
+
+document.head.insertAdjacentHTML('beforeend', additionalCSS);
 
 if (document.getElementById('questionnaireForm')) {
     document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
