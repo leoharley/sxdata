@@ -315,8 +315,7 @@ public function create($data) {
     }
     
     $data['created_at'] = date('Y-m-d H:i:s');
-    $data['updated_at'] = date('Y-m-d H:i:s');
-    
+
     return $this->db->insert('questions', $data) ? $this->db->insert_id() : FALSE;
 }
 
@@ -328,9 +327,7 @@ public function update($id, $data) {
     if (isset($data['conditional_logic']) && !empty($data['conditional_logic'])) {
         $this->validate_conditional_logic_json($data['conditional_logic']);
     }
-    
-    $data['updated_at'] = date('Y-m-d H:i:s');
-    
+        
     $this->db->where('id', $id);
     return $this->db->update('questions', $data);
 }
