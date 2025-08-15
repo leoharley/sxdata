@@ -247,58 +247,71 @@ class Question_model extends CI_Model {
 
 
     /**
- * Buscar perguntas com lógica condicional
- */
-public function get_by_questionnaire_with_logic($questionnaire_id) {
-    $this->db->select('q.*, GROUP_CONCAT(
-        CONCAT(qo.id, ":", qo.option_text, ":", qo.option_value, ":", qo.order_index) 
-        ORDER BY qo.order_index SEPARATOR "|"
-    ) as options_data');
-    $this->db->from('questions q');
-    $this->db->join('question_options qo', 'q.id = qo.question_id', 'left');
-    $this->db->where('q.questionnaire_id', $questionnaire_id);
-    $this->db->group_by('q.id');
-    $this->db->order_by('q.order_index', 'ASC');
-    
-    $questions = $this->db->get()->result();
-    
-    // Processar opções
-    foreach ($questions as &$question) {
-        $question->options = array();
+     * Buscar perguntas com lógica condicional
+     */
+    public function get_by_questionnaire_with_logic($questionnaire_id) {
+        // Detectar o driver do banco
+        $db_driver = $this->db->platform();
         
-        if (!empty($question->options_data)) {
-            $options_parts = explode('|', $question->options_data);
-            foreach ($options_parts as $option_part) {
-                $option_data = explode(':', $option_part);
-                if (count($option_data) >= 4) {
-                    $question->options[] = (object) array(
-                        'id' => $option_data[0],
-                        'option_text' => $option_data[1],
-                        'option_value' => $option_data[2],
-                        'order_index' => $option_data[3]
-                    );
-                }
-            }
+        if (strpos($db_driver, 'postgre') !== false) {
+            // PostgreSQL - usar STRING_AGG
+            $this->db->select('q.*, STRING_AGG(
+                CONCAT(qo.id, \':\', qo.option_text, \':\', qo.option_value, \':\', qo.order_index), \'|\'
+                ORDER BY qo.order_index
+            ) as options_data');
+        } else {
+            // MySQL - usar GROUP_CONCAT
+            $this->db->select('q.*, GROUP_CONCAT(
+                CONCAT(qo.id, ":", qo.option_text, ":", qo.option_value, ":", qo.order_index) 
+                ORDER BY qo.order_index SEPARATOR "|"
+            ) as options_data');
         }
         
-        // Remover campo temporário
-        unset($question->options_data);
+        $this->db->from('questions q');
+        $this->db->join('question_options qo', 'q.id = qo.question_id', 'left');
+        $this->db->where('q.questionnaire_id', $questionnaire_id);
+        $this->db->group_by('q.id');
+        $this->db->order_by('q.order_index', 'ASC');
         
-        // Decodificar lógica condicional se existir
-        if (!empty($question->conditional_logic)) {
-            $logic = json_decode($question->conditional_logic, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $question->conditional_logic_decoded = $logic;
+        $questions = $this->db->get()->result();
+        
+        // Processar opções
+        foreach ($questions as &$question) {
+            $question->options = array();
+            
+            if (!empty($question->options_data)) {
+                $options_parts = explode('|', $question->options_data);
+                foreach ($options_parts as $option_part) {
+                    $option_data = explode(':', $option_part);
+                    if (count($option_data) >= 4) {
+                        $question->options[] = (object) array(
+                            'id' => $option_data[0],
+                            'option_text' => $option_data[1],
+                            'option_value' => $option_data[2],
+                            'order_index' => $option_data[3]
+                        );
+                    }
+                }
+            }
+            
+            // Remover campo temporário
+            unset($question->options_data);
+            
+            // Decodificar lógica condicional se existir
+            if (!empty($question->conditional_logic)) {
+                $logic = json_decode($question->conditional_logic, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $question->conditional_logic_decoded = $logic;
+                } else {
+                    $question->conditional_logic_decoded = null;
+                }
             } else {
                 $question->conditional_logic_decoded = null;
             }
-        } else {
-            $question->conditional_logic_decoded = null;
         }
+        
+        return $questions;
     }
-    
-    return $questions;
-}
 
 /**
  * Criar pergunta com lógica condicional

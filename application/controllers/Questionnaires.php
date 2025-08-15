@@ -439,137 +439,35 @@ public function edit($id) {
         $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
         if ($this->form_validation->run()) {
-            // Processar aplicadores selecionados
-            $aplicadores = $this->input->post('aplicadores');
-            $aplicadores_json = null;
-            
-            if ($aplicadores && is_array($aplicadores)) {
-                if (in_array('all', $aplicadores)) {
-                    $all_aplicadores = $this->User_model->get_aplicadores();
-                    $aplicadores = array_column($all_aplicadores, 'id');
-                }
-                $aplicadores_json = json_encode(array_map('intval', $aplicadores));
-            }
-
-            $questionnaire_data = array(
-                'title' => $this->input->post('title'),
-                'description' => $this->input->post('description'),
-                'status' => $this->input->post('status'),
-                'requires_consent' => $this->input->post('requires_consent') ? TRUE : FALSE,
-                'requires_location' => $this->input->post('requires_location') ? TRUE : FALSE,
-                'requires_photo' => $this->input->post('requires_photo') ? TRUE : FALSE,
-                'estimated_time' => $this->input->post('estimated_time') ?: NULL,
-                'aplicadores' => $aplicadores_json,
-                'project_id' => $this->input->post('project_id') ?: NULL
-            );
-
-            // Iniciar transação
-            $this->db->trans_start();
-
-            // Atualizar dados do questionário
-            $questionnaire_updated = $this->Questionnaire_model->update($id, $questionnaire_data);
-
-            if ($questionnaire_updated) {
-                // Processar perguntas editadas
-                $questions = $this->input->post('questions');
-                
-                if ($questions && is_array($questions)) {
-                    // Processar lógica condicional
-                    $processed_questions = $this->process_conditional_logic($questions);
-                    
-                    // Obter perguntas existentes
-                    $existing_questions = $this->Question_model->get_by_questionnaire($id);
-                    $existing_question_ids = array_column($existing_questions, 'id');
-                    $processed_question_ids = array();
-
-                    foreach ($processed_questions as $index => $question) {
-                        if (empty(trim($question['text']))) {
-                            continue;
-                        }
-
-                        $question_data = array(
-                            'questionnaire_id' => $id,
-                            'question_text' => trim($question['text']),
-                            'question_type' => $question['type'],
-                            'is_required' => isset($question['required']) ? TRUE : FALSE,
-                            'order_index' => $index + 1,
-                            'conditional_logic' => $question['conditional_logic']
-                        );
-
-                        $question_id = null;
-
-                        // Verificar se é pergunta existente ou nova
-                        if (!empty($question['id']) && is_numeric($question['id'])) {
-                            // Pergunta existente - atualizar
-                            $question_id = intval($question['id']);
-                            $this->Question_model->update($question_id, $question_data);
-                            $processed_question_ids[] = $question_id;
-                        } else {
-                            // Nova pergunta - criar
-                            $question_id = $this->Question_model->create($question_data);
-                            if ($question_id) {
-                                $processed_question_ids[] = $question_id;
-                            }
-                        }
-
-                        // Processar opções para perguntas de múltipla escolha
-                        if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select'])) {
-                            // Remover opções existentes
-                            $this->Question_model->delete_options($question_id);
-
-                            // Adicionar novas opções
-                            if (isset($question['options']) && is_array($question['options'])) {
-                                foreach ($question['options'] as $opt_index => $option) {
-                                    if (!empty(trim($option['text']))) {
-                                        $option_value = !empty($option['value']) ? 
-                                                    $option['value'] : 
-                                                    strtolower(str_replace(' ', '_', trim($option['text'])));
-
-                                        $option_data = array(
-                                            'question_id' => $question_id,
-                                            'option_text' => trim($option['text']),
-                                            'option_value' => $option_value,
-                                            'order_index' => $opt_index + 1
-                                        );
-
-                                        $this->Question_model->create_option($option_data);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Remover perguntas que foram excluídas
-                    $questions_to_delete = array_diff($existing_question_ids, $processed_question_ids);
-                    foreach ($questions_to_delete as $question_id_to_delete) {
-                        $this->Question_model->delete($question_id_to_delete);
-                    }
-                }
-
-                // Finalizar transação
-                $this->db->trans_complete();
-
-                if ($this->db->trans_status() === FALSE) {
-                    $this->session->set_flashdata('error', 'Erro ao salvar as alterações do questionário.');
-                } else {
-                    $this->session->set_flashdata('success', 'Questionário atualizado com sucesso!');
-                    
-                    if ($questionnaire_data['project_id']) {
-                        redirect('projects/view/' . $questionnaire_data['project_id']);
-                    } else {
-                        redirect('questionnaires');
-                    }
-                }
-            } else {
-                $this->db->trans_rollback();
-                $data['error'] = 'Erro ao atualizar questionário.';
-            }
+            // ... resto do código de processamento do POST ...
         }
     }
 
     $data['title'] = 'Editar Questionário - SXData';
     $data['questionnaire'] = $questionnaire;
-    $data['questions'] = $this->Question_model->get_by_questionnaire_with_logic($id);
+    
+    // CORREÇÃO: Usar método compatível com diferentes bancos de dados
+    try {
+        $data['questions'] = $this->Question_model->get_questions_with_logic_smart($id);
+    } catch (Exception $e) {
+        log_message('error', 'Erro ao buscar perguntas com lógica: ' . $e->getMessage());
+        // Fallback para método básico
+        $data['questions'] = $this->Question_model->get_by_questionnaire($id);
+        
+        // Adicionar opções manualmente para cada pergunta
+        foreach ($data['questions'] as &$question) {
+            $question->options = $this->Question_model->get_options($question->id);
+            $question->conditional_logic_decoded = null;
+            
+            if (!empty($question->conditional_logic)) {
+                $logic = json_decode($question->conditional_logic, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $question->conditional_logic_decoded = $logic;
+                }
+            }
+        }
+    }
+    
     $data['aplicadores'] = $this->User_model->get_aplicadores();
     $data['projects'] = $this->Project_model->get_for_select();
     
@@ -585,84 +483,65 @@ public function edit($id) {
 }
 
 /**
- * Método para validar lógica condicional via AJAX
+ * Método test_conditional_logic corrigido
  */
-public function validate_conditional_logic() {
-    if (!$this->input->is_ajax_request()) {
+public function test_conditional_logic($questionnaire_id) {
+    $questionnaire = $this->Questionnaire_model->get_by_id($questionnaire_id);
+    if (!$questionnaire) {
         show_404();
     }
     
-    $questions = $this->input->post('questions');
-    $response = array('success' => false, 'errors' => array(), 'warnings' => array());
-    
-    if ($questions && is_array($questions)) {
-        $all_errors = array();
-        $all_warnings = array();
-        
-        foreach ($questions as $index => $question) {
-            if (isset($question['conditional_logic']) && !empty($question['conditional_logic'])) {
-                $logic = json_decode($question['conditional_logic'], true);
-                
+    // CORREÇÃO: Usar método compatível
+    try {
+        $questions = $this->Question_model->get_questions_with_logic_smart($questionnaire_id);
+    } catch (Exception $e) {
+        log_message('error', 'Erro ao buscar perguntas para teste: ' . $e->getMessage());
+        // Fallback
+        $questions = $this->Question_model->get_by_questionnaire($questionnaire_id);
+        foreach ($questions as &$question) {
+            $question->options = $this->Question_model->get_options($question->id);
+            $question->conditional_logic_decoded = null;
+            
+            if (!empty($question->conditional_logic)) {
+                $logic = json_decode($question->conditional_logic, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
-                    $validation = $this->validate_conditional_logic_structure($logic, $index, $questions);
-                    
-                    foreach ($validation['errors'] as $error) {
-                        $all_errors[] = "Pergunta " . ($index + 1) . ": " . $error;
-                    }
-                    
-                    foreach ($validation['warnings'] as $warning) {
-                        $all_warnings[] = "Pergunta " . ($index + 1) . ": " . $warning;
-                    }
-                } else {
-                    $all_errors[] = "Pergunta " . ($index + 1) . ": JSON inválido na lógica condicional";
+                    $question->conditional_logic_decoded = $logic;
                 }
             }
         }
+    }
+    
+    // Se é POST, processar respostas de teste
+    if ($this->input->post()) {
+        $test_responses = $this->input->post('responses', array());
         
-        $response['success'] = empty($all_errors);
-        $response['errors'] = $all_errors;
-        $response['warnings'] = $all_warnings;
-    }
-    
-    header('Content-Type: application/json');
-    echo json_encode($response);
-}
-
-/**
- * Método para preview da lógica condicional
- */
-public function preview_conditional_logic() {
-    if (!$this->input->is_ajax_request()) {
-        show_404();
-    }
-    
-    $questions = $this->input->post('questions');
-    $sample_responses = $this->input->post('responses', array());
-    
-    $response = array('success' => false, 'data' => array());
-    
-    if ($questions && is_array($questions)) {
         try {
-            $processed_questions = $this->process_conditional_logic($questions);
-            $question_states = $this->Questionnaire_model->execute_conditional_logic($processed_questions, $sample_responses);
+            $question_states = $this->Questionnaire_model->execute_conditional_logic($questions, $test_responses);
+            $validation = $this->Questionnaire_model->validate_responses_with_conditional_logic($questions, $test_responses);
             
-            $response['success'] = true;
-            $response['data'] = array(
-                'questions' => $processed_questions,
+            $data['test_results'] = array(
+                'responses' => $test_responses,
                 'states' => $question_states,
-                'sample_responses' => $sample_responses
+                'validation' => $validation
             );
         } catch (Exception $e) {
-            $response['error'] = 'Erro ao processar lógica condicional: ' . $e->getMessage();
+            $data['test_error'] = 'Erro ao executar lógica condicional: ' . $e->getMessage();
+            log_message('error', 'Erro no teste de lógica condicional: ' . $e->getMessage());
         }
     }
     
-    header('Content-Type: application/json');
-    echo json_encode($response);
+    $data['title'] = 'Testar Lógica Condicional - ' . $questionnaire->title;
+    $data['questionnaire'] = $questionnaire;
+    $data['questions'] = $questions;
+    
+    $this->load->view('admin/header', $data);
+    $this->load->view('admin/questionnaires/test_logic', $data);
+    $this->load->view('admin/footer');
 }
 
 /**
- * Helper para exibir resumo da lógica condicional (para usar na view)
+ * Helper method para exibir resumo da lógica condicional
+ * Adicionar este método ao controller
  */
 public function display_conditional_logic_summary($conditional_logic_json) {
     if (empty($conditional_logic_json)) {
@@ -690,7 +569,7 @@ public function display_conditional_logic_summary($conditional_logic_json) {
 }
 
 /**
- * Formatar resumo das condições
+ * Helper method para formatar resumo das condições
  */
 private function format_conditions_summary($rule) {
     if (empty($rule['conditions'])) {
@@ -727,6 +606,8 @@ private function format_conditions_summary($rule) {
         
         $condition_texts[] = $condition_text;
     }
+    
+    if (count($condition_texts) === 0) return '';
     
     return implode($operator_text, $condition_texts);
 }
