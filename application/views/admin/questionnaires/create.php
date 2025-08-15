@@ -733,8 +733,22 @@ function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     const selectedQuestionIndex = questionSelect.value;
     if (!selectedQuestionIndex) return;
     
-    const targetQuestion = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
-    const questionType = targetQuestion.querySelector('select[name*="[type]"]').value;
+    let targetQuestion = null;
+    
+    // Tentar encontrar a pergunta alvo
+    if (existingQuestions[selectedQuestionIndex]) {
+        targetQuestion = existingQuestions[selectedQuestionIndex];
+    } else {
+        const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+        if (targetQuestionElement) {
+            const typeSelect = targetQuestionElement.querySelector('select[name*="[type]"]');
+            targetQuestion = {
+                question_type: typeSelect ? typeSelect.value : 'text'
+            };
+        }
+    }
+    
+    if (!targetQuestion) return;
     
     // Limpar operadores atuais
     operatorSelect.innerHTML = '<option value="">Operador...</option>';
@@ -742,7 +756,7 @@ function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     // Adicionar operadores baseados no tipo de pergunta
     let availableOperators = [];
     
-    switch (questionType) {
+    switch (targetQuestion.question_type) {
         case 'number':
             availableOperators = ['equals', 'not_equals', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
             break;
@@ -1067,6 +1081,25 @@ function previewLogic() {
         });
         
         previewHtml += '</div>';
+        
+        // Adicionar resumo geral
+        const totalWithLogic = Array.from(questions).filter(q => {
+            const visibilityConditions = q.querySelectorAll('[id*="visibilityConditions"] .condition-item');
+            const requiredConditions = q.querySelectorAll('[id*="requiredConditions"] .condition-item');
+            return visibilityConditions.length > 0 || requiredConditions.length > 0;
+        }).length;
+        
+        if (totalWithLogic > 0) {
+            previewHtml = `
+                <div class="alert alert-info mb-3">
+                    <h6><i class="fas fa-info-circle me-2"></i>Resumo da Lógica Condicional</h6>
+                    <p class="mb-0">
+                        <strong>${totalWithLogic}</strong> de <strong>${questions.length}</strong> perguntas possuem lógica condicional definida.
+                    </p>
+                </div>
+                ${previewHtml}
+            `;
+        }
     }
     
     content.innerHTML = previewHtml;

@@ -820,7 +820,6 @@ function loadConditionsForRule(questionIndex, ruleType, ruleData) {
     }
 }
 
-// Função para adicionar pergunta (mesmo código do create.php)
 function addQuestion() {
     const container = document.getElementById('questionsContainer');
     const noQuestions = document.getElementById('noQuestions');
@@ -1044,10 +1043,6 @@ function updateQuestionNumbers() {
     });
 }
 
-// [Copiar todas as outras funções do create.php aqui...]
-// toggleConditionalLogic, selectLogicType, addCondition, removeCondition, etc.
-
-// Incluir todas as funções de lógica condicional do create.php
 function toggleConditionalLogic(questionIndex) {
     const logicDiv = document.getElementById(`conditionalLogic-${questionIndex}`);
     const questionItem = document.querySelector(`[data-index="${questionIndex}"]`);
@@ -1157,15 +1152,144 @@ function getAvailableQuestionsForCondition(currentQuestionIndex) {
 }
 
 function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
-    // Implementação igual ao create.php
+    const questionSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"]`);
+    const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
+    const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
+    
+    const selectedQuestionIndex = questionSelect.value;
+    if (!selectedQuestionIndex) return;
+    
+    let targetQuestion = null;
+    
+    // Tentar encontrar a pergunta alvo
+    if (existingQuestions[selectedQuestionIndex]) {
+        targetQuestion = existingQuestions[selectedQuestionIndex];
+    } else {
+        const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+        if (targetQuestionElement) {
+            const typeSelect = targetQuestionElement.querySelector('select[name*="[type]"]');
+            targetQuestion = {
+                question_type: typeSelect ? typeSelect.value : 'text'
+            };
+        }
+    }
+    
+    if (!targetQuestion) return;
+    
+    // Limpar operadores atuais
+    operatorSelect.innerHTML = '<option value="">Operador...</option>';
+    
+    // Adicionar operadores baseados no tipo de pergunta
+    let availableOperators = [];
+    
+    switch (targetQuestion.question_type) {
+        case 'number':
+            availableOperators = ['equals', 'not_equals', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
+            break;
+        case 'radio':
+        case 'select':
+            availableOperators = ['equals', 'not_equals', 'is_empty', 'is_not_empty'];
+            break;
+        case 'checkbox':
+            availableOperators = ['contains', 'not_contains', 'is_empty', 'is_not_empty'];
+            break;
+        default:
+            availableOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty'];
+    }
+    
+    availableOperators.forEach(op => {
+        const option = document.createElement('option');
+        option.value = op;
+        option.textContent = logicOperators[op];
+        operatorSelect.appendChild(option);
+    });
+    
+    updateConditionValue(questionIndex, ruleType, conditionIndex);
 }
 
 function updateConditionValue(questionIndex, ruleType, conditionIndex) {
-    // Implementação igual ao create.php
+    const questionSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"]`);
+    const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
+    const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
+    
+    const selectedQuestionIndex = questionSelect.value;
+    const selectedOperator = operatorSelect.value;
+    
+    if (!selectedQuestionIndex || !selectedOperator) return;
+    
+    // Se operador é "is_empty" ou "is_not_empty", esconder campo de valor
+    if (['is_empty', 'is_not_empty'].includes(selectedOperator)) {
+        valueInput.style.display = 'none';
+        valueInput.value = '';
+        return;
+    } else {
+        valueInput.style.display = 'block';
+    }
+    
+    let targetQuestion = null;
+    if (existingQuestions[selectedQuestionIndex]) {
+        targetQuestion = existingQuestions[selectedQuestionIndex];
+    }
+    
+    // Se é pergunta de múltipla escolha, converter para select
+    if (targetQuestion && ['radio', 'checkbox', 'select'].includes(targetQuestion.question_type)) {
+        let options = [];
+        
+        if (targetQuestion.options && targetQuestion.options.length > 0) {
+            options = targetQuestion.options;
+        } else {
+            // Tentar buscar opções do DOM
+            const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+            if (targetQuestionElement) {
+                const optionInputs = targetQuestionElement.querySelectorAll('input[name*="[options]"][name*="[text]"]');
+                optionInputs.forEach(input => {
+                    if (input.value.trim()) {
+                        options.push({ option_text: input.value.trim() });
+                    }
+                });
+            }
+        }
+        
+        if (options.length > 0) {
+            // Criar select com as opções
+            const select = document.createElement('select');
+            select.className = 'form-select form-select-sm';
+            select.name = valueInput.name;
+            select.onchange = () => updateLogicPreview();
+            
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Selecione...';
+            select.appendChild(defaultOption);
+            
+            options.forEach(option => {
+                const optionText = option.option_text || option.text;
+                if (optionText && optionText.trim()) {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = optionText.trim();
+                    optionElement.textContent = optionText.trim();
+                    select.appendChild(optionElement);
+                }
+            });
+            
+            valueInput.parentNode.replaceChild(select, valueInput);
+        }
+    }
+    
+    updateLogicPreview();
 }
 
 function updateConditionQuestionOptions(questionElement, newIndex) {
-    // Implementação igual ao create.php
+    const conditionSelects = questionElement.querySelectorAll('select[name*="[question]"]');
+    
+    conditionSelects.forEach(select => {
+        // Remover opções que referenciam perguntas posteriores ou a própria pergunta
+        Array.from(select.options).forEach(option => {
+            if (option.value && parseInt(option.value) >= newIndex) {
+                option.remove();
+            }
+        });
+    });
 }
 
 function clearConditionalLogic(questionIndex) {
@@ -1185,27 +1309,307 @@ function clearConditionalLogic(questionIndex) {
 }
 
 function updateLogicPreview() {
-    // Implementação igual ao create.php
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        const previewDiv = question.querySelector(`#logicPreview-${index}`);
+        if (!previewDiv) return;
+        
+        const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+        const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+        
+        let previewText = '';
+        
+        if (visibilityConditions.length > 0) {
+            previewText += '<strong>Visibilidade:</strong> ';
+            previewText += generateConditionsPreview(visibilityConditions, index, 'visibility');
+            previewText += '<br>';
+        }
+        
+        if (requiredConditions.length > 0) {
+            previewText += '<strong>Obrigatoriedade:</strong> ';
+            previewText += generateConditionsPreview(requiredConditions, index, 'required');
+        }
+        
+        if (previewText) {
+            previewDiv.innerHTML = previewText;
+            previewDiv.style.display = 'block';
+        } else {
+            previewDiv.style.display = 'none';
+        }
+    });
 }
 
 function generateConditionsPreview(conditions, questionIndex, ruleType) {
-    // Implementação igual ao create.php
+    if (conditions.length === 0) return '';
+    
+    const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][operator]"]`);
+    const operator = operatorSelect ? operatorSelect.value : 'AND';
+    
+    const conditionTexts = [];
+    
+    conditions.forEach(condition => {
+        const questionSelect = condition.querySelector('select[name*="[question]"]');
+        const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+        const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+        
+        if (questionSelect && operatorSelect) {
+            const questionText = questionSelect.selectedOptions[0]?.text || 'Pergunta';
+            const operatorText = logicOperators[operatorSelect.value] || 'operador';
+            const valueText = valueField ? valueField.value : '';
+            
+            let conditionText = `<span class="question-reference">${questionText}</span> ${operatorText}`;
+            
+            if (valueText && !['is_empty', 'is_not_empty'].includes(operatorSelect.value)) {
+                conditionText += ` "${valueText}"`;
+            }
+            
+            conditionTexts.push(conditionText);
+        }
+    });
+    
+    if (conditionTexts.length === 0) return '';
+    
+    const operatorText = operator === 'AND' ? ' E ' : ' OU ';
+    return conditionTexts.join(operatorText);
 }
 
 function validateAllConditionalLogic() {
-    // Implementação igual ao create.php
+    const questions = document.querySelectorAll('.question-item');
+    const errors = [];
+    const warnings = [];
+    
+    questions.forEach((question, index) => {
+        const validation = validateQuestionConditionalLogic(question, index);
+        errors.push(...validation.errors);
+        warnings.push(...validation.warnings);
+    });
+    
+    // Mostrar erros globais
+    const globalValidation = document.getElementById('globalValidation');
+    if (errors.length > 0 || warnings.length > 0) {
+        let content = '';
+        
+        if (errors.length > 0) {
+            content += '<strong>Erros:</strong><ul>';
+            errors.forEach(error => {
+                content += `<li>${error}</li>`;
+            });
+            content += '</ul>';
+        }
+        
+        if (warnings.length > 0) {
+            content += '<strong>Avisos:</strong><ul>';
+            warnings.forEach(warning => {
+                content += `<li>${warning}</li>`;
+            });
+            content += '</ul>';
+        }
+        
+        globalValidation.innerHTML = content;
+        globalValidation.style.display = 'block';
+    } else {
+        globalValidation.style.display = 'none';
+    }
+    
+    return { valid: errors.length === 0, errors, warnings };
 }
 
 function validateQuestionConditionalLogic(question, questionIndex) {
-    // Implementação igual ao create.php
+    const errors = [];
+    const warnings = [];
+    
+    const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + questionIndex + ' .condition-item');
+    const requiredConditions = question.querySelectorAll('#requiredConditions-' + questionIndex + ' .condition-item');
+    
+    [...visibilityConditions, ...requiredConditions].forEach((condition, condIndex) => {
+        const questionSelect = condition.querySelector('select[name*="[question]"]');
+        const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+        const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+        
+        if (!questionSelect.value) {
+            errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem pergunta selecionada`);
+        }
+        
+        if (!operatorSelect.value) {
+            errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem operador selecionado`);
+        }
+        
+        if (questionSelect.value && parseInt(questionSelect.value) >= questionIndex) {
+            errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+        }
+        
+        if (operatorSelect.value && !['is_empty', 'is_not_empty'].includes(operatorSelect.value) && (!valueField || !valueField.value.trim())) {
+            warnings.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem valor definido`);
+        }
+    });
+    
+    return { errors, warnings };
 }
 
 function previewLogic() {
-    // Implementação igual ao create.php
+    const modal = new bootstrap.Modal(document.getElementById('logicPreviewModal'));
+    const content = document.getElementById('logicPreviewContent');
+    
+    const questions = document.querySelectorAll('.question-item');
+    let previewHtml = '';
+    
+    if (questions.length === 0) {
+        previewHtml = '<p class="text-muted">Nenhuma pergunta criada ainda.</p>';
+    } else {
+        previewHtml = '<div class="row">';
+        
+        questions.forEach((question, index) => {
+            const textArea = question.querySelector('textarea[name*="[text]"]');
+            const typeSelect = question.querySelector('select[name*="[type]"]');
+            const requiredCheckbox = question.querySelector('input[name*="[required]"]');
+            
+            const questionText = textArea ? textArea.value : `Pergunta ${index + 1}`;
+            const questionType = typeSelect ? typeSelect.value : 'text';
+            const isRequired = requiredCheckbox ? requiredCheckbox.checked : false;
+            
+            const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+            const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+            
+            let cardClass = 'border-start border-3 ';
+            if (visibilityConditions.length > 0 && requiredConditions.length > 0) {
+                cardClass += 'border-warning';
+            } else if (visibilityConditions.length > 0) {
+                cardClass += 'border-info';
+            } else if (requiredConditions.length > 0) {
+                cardClass += 'border-primary';
+            } else {
+                cardClass += 'border-secondary';
+            }
+            
+            previewHtml += `
+                <div class="col-12 mb-3">
+                    <div class="card ${cardClass}">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                Pergunta ${index + 1}
+                                ${isRequired ? '<i class="fas fa-asterisk text-danger ms-1" title="Obrigatória"></i>' : ''}
+                            </h6>
+                            <p class="card-text">${questionText || 'Texto não definido'}</p>
+                            <small class="text-muted">Tipo: ${questionType || 'Não definido'}</small>
+                            
+                            ${visibilityConditions.length > 0 ? `
+                                <div class="mt-2">
+                                    <span class="badge bg-info">Lógica de Visibilidade</span>
+                                    <div class="mt-1 small">
+                                        ${generateConditionsPreview(visibilityConditions, index, 'visibility')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${requiredConditions.length > 0 ? `
+                                <div class="mt-2">
+                                    <span class="badge bg-primary">Lógica de Obrigatoriedade</span>
+                                    <div class="mt-1 small">
+                                        ${generateConditionsPreview(requiredConditions, index, 'required')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        previewHtml += '</div>';
+        
+        // Adicionar resumo geral
+        const totalWithLogic = Array.from(questions).filter(q => {
+            const visibilityConditions = q.querySelectorAll('[id*="visibilityConditions"] .condition-item');
+            const requiredConditions = q.querySelectorAll('[id*="requiredConditions"] .condition-item');
+            return visibilityConditions.length > 0 || requiredConditions.length > 0;
+        }).length;
+        
+        if (totalWithLogic > 0) {
+            previewHtml = `
+                <div class="alert alert-info mb-3">
+                    <h6><i class="fas fa-info-circle me-2"></i>Resumo da Lógica Condicional</h6>
+                    <p class="mb-0">
+                        <strong>${totalWithLogic}</strong> de <strong>${questions.length}</strong> perguntas possuem lógica condicional definida.
+                    </p>
+                </div>
+                ${previewHtml}
+            `;
+        }
+    }
+    
+    content.innerHTML = previewHtml;
+    modal.show();
 }
 
 function serializeConditionalLogic() {
-    // Implementação igual ao create.php
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        const logicData = {
+            visibility: null,
+            required: null
+        };
+        
+        // Serializar condições de visibilidade
+        const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+        if (visibilityConditions.length > 0) {
+            const visibilityOperator = question.querySelector(`select[name="questions[${index}][logic][visibility][operator]"]`);
+            
+            logicData.visibility = {
+                operator: visibilityOperator ? visibilityOperator.value : 'AND',
+                conditions: []
+            };
+            
+            visibilityConditions.forEach(condition => {
+                const questionSelect = condition.querySelector('select[name*="[question]"]');
+                const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+                const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+                
+                if (questionSelect.value && operatorSelect.value) {
+                    logicData.visibility.conditions.push({
+                        question: parseInt(questionSelect.value),
+                        operator: operatorSelect.value,
+                        value: valueField ? valueField.value : ''
+                    });
+                }
+            });
+        }
+        
+        // Serializar condições de obrigatoriedade
+        const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+        if (requiredConditions.length > 0) {
+            const requiredOperator = question.querySelector(`select[name="questions[${index}][logic][required][operator]"]`);
+            
+            logicData.required = {
+                operator: requiredOperator ? requiredOperator.value : 'AND',
+                conditions: []
+            };
+            
+            requiredConditions.forEach(condition => {
+                const questionSelect = condition.querySelector('select[name*="[question]"]');
+                const operatorSelect = condition.querySelector('select[name*="[operator]"]');
+                const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
+                
+                if (questionSelect.value && operatorSelect.value) {
+                    logicData.required.conditions.push({
+                        question: parseInt(questionSelect.value),
+                        operator: operatorSelect.value,
+                        value: valueField ? valueField.value : ''
+                    });
+                }
+            });
+        }
+        
+        // Adicionar campo hidden com a lógica serializada
+        if (logicData.visibility || logicData.required) {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = `questions[${index}][conditional_logic]`;
+            hiddenInput.value = JSON.stringify(logicData);
+            question.appendChild(hiddenInput);
+        }
+    });
 }
 
 // Validação do formulário
