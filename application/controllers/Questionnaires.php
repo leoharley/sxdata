@@ -483,63 +483,6 @@ public function edit($id) {
 }
 
 /**
- * Método test_conditional_logic corrigido
- */
-public function test_conditional_logic($questionnaire_id) {
-    $questionnaire = $this->Questionnaire_model->get_by_id($questionnaire_id);
-    if (!$questionnaire) {
-        show_404();
-    }
-    
-    // CORREÇÃO: Usar método compatível
-    try {
-        $questions = $this->Question_model->get_questions_with_logic_smart($questionnaire_id);
-    } catch (Exception $e) {
-        log_message('error', 'Erro ao buscar perguntas para teste: ' . $e->getMessage());
-        // Fallback
-        $questions = $this->Question_model->get_by_questionnaire($questionnaire_id);
-        foreach ($questions as &$question) {
-            $question->options = $this->Question_model->get_options($question->id);
-            $question->conditional_logic_decoded = null;
-            
-            if (!empty($question->conditional_logic)) {
-                $logic = json_decode($question->conditional_logic, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $question->conditional_logic_decoded = $logic;
-                }
-            }
-        }
-    }
-    
-    // Se é POST, processar respostas de teste
-    if ($this->input->post()) {
-        $test_responses = $this->input->post('responses', array());
-        
-        try {
-            $question_states = $this->Questionnaire_model->execute_conditional_logic($questions, $test_responses);
-            $validation = $this->Questionnaire_model->validate_responses_with_conditional_logic($questions, $test_responses);
-            
-            $data['test_results'] = array(
-                'responses' => $test_responses,
-                'states' => $question_states,
-                'validation' => $validation
-            );
-        } catch (Exception $e) {
-            $data['test_error'] = 'Erro ao executar lógica condicional: ' . $e->getMessage();
-            log_message('error', 'Erro no teste de lógica condicional: ' . $e->getMessage());
-        }
-    }
-    
-    $data['title'] = 'Testar Lógica Condicional - ' . $questionnaire->title;
-    $data['questionnaire'] = $questionnaire;
-    $data['questions'] = $questions;
-    
-    $this->load->view('admin/header', $data);
-    $this->load->view('admin/questionnaires/test_logic', $data);
-    $this->load->view('admin/footer');
-}
-
-/**
  * Helper method para exibir resumo da lógica condicional
  * Adicionar este método ao controller
  */
