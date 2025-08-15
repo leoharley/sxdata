@@ -448,7 +448,7 @@ public function edit($id) {
     
     // CORREÇÃO: Usar método compatível com diferentes bancos de dados
     try {
-        $data['questions'] = $this->Question_model->get_questions_with_logic_smart($id);
+        $data['questions'] = $this->Question_model->get_by_questionnaire_with_logic($id);
     } catch (Exception $e) {
         log_message('error', 'Erro ao buscar perguntas com lógica: ' . $e->getMessage());
         // Fallback para método básico
