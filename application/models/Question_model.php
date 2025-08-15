@@ -250,30 +250,22 @@ class Question_model extends CI_Model {
      * Buscar perguntas com lógica condicional
      */
     public function get_by_questionnaire_with_logic($questionnaire_id) {
-        // Detectar o driver do banco
-        $db_driver = $this->db->platform();
+        // Para PostgreSQL, usar STRING_AGG
+        $sql = "
+            SELECT q.*, 
+                STRING_AGG(
+                    qo.id || ':' || qo.option_text || ':' || qo.option_value || ':' || qo.order_index, 
+                    '|' ORDER BY qo.order_index
+                ) as options_data
+            FROM questions q
+            LEFT JOIN question_options qo ON q.id = qo.question_id
+            WHERE q.questionnaire_id = ?
+            GROUP BY q.id, q.questionnaire_id, q.question_text, q.question_type, 
+                    q.is_required, q.order_index, q.conditional_logic, q.created_at, q.updated_at
+            ORDER BY q.order_index ASC
+        ";
         
-        if (strpos($db_driver, 'postgre') !== false) {
-            // PostgreSQL - usar STRING_AGG
-            $this->db->select('q.*, STRING_AGG(
-                CONCAT(qo.id, \':\', qo.option_text, \':\', qo.option_value, \':\', qo.order_index), \'|\'
-                ORDER BY qo.order_index
-            ) as options_data');
-        } else {
-            // MySQL - usar GROUP_CONCAT
-            $this->db->select('q.*, GROUP_CONCAT(
-                CONCAT(qo.id, ":", qo.option_text, ":", qo.option_value, ":", qo.order_index) 
-                ORDER BY qo.order_index SEPARATOR "|"
-            ) as options_data');
-        }
-        
-        $this->db->from('questions q');
-        $this->db->join('question_options qo', 'q.id = qo.question_id', 'left');
-        $this->db->where('q.questionnaire_id', $questionnaire_id);
-        $this->db->group_by('q.id');
-        $this->db->order_by('q.order_index', 'ASC');
-        
-        $questions = $this->db->get()->result();
+        $questions = $this->db->query($sql, array($questionnaire_id))->result();
         
         // Processar opções
         foreach ($questions as &$question) {
@@ -282,6 +274,8 @@ class Question_model extends CI_Model {
             if (!empty($question->options_data)) {
                 $options_parts = explode('|', $question->options_data);
                 foreach ($options_parts as $option_part) {
+                    if (empty($option_part)) continue;
+                    
                     $option_data = explode(':', $option_part);
                     if (count($option_data) >= 4) {
                         $question->options[] = (object) array(
@@ -312,6 +306,7 @@ class Question_model extends CI_Model {
         
         return $questions;
     }
+
 
 /**
  * Criar pergunta com lógica condicional
