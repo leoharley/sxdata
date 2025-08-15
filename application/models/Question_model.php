@@ -250,69 +250,56 @@ class Question_model extends CI_Model {
      * Buscar perguntas com lógica condicional
      */
     public function get_by_questionnaire_with_logic($questionnaire_id) {
-        // Para PostgreSQL com campo JSON, usar abordagem sem GROUP BY no campo JSON
-        $sql = "
-            SELECT q.id, q.questionnaire_id, q.question_text, q.question_type, 
-                q.is_required, q.order_index, q.conditional_logic::text as conditional_logic_text,
-                q.created_at, q.updated_at,
-                STRING_AGG(
-                    qo.id || ':' || qo.option_text || ':' || qo.option_value || ':' || qo.order_index, 
-                    '|' ORDER BY qo.order_index
-                ) as options_data
-            FROM questions q
-            LEFT JOIN question_options qo ON q.id = qo.question_id
-            WHERE q.questionnaire_id = ?
-            GROUP BY q.id, q.questionnaire_id, q.question_text, q.question_type, 
-                    q.is_required, q.order_index, q.conditional_logic::text, q.created_at, q.updated_at
-            ORDER BY q.order_index ASC
-        ";
+        // Buscar perguntas sem JOIN
+        $this->db->select('*');
+        $this->db->from('questions');
+        $this->db->where('questionnaire_id', $questionnaire_id);
+        $this->db->order_by('order_index', 'ASC');
         
-        try {
-            $questions = $this->db->query($sql, array($questionnaire_id))->result();
+        $questions = $this->db->get()->result();
+        
+        if (empty($questions)) {
+            return array();
+        }
+        
+        // Buscar opções separadamente
+        $question_ids = array();
+        foreach ($questions as $question) {
+            $question_ids[] = $question->id;
+        }
+        
+        $options_map = array();
+        if (!empty($question_ids)) {
+            $this->db->select('*');
+            $this->db->from('question_options');
+            $this->db->where_in('question_id', $question_ids);
+            $this->db->order_by('question_id ASC, order_index ASC');
             
-            // Processar resultados
-            foreach ($questions as &$question) {
-                // Restaurar conditional_logic do texto
-                $question->conditional_logic = $question->conditional_logic_text;
-                unset($question->conditional_logic_text);
-                
-                // Processar opções
-                $question->options = array();
-                if (!empty($question->options_data)) {
-                    $options_parts = explode('|', $question->options_data);
-                    foreach ($options_parts as $option_part) {
-                        if (empty($option_part)) continue;
-                        
-                        $option_data = explode(':', $option_part);
-                        if (count($option_data) >= 4) {
-                            $question->options[] = (object) array(
-                                'id' => $option_data[0],
-                                'option_text' => $option_data[1],
-                                'option_value' => $option_data[2],
-                                'order_index' => $option_data[3]
-                            );
-                        }
-                    }
+            $options_result = $this->db->get()->result();
+            
+            foreach ($options_result as $option) {
+                if (!isset($options_map[$option->question_id])) {
+                    $options_map[$option->question_id] = array();
                 }
-                unset($question->options_data);
-                
-                // Decodificar lógica condicional
-                $question->conditional_logic_decoded = null;
-                if (!empty($question->conditional_logic)) {
-                    $logic = json_decode($question->conditional_logic, true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        $question->conditional_logic_decoded = $logic;
-                    }
+                $options_map[$option->question_id][] = $option;
+            }
+        }
+        
+        // Combinar dados
+        foreach ($questions as &$question) {
+            $question->options = isset($options_map[$question->id]) ? 
+                            $options_map[$question->id] : array();
+            
+            $question->conditional_logic_decoded = null;
+            if (!empty($question->conditional_logic)) {
+                $logic = json_decode($question->conditional_logic, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $question->conditional_logic_decoded = $logic;
                 }
             }
-            
-            return $questions;
-            
-        } catch (Exception $e) {
-            // Se ainda falhar, usar método simples
-            log_message('error', 'Erro na consulta PostgreSQL: ' . $e->getMessage());
-            return $this->get_by_questionnaire_with_logic_simple($questionnaire_id);
         }
+        
+        return $questions;
     }
 
 
