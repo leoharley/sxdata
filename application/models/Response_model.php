@@ -1344,6 +1344,8 @@ public function get_question_statistics($question_id, $filters = array()) {
     // Análise baseada no tipo de questão
     switch ($question->question_type) {
         case 'radio':
+            $statistics['data'] = $this->analyze_option_responses($question_id, $filters, $total_responses);
+            break;
         case 'checkbox':
             $statistics['data'] = $this->analyze_option_responses($question_id, $filters, $total_responses);
             break;
