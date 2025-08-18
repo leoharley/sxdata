@@ -1405,7 +1405,7 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             // Buscar no JSON - verificar se o ID da opção está no array JSON
          //   $this->db->where("qr.selected_options::text LIKE", '%"' . $option->id . '"%');
 
-            $this->db->where("qr.selected_options::text", 'IS NOT NULL');
+            $this->db->where("qr.selected_options", 'IS NOT NULL');
             
             // Alternativa mais precisa usando funções JSON do PostgreSQL:
             // $this->db->where("qr.selected_options ? '$option->id'");
