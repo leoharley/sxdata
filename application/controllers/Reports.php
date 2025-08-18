@@ -823,5 +823,366 @@ private function create_text_statistics_sheet($sheet, $samples, $question_info) 
           ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
 }
 
+public function get_specific_questionnaire_analysis() {
+    // Verificar autenticação
+    $this->check_auth();
+    
+    $questionnaire_id = $this->input->get('questionnaire_id');
+    
+    if (!$questionnaire_id) {
+        header('Content-Type: application/json');
+        echo json_encode(array('error' => 'ID do questionário não fornecido'));
+        return;
+    }
+    
+    $filters = $this->get_filters();
+    
+    try {
+        $analysis = $this->Response_model->get_specific_questionnaire_analysis($questionnaire_id, $filters);
+        
+        header('Content-Type: application/json');
+        echo json_encode($analysis);
+        
+    } catch (Exception $e) {
+        header('Content-Type: application/json');
+        echo json_encode(array('error' => 'Erro ao carregar análise: ' . $e->getMessage()));
+    }
+}
+
+/**
+ * MÉTODO QUE FALTAVA: Exportar análise específica de questionário
+ */
+public function export_specific_questionnaire() {
+    $this->check_auth();
+    
+    $filters = $this->get_filters();
+    $questionnaire_id = $filters['questionnaire_id'] ?? null;
+    
+    if (!$questionnaire_id) {
+        $this->session->set_flashdata('error', 'Questionário não especificado para exportação.');
+        redirect('reports');
+        return;
+    }
+    
+    try {
+        $analysis = $this->Response_model->get_specific_questionnaire_analysis($questionnaire_id, $filters);
+        
+        if (isset($analysis['error'])) {
+            $this->session->set_flashdata('error', $analysis['error']);
+            redirect('reports');
+            return;
+        }
+        
+        $this->load->library('excel');
+        
+        // Criar arquivo Excel
+        $objPHPExcel = new PHPExcel();
+        $objPHPExcel->getProperties()
+                    ->setCreator("SXData")
+                    ->setLastModifiedBy("SXData")
+                    ->setTitle("Análise Detalhada - " . $analysis['questionnaire']->title)
+                    ->setSubject("Análise de Questionário Específico")
+                    ->setDescription("Análise detalhada do questionário: " . $analysis['questionnaire']->title);
+
+        // PLANILHA 1: Resumo do Questionário
+        $objPHPExcel->setActiveSheetIndex(0);
+        $summarySheet = $objPHPExcel->getActiveSheet();
+        $summarySheet->setTitle('Resumo');
+        
+        $this->create_summary_sheet($summarySheet, $analysis);
+        
+        // PLANILHA 2: Análise por Questão
+        $objPHPExcel->createSheet();
+        $objPHPExcel->setActiveSheetIndex(1);
+        $questionsSheet = $objPHPExcel->getActiveSheet();
+        $questionsSheet->setTitle('Análise por Questão');
+        
+        $this->create_questions_analysis_sheet($questionsSheet, $analysis);
+        
+        // Gerar arquivo
+        $filename = 'analise_questionario_' . preg_replace('/[^a-zA-Z0-9]/', '_', $analysis['questionnaire']->title) . '_' . date('Y-m-d_H-i-s') . '.xlsx';
+        
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+        
+        $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
+        $objWriter->save('php://output');
+        
+    } catch (Exception $e) {
+        $this->session->set_flashdata('error', 'Erro ao gerar exportação: ' . $e->getMessage());
+        redirect('reports');
+    }
+}
+
+/**
+ * MÉTODO QUE FALTAVA: Exportar análise geral de questões
+ */
+public function export_question_analysis() {
+    $this->check_auth();
+    
+    $filters = $this->get_filters();
+    
+    try {
+        $question_analysis = $this->Response_model->get_question_analysis($filters);
+        
+        if (empty($question_analysis)) {
+            $this->session->set_flashdata('error', 'Nenhum dado de análise encontrado para exportar.');
+            redirect('reports');
+            return;
+        }
+        
+        $this->load->library('excel');
+        
+        // Criar novo arquivo Excel
+        $objPHPExcel = new PHPExcel();
+        $objPHPExcel->getProperties()
+                    ->setCreator("SXData")
+                    ->setLastModifiedBy("SXData")
+                    ->setTitle("Análise de Respostas por Questões")
+                    ->setSubject("Relatório de Análise de Questões")
+                    ->setDescription("Análise detalhada das respostas por questão");
+
+        // Definir planilha ativa
+        $objPHPExcel->setActiveSheetIndex(0);
+        $worksheet = $objPHPExcel->getActiveSheet();
+        $worksheet->setTitle('Análise de Questões');
+        
+        // Cabeçalhos
+        $headers = array(
+            'A1' => 'Questionário',
+            'B1' => 'Ordem',
+            'C1' => 'Questão',
+            'D1' => 'Tipo',
+            'E1' => 'Total Respostas',
+            'F1' => 'Opção/Categoria',
+            'G1' => 'Quantidade',
+            'H1' => 'Percentual'
+        );
+        
+        foreach ($headers as $cell => $value) {
+            $worksheet->setCellValue($cell, $value);
+        }
+        
+        // Estilizar cabeçalhos
+        $headerRange = 'A1:H1';
+        $worksheet->getStyle($headerRange)->getFont()->setBold(true);
+        $worksheet->getStyle($headerRange)->getFill()
+                  ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+                  ->getStartColor()->setRGB('8fae5d');
+        $worksheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
+        
+        // Preencher dados
+        $row = 2;
+        
+        foreach ($question_analysis as $question) {
+            $questionnaire_title = $question['questionnaire_title'];
+            $order_index = $question['order_index'];
+            $question_text = $question['question_text'];
+            $question_type = $question['question_type'];
+            $total_responses = $question['statistics']['total_responses'];
+            
+            if (!empty($question['statistics']['data'])) {
+                foreach ($question['statistics']['data'] as $stat) {
+                    $worksheet->setCellValue('A' . $row, $questionnaire_title);
+                    $worksheet->setCellValue('B' . $row, $order_index);
+                    $worksheet->setCellValue('C' . $row, $question_text);
+                    $worksheet->setCellValue('D' . $row, ucfirst($question_type));
+                    $worksheet->setCellValue('E' . $row, $total_responses);
+                    
+                    // Determinar rótulo da opção
+                    $option_label = '';
+                    if (isset($stat['option_text'])) {
+                        $option_label = $stat['option_text'];
+                    } else {
+                        $option_label = $stat['label'];
+                        if (isset($stat['unit'])) {
+                            $option_label .= ' (' . $stat['unit'] . ')';
+                        }
+                    }
+                    
+                    $worksheet->setCellValue('F' . $row, $option_label);
+                    $worksheet->setCellValue('G' . $row, $stat['count']);
+                    $worksheet->setCellValue('H' . $row, $stat['percentage'] !== null ? $stat['percentage'] . '%' : '-');
+                    
+                    $row++;
+                }
+            } else {
+                // Questão sem respostas
+                $worksheet->setCellValue('A' . $row, $questionnaire_title);
+                $worksheet->setCellValue('B' . $row, $order_index);
+                $worksheet->setCellValue('C' . $row, $question_text);
+                $worksheet->setCellValue('D' . $row, ucfirst($question_type));
+                $worksheet->setCellValue('E' . $row, 0);
+                $worksheet->setCellValue('F' . $row, 'Sem respostas');
+                $worksheet->setCellValue('G' . $row, 0);
+                $worksheet->setCellValue('H' . $row, '0%');
+                
+                $row++;
+            }
+        }
+        
+        // Ajustar largura das colunas
+        $worksheet->getColumnDimension('A')->setWidth(25);
+        $worksheet->getColumnDimension('B')->setWidth(8);
+        $worksheet->getColumnDimension('C')->setWidth(50);
+        $worksheet->getColumnDimension('D')->setWidth(12);
+        $worksheet->getColumnDimension('E')->setWidth(15);
+        $worksheet->getColumnDimension('F')->setWidth(30);
+        $worksheet->getColumnDimension('G')->setWidth(12);
+        $worksheet->getColumnDimension('H')->setWidth(12);
+        
+        // Quebra de texto
+        $worksheet->getStyle('C2:C' . ($row-1))->getAlignment()->setWrapText(true);
+        $worksheet->getStyle('F2:F' . ($row-1))->getAlignment()->setWrapText(true);
+        
+        // Adicionar bordas
+        $dataRange = 'A1:H' . ($row-1);
+        $worksheet->getStyle($dataRange)->getBorders()->getAllBorders()
+                  ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+        
+        // Gerar arquivo
+        $filename = 'analise_questoes_' . date('Y-m-d_H-i-s') . '.xlsx';
+        
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+        
+        $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
+        $objWriter->save('php://output');
+        
+    } catch (Exception $e) {
+        $this->session->set_flashdata('error', 'Erro ao exportar análise: ' . $e->getMessage());
+        redirect('reports');
+    }
+}
+
+/**
+ * Criar planilha de resumo
+ */
+private function create_summary_sheet($sheet, $analysis) {
+    $questionnaire = $analysis['questionnaire'];
+    $summary = $analysis['summary'];
+    
+    // Título
+    $sheet->setCellValue('A1', 'ANÁLISE DETALHADA DO QUESTIONÁRIO');
+    $sheet->mergeCells('A1:B1');
+    $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
+    $sheet->getStyle('A1')->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+    
+    // Informações do questionário
+    $row = 3;
+    $info_data = array(
+        array('Nome do Questionário:', $questionnaire->title),
+        array('Descrição:', $questionnaire->description ?: 'Sem descrição'),
+        array('Data de criação:', date('d/m/Y H:i', strtotime($questionnaire->created_at))),
+        array('', ''),
+        array('ESTATÍSTICAS GERAIS', ''),
+        array('Total de questões:', $summary['total_questions']),
+        array('Total de respostas:', $summary['total_responses']),
+        array('Respondentes únicos:', $summary['unique_respondents']),
+        array('Taxa média de conclusão:', $summary['avg_completion_rate'] . '%'),
+        array('Tempo médio de resposta:', $summary['avg_time'] . ' minutos'),
+        array('Última resposta:', $summary['last_response'] ?: 'Nunca'),
+        array('Relatório gerado em:', date('d/m/Y H:i:s'))
+    );
+    
+    foreach ($info_data as $data) {
+        $sheet->setCellValue('A' . $row, $data[0]);
+        $sheet->setCellValue('B' . $row, $data[1]);
+        
+        if ($data[0] === 'ESTATÍSTICAS GERAIS') {
+            $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
+            $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
+                  ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+                  ->getStartColor()->setRGB('E9ECEF');
+        }
+        
+        $row++;
+    }
+    
+    // Ajustar larguras
+    $sheet->getColumnDimension('A')->setWidth(25);
+    $sheet->getColumnDimension('B')->setWidth(40);
+    
+    // Adicionar bordas
+    $dataRange = 'A3:B' . ($row - 1);
+    $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
+          ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+}
+
+/**
+ * Criar planilha de análise por questão
+ */
+private function create_questions_analysis_sheet($sheet, $analysis) {
+    // Cabeçalhos
+    $headers = array(
+        'A1' => 'Ordem',
+        'B1' => 'Questão',
+        'C1' => 'Tipo',
+        'D1' => 'Total Respostas',
+        'E1' => 'Taxa de Resposta',
+        'F1' => 'Observações'
+    );
+    
+    foreach ($headers as $cell => $value) {
+        $sheet->setCellValue($cell, $value);
+    }
+    
+    // Estilizar cabeçalhos
+    $headerRange = 'A1:F1';
+    $sheet->getStyle($headerRange)->getFont()->setBold(true);
+    $sheet->getStyle($headerRange)->getFill()
+          ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+          ->getStartColor()->setRGB('8fae5d');
+    $sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
+    
+    // Preencher dados
+    $row = 2;
+    $total_questionnaire_responses = $analysis['summary']['total_responses'];
+    
+    foreach ($analysis['questions'] as $question) {
+        $total_responses = $question['statistics']['total_responses'];
+        $response_rate = $total_questionnaire_responses > 0 ? 
+            round(($total_responses / $total_questionnaire_responses) * 100, 1) : 0;
+        
+        $observations = '';
+        if ($response_rate >= 80) {
+            $observations = 'Alta taxa de resposta';
+        } elseif ($response_rate >= 50) {
+            $observations = 'Taxa de resposta média';
+        } elseif ($response_rate > 0) {
+            $observations = 'Baixa taxa de resposta';
+        } else {
+            $observations = 'Nenhuma resposta';
+        }
+        
+        $sheet->setCellValue('A' . $row, $question['order_index']);
+        $sheet->setCellValue('B' . $row, $question['question_text']);
+        $sheet->setCellValue('C' . $row, ucfirst($question['question_type']));
+        $sheet->setCellValue('D' . $row, $total_responses);
+        $sheet->setCellValue('E' . $row, $response_rate . '%');
+        $sheet->setCellValue('F' . $row, $observations);
+        
+        $row++;
+    }
+    
+    // Ajustar larguras
+    $sheet->getColumnDimension('A')->setWidth(8);
+    $sheet->getColumnDimension('B')->setWidth(60);
+    $sheet->getColumnDimension('C')->setWidth(12);
+    $sheet->getColumnDimension('D')->setWidth(15);
+    $sheet->getColumnDimension('E')->setWidth(15);
+    $sheet->getColumnDimension('F')->setWidth(25);
+    
+    // Quebra de texto
+    $sheet->getStyle('B2:B' . ($row-1))->getAlignment()->setWrapText(true);
+    
+    // Adicionar bordas
+    $dataRange = 'A1:F' . ($row-1);
+    $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
+          ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+}
+
 }
 ?>
