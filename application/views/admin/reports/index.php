@@ -1995,7 +1995,10 @@ function removeHighlight(item) {
  * Escapar caracteres especiais para regex
  */
 function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\// Inicialização após carregamento da página
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\');
+}    
+    
+// Inicialização após carregamento da página
 document.addEventListener('DOMContentLoaded', function() {
     // Adicionar tooltips se necessário
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
