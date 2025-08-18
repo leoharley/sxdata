@@ -31,6 +31,9 @@ class Reports extends CI_Controller {
         
         // NOVO: Obter dados de localização para o mapa de calor
         $data['heatmap_locations'] = $this->get_heatmap_data($filters);
+
+        // NOVO: Obter análise de questões
+        $data['question_analysis'] = $this->get_question_analysis($filters);
         
         $this->load->view('admin/header', $data);
         $this->load->view('admin/reports/index', $data);
@@ -301,34 +304,6 @@ private function calculate_question_summary($question_analysis) {
         'questions_with_responses' => $questions_with_responses,
         'avg_response_rate' => $avg_response_rate
     );
-}
-
-// MODIFICAR o método index() para incluir os dados de análise de questões
-public function index() {
-    $data['title'] = 'Relatórios - SXData';
-    
-    // Processar filtros
-    $filters = $this->get_filters();
-    $data['filters'] = $filters;
-    
-    $this->load->model('User_model');
-    $data['users'] = $this->User_model->get_all_with_stats();
-
-    // Carregar dados
-    $data['questionnaires'] = $this->Questionnaire_model->get_all();
-    $data['period_stats'] = $this->calculate_period_stats($filters);
-    $data['charts_data'] = $this->get_charts_data($filters);
-    $data['detailed_analysis'] = $this->get_detailed_analysis($filters);
-    
-    // NOVO: Obter dados de localização para o mapa de calor
-    $data['heatmap_locations'] = $this->get_heatmap_data($filters);
-    
-    // NOVO: Obter análise de questões
-    $data['question_analysis'] = $this->get_question_analysis($filters);
-    
-    $this->load->view('admin/header', $data);
-    $this->load->view('admin/reports/index', $data);
-    $this->load->view('admin/footer');
 }
 
 /**
