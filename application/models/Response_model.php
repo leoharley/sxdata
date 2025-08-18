@@ -1407,10 +1407,10 @@ private function analyze_option_responses($question_id, $filters, $total_respons
 
             // Filtros - usando where com FALSE para não escapar o cast
             if (!empty($filters['date_from'])) {
-                $this->db->where('fr.completed_at::date >=', $filters['date_from']);
+                $this->db->where('fr.completed_at >=', $filters['date_from']);
             }
             if (!empty($filters['date_to'])) {
-                $this->db->where('fr.completed_at::date <=', $filters['date_to']);
+                $this->db->where('fr.completed_at <=', $filters['date_to']);
             }
             if (!empty($filters['applied_by'])) {
                 $this->db->where('fr.applied_by', $filters['applied_by']);
