@@ -1397,18 +1397,13 @@ private function analyze_option_responses($question_id, $filters, $total_respons
         
         if ($question->question_type === 'radio') {
             // Para radio, buscar em selected_options (JSON contém o ID da opção)
-            $this->db->select('COUNT(*) as count, qr.selected_options, qr.response_text');
+            $this->db->select('COUNT(*) as count, qr.selected_options::text as selected_options_text, qr.response_text');
             $this->db->from('question_responses qr');
             $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
 
             // Condição correta para IS NOT NULL
             $this->db->where("qr.selected_options IS NOT NULL", null, false);
-
-            // Alternativa mais precisa (quando for buscar dentro do JSON):
-            // $this->db->where("qr.selected_options::text LIKE '%\"" . $option->id . "\"%'", null, false);
-            // ou
-            // $this->db->where("qr.selected_options ? '" . $option->id . "'", null, false);
 
             // Filtros
             if (!empty($filters['date_from'])) {
@@ -1421,14 +1416,16 @@ private function analyze_option_responses($question_id, $filters, $total_respons
                 $this->db->where('fr.applied_by', $filters['applied_by']);
             }
 
-            // Group by (com cast no Postgres)
+            // Group by com cast em Postgres
             $this->db->group_by('qr.response_text');
-            $this->db->group_by('qr.selected_options');
+            $this->db->group_by('qr.selected_options::text', false);
 
             $result = $this->db->get()->result();
             var_dump($this->db->last_query()); exit;
 
-            $count = $result ? $result->count : 0;
+            // Obs: $result é um array, então precisa percorrer ou somar
+            $count = !empty($result) ? $result[0]->count : 0;
+
         } else {
             // Para checkbox, usar método mais seguro
             $count = $this->count_checkbox_option($question_id, $option->option_value, $filters);
