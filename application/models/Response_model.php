@@ -1399,7 +1399,7 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             // Para radio, buscar em selected_options (JSON contém o ID da opção)
             $this->db->select('COUNT(*) as count');
             $this->db->from('question_responses qr');
-            $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+            //$this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
             
             // Buscar no JSON - verificar se o ID da opção está no array JSON
@@ -1420,7 +1420,7 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             }
             
             $result = $this->db->get()->row();
-            var_dump($result);exit;
+            var_dump($this->db->last_query());exit;
             $count = $result ? $result->count : 0;
         } else {
             // Para checkbox, usar método mais seguro
