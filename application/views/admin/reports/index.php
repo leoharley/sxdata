@@ -2008,8 +2008,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Inicializar outros componentes se necessário
     console.log('Análise de questões carregada com sucesso');
-});');
-}
+});
 
 /**
  * Atualizar indicador de resultados de busca
