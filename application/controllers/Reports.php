@@ -351,142 +351,168 @@ public function get_question_details() {
 }
 
 public function export_question_analysis() {
-    $filters = $this->get_filters();
-    $question_analysis = $this->Response_model->get_question_analysis($filters);
-    
-    if (empty($question_analysis)) {
-        $this->session->set_flashdata('error', 'Nenhum dado de análise encontrado para exportar.');
-        redirect('reports');
-        return;
-    }
-    
-    // Criar novo arquivo Excel usando PhpSpreadsheet
-    $spreadsheet = new Spreadsheet();
-    $spreadsheet->getProperties()
-                ->setCreator("SXData")
-                ->setLastModifiedBy("SXData")
-                ->setTitle("Análise de Respostas por Questões")
-                ->setSubject("Relatório de Análise de Questões")
-                ->setDescription("Análise detalhada das respostas por questão");
+   $filters = $this->get_filters();
+   $question_analysis = $this->Response_model->get_question_analysis($filters);
+   
+   if (empty($question_analysis)) {
+       $this->session->set_flashdata('error', 'Nenhum dado de análise encontrado para exportar.');
+       redirect('reports');
+       return;
+   }
+   
+   // Criar novo arquivo Excel usando PhpSpreadsheet
+   $spreadsheet = new Spreadsheet();
+   $spreadsheet->getProperties()
+               ->setCreator("SXData")
+               ->setLastModifiedBy("SXData")
+               ->setTitle("Análise de Respostas por Questões")
+               ->setSubject("Relatório de Análise de Questões")
+               ->setDescription("Análise detalhada das respostas por questão");
 
-    // Definir planilha ativa
-    $spreadsheet->setActiveSheetIndex(0);
-    $worksheet = $spreadsheet->getActiveSheet();
-    $worksheet->setTitle('Análise de Questões');
-    
-    // Cabeçalhos
-    $headers = array(
-        'A1' => 'Questionário',
-        'B1' => 'Ordem',
-        'C1' => 'Questão',
-        'D1' => 'Tipo',
-        'E1' => 'Total Respostas',
-        'F1' => 'Opção/Categoria',
-        'G1' => 'Quantidade',
-        'H1' => 'Percentual'
-    );
-    
-    foreach ($headers as $cell => $value) {
-        $worksheet->setCellValue($cell, $value);
-    }
-    
-    // Estilizar cabeçalhos
-    $headerRange = 'A1:H1';
-    $worksheet->getStyle($headerRange)->getFont()->setBold(true);
-    $worksheet->getStyle($headerRange)->getFill()
-              ->setFillType(Fill::FILL_SOLID)
-              ->getStartColor()->setRGB('8fae5d');
-    $worksheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
-    
-    // Preencher dados
-    $row = 2;
-    
-    foreach ($question_analysis as $question) {
-        $questionnaire_title = $question['questionnaire_title'];
-        $order_index = $question['order_index'];
-        $question_text = $question['question_text'];
-        $question_type = $question['question_type'];
-        $total_responses = $question['statistics']['total_responses'];
-        
-        if (!empty($question['statistics']['data'])) {
-            foreach ($question['statistics']['data'] as $stat) {
-                $worksheet->setCellValue('A' . $row, $questionnaire_title);
-                $worksheet->setCellValue('B' . $row, $order_index);
-                $worksheet->setCellValue('C' . $row, $question_text);
-                $worksheet->setCellValue('D' . $row, ucfirst($question_type));
-                $worksheet->setCellValue('E' . $row, $total_responses);
-                
-                // Determinar rótulo da opção
-                $option_label = '';
-                if (isset($stat['option_text'])) {
-                    $option_label = $stat['option_text'];
-                } else {
-                    $option_label = $stat['label'];
-                    if (isset($stat['unit'])) {
-                        $option_label .= ' (' . $stat['unit'] . ')';
-                    }
-                }
-                
-                $worksheet->setCellValue('F' . $row, $option_label);
-                $worksheet->setCellValue('G' . $row, $stat['count']);
-                $worksheet->setCellValue('H' . $row, $stat['percentage'] !== null ? $stat['percentage'] . '%' : '-');
-                
-                $row++;
-            }
-        } else {
-            // Questão sem respostas
-            $worksheet->setCellValue('A' . $row, $questionnaire_title);
-            $worksheet->setCellValue('B' . $row, $order_index);
-            $worksheet->setCellValue('C' . $row, $question_text);
-            $worksheet->setCellValue('D' . $row, ucfirst($question_type));
-            $worksheet->setCellValue('E' . $row, 0);
-            $worksheet->setCellValue('F' . $row, 'Sem respostas');
-            $worksheet->setCellValue('G' . $row, 0);
-            $worksheet->setCellValue('H' . $row, '0%');
-            
-            $row++;
-        }
-    }
-    
-    // Ajustar largura das colunas
-    $worksheet->getColumnDimension('A')->setWidth(25); // Questionário
-    $worksheet->getColumnDimension('B')->setWidth(8);  // Ordem
-    $worksheet->getColumnDimension('C')->setWidth(50); // Questão
-    $worksheet->getColumnDimension('D')->setWidth(12); // Tipo
-    $worksheet->getColumnDimension('E')->setWidth(15); // Total Respostas
-    $worksheet->getColumnDimension('F')->setWidth(12);  // Palavras
-    
-    // Quebra de texto para respostas longas
-    $worksheet->getStyle('D11:D' . ($row-1))->getAlignment()->setWrapText(true);
-    
-    // Adicionar bordas
-    $dataRange = 'A10:F' . ($row-1);
-    $worksheet->getStyle($dataRange)->getBorders()->getAllBorders()
-              ->setBorderStyle(Border::BORDER_THIN);
-    
-    // Adicionar filtros automáticos
-    $worksheet->setAutoFilter('A10:F' . ($row-1));
-    
-    // Criar segunda planilha com estatísticas das respostas
-    $spreadsheet->createSheet();
-    $spreadsheet->setActiveSheetIndex(1);
-    $statsSheet = $spreadsheet->getActiveSheet();
-    $statsSheet->setTitle('Estatísticas');
-    
-    $this->create_text_statistics_sheet($statsSheet, $samples, $question_info);
-    
-    // Gerar arquivo
-    $filename = 'amostras_texto_Q' . $question_info->order_index . '_' . 
-                preg_replace('/[^a-zA-Z0-9]/', '_', substr($question_info->question_text, 0, 30)) . '_' . 
-                date('Y-m-d_H-i-s') . '.xlsx';
-    
-    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    header('Content-Disposition: attachment;filename="' . $filename . '"');
-    header('Cache-Control: max-age=0');
-    
-    $writer = new Xlsx($spreadsheet);
-    $writer->save('php://output');
-    exit;
+   // Definir planilha ativa
+   $spreadsheet->setActiveSheetIndex(0);
+   $worksheet = $spreadsheet->getActiveSheet();
+   $worksheet->setTitle('Análise de Questões');
+   
+   // Cabeçalhos
+   $headers = array(
+       'A1' => 'Questionário',
+       'B1' => 'Ordem',
+       'C1' => 'Questão',
+       'D1' => 'Tipo',
+       'E1' => 'Total Respostas',
+       'F1' => 'Opção/Categoria',
+       'G1' => 'Quantidade',
+       'H1' => 'Percentual'
+   );
+   
+   foreach ($headers as $cell => $value) {
+       $worksheet->setCellValue($cell, $value);
+   }
+   
+   // Estilizar cabeçalhos
+   $headerRange = 'A1:H1';
+   $worksheet->getStyle($headerRange)->getFont()->setBold(true);
+   $worksheet->getStyle($headerRange)->getFill()
+             ->setFillType(Fill::FILL_SOLID)
+             ->getStartColor()->setRGB('8fae5d');
+   $worksheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
+   
+   // Preencher dados
+   $row = 2;
+   
+   foreach ($question_analysis as $question) {
+       $questionnaire_title = $question['questionnaire_title'];
+       $order_index = $question['order_index'];
+       $question_text = $question['question_text'];
+       $question_type = $question['question_type'];
+       $total_responses = $question['statistics']['total_responses'];
+       
+       if (!empty($question['statistics']['data'])) {
+           foreach ($question['statistics']['data'] as $stat) {
+               $worksheet->setCellValue('A' . $row, $questionnaire_title);
+               $worksheet->setCellValue('B' . $row, $order_index);
+               $worksheet->setCellValue('C' . $row, $question_text);
+               $worksheet->setCellValue('D' . $row, ucfirst($question_type));
+               $worksheet->setCellValue('E' . $row, $total_responses);
+               
+               // Determinar rótulo da opção
+               $option_label = '';
+               if (isset($stat['option_text'])) {
+                   $option_label = $stat['option_text'];
+               } else {
+                   $option_label = $stat['label'];
+                   if (isset($stat['unit'])) {
+                       $option_label .= ' (' . $stat['unit'] . ')';
+                   }
+               }
+               
+               $worksheet->setCellValue('F' . $row, $option_label);
+               $worksheet->setCellValue('G' . $row, $stat['count']);
+               $worksheet->setCellValue('H' . $row, $stat['percentage'] !== null ? $stat['percentage'] . '%' : '-');
+               
+               $row++;
+           }
+       } else {
+           // Questão sem respostas
+           $worksheet->setCellValue('A' . $row, $questionnaire_title);
+           $worksheet->setCellValue('B' . $row, $order_index);
+           $worksheet->setCellValue('C' . $row, $question_text);
+           $worksheet->setCellValue('D' . $row, ucfirst($question_type));
+           $worksheet->setCellValue('E' . $row, 0);
+           $worksheet->setCellValue('F' . $row, 'Sem respostas');
+           $worksheet->setCellValue('G' . $row, 0);
+           $worksheet->setCellValue('H' . $row, '0%');
+           
+           $row++;
+       }
+   }
+   
+   // Ajustar largura das colunas
+   $worksheet->getColumnDimension('A')->setWidth(25); // Questionário
+   $worksheet->getColumnDimension('B')->setWidth(8);  // Ordem
+   $worksheet->getColumnDimension('C')->setWidth(50); // Questão
+   $worksheet->getColumnDimension('D')->setWidth(12); // Tipo
+   $worksheet->getColumnDimension('E')->setWidth(15); // Total Respostas
+   $worksheet->getColumnDimension('F')->setWidth(30); // Opção/Categoria
+   $worksheet->getColumnDimension('G')->setWidth(12); // Quantidade
+   $worksheet->getColumnDimension('H')->setWidth(12); // Percentual
+   
+   // Quebra de texto para células de texto longo
+   $worksheet->getStyle('C2:C' . ($row-1))->getAlignment()->setWrapText(true);
+   $worksheet->getStyle('F2:F' . ($row-1))->getAlignment()->setWrapText(true);
+   
+   // Adicionar bordas
+   $dataRange = 'A1:H' . ($row-1);
+   $worksheet->getStyle($dataRange)->getBorders()->getAllBorders()
+             ->setBorderStyle(Border::BORDER_THIN);
+   
+   // Criar segunda planilha com resumo
+   $spreadsheet->createSheet();
+   $spreadsheet->setActiveSheetIndex(1);
+   $summarySheet = $spreadsheet->getActiveSheet();
+   $summarySheet->setTitle('Resumo');
+   
+   // Adicionar dados de resumo
+   $summary = $this->calculate_question_summary($question_analysis);
+   
+   $summaryData = array(
+       array('Métrica', 'Valor'),
+       array('Total de Questões', $summary['total_questions']),
+       array('Total de Respostas', $summary['total_responses']),
+       array('Questões com Respostas', $summary['questions_with_responses']),
+       array('Taxa Média de Resposta', $summary['avg_response_rate'] . '%'),
+       array('Período do Relatório', $this->format_period_text($filters)),
+       array('Data de Geração', date('d/m/Y H:i:s'))
+   );
+   
+   $row = 1;
+   foreach ($summaryData as $data) {
+       $summarySheet->setCellValue('A' . $row, $data[0]);
+       $summarySheet->setCellValue('B' . $row, $data[1]);
+       $row++;
+   }
+   
+   // Estilizar resumo
+   $summarySheet->getStyle('A1:B1')->getFont()->setBold(true);
+   $summarySheet->getStyle('A1:B1')->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('8fae5d');
+   $summarySheet->getStyle('A1:B1')->getFont()->getColor()->setRGB('FFFFFF');
+   
+   $summarySheet->getColumnDimension('A')->setWidth(25);
+   $summarySheet->getColumnDimension('B')->setWidth(20);
+   
+   // Gerar arquivo
+   $filename = 'analise_questoes_' . date('Y-m-d_H-i-s') . '.xlsx';
+   
+   header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+   header('Content-Disposition: attachment;filename="' . $filename . '"');
+   header('Cache-Control: max-age=0');
+   
+   $writer = new Xlsx($spreadsheet);
+   $writer->save('php://output');
+   exit;
 }
 
 /**
