@@ -1,6 +1,16 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+// Add these imports at the top after the defined() line
+require_once FCPATH . 'vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Font;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+
 class Reports extends CI_Controller {
 
     public function __construct() {
@@ -350,12 +360,9 @@ public function export_question_analysis() {
         return;
     }
     
-    // Carregar biblioteca Excel se não estiver carregada
-    $this->load->library('excel');
-    
-    // Criar novo arquivo Excel
-    $objPHPExcel = new PHPExcel();
-    $objPHPExcel->getProperties()
+    // Criar novo arquivo Excel usando PhpSpreadsheet
+    $spreadsheet = new Spreadsheet();
+    $spreadsheet->getProperties()
                 ->setCreator("SXData")
                 ->setLastModifiedBy("SXData")
                 ->setTitle("Análise de Respostas por Questões")
@@ -363,8 +370,8 @@ public function export_question_analysis() {
                 ->setDescription("Análise detalhada das respostas por questão");
 
     // Definir planilha ativa
-    $objPHPExcel->setActiveSheetIndex(0);
-    $worksheet = $objPHPExcel->getActiveSheet();
+    $spreadsheet->setActiveSheetIndex(0);
+    $worksheet = $spreadsheet->getActiveSheet();
     $worksheet->setTitle('Análise de Questões');
     
     // Cabeçalhos
@@ -387,7 +394,7 @@ public function export_question_analysis() {
     $headerRange = 'A1:H1';
     $worksheet->getStyle($headerRange)->getFont()->setBold(true);
     $worksheet->getStyle($headerRange)->getFill()
-              ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+              ->setFillType(Fill::FILL_SOLID)
               ->getStartColor()->setRGB('8fae5d');
     $worksheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
     
@@ -447,226 +454,6 @@ public function export_question_analysis() {
     $worksheet->getColumnDimension('C')->setWidth(50); // Questão
     $worksheet->getColumnDimension('D')->setWidth(12); // Tipo
     $worksheet->getColumnDimension('E')->setWidth(15); // Total Respostas
-    $worksheet->getColumnDimension('F')->setWidth(30); // Opção/Categoria
-    $worksheet->getColumnDimension('G')->setWidth(12); // Quantidade
-    $worksheet->getColumnDimension('H')->setWidth(12); // Percentual
-    
-    // Quebra de texto para células de texto longo
-    $worksheet->getStyle('C2:C' . ($row-1))->getAlignment()->setWrapText(true);
-    $worksheet->getStyle('F2:F' . ($row-1))->getAlignment()->setWrapText(true);
-    
-    // Adicionar bordas
-    $dataRange = 'A1:H' . ($row-1);
-    $worksheet->getStyle($dataRange)->getBorders()->getAllBorders()
-              ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
-    
-    // Criar segunda planilha com resumo
-    $objPHPExcel->createSheet();
-    $objPHPExcel->setActiveSheetIndex(1);
-    $summarySheet = $objPHPExcel->getActiveSheet();
-    $summarySheet->setTitle('Resumo');
-    
-    // Adicionar dados de resumo
-    $summary = $this->calculate_question_summary($question_analysis);
-    
-    $summaryData = array(
-        array('Métrica', 'Valor'),
-        array('Total de Questões', $summary['total_questions']),
-        array('Total de Respostas', $summary['total_responses']),
-        array('Questões com Respostas', $summary['questions_with_responses']),
-        array('Taxa Média de Resposta', $summary['avg_response_rate'] . '%'),
-        array('Período do Relatório', $this->format_period_text($filters)),
-        array('Data de Geração', date('d/m/Y H:i:s'))
-    );
-    
-    $row = 1;
-    foreach ($summaryData as $data) {
-        $summarySheet->setCellValue('A' . $row, $data[0]);
-        $summarySheet->setCellValue('B' . $row, $data[1]);
-        $row++;
-    }
-    
-    // Estilizar resumo
-    $summarySheet->getStyle('A1:B1')->getFont()->setBold(true);
-    $summarySheet->getStyle('A1:B1')->getFill()
-                 ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
-                 ->getStartColor()->setRGB('8fae5d');
-    $summarySheet->getStyle('A1:B1')->getFont()->getColor()->setRGB('FFFFFF');
-    
-    $summarySheet->getColumnDimension('A')->setWidth(25);
-    $summarySheet->getColumnDimension('B')->setWidth(20);
-    
-    // Gerar arquivo
-    $filename = 'analise_questoes_' . date('Y-m-d_H-i-s') . '.xlsx';
-    
-    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    header('Content-Disposition: attachment;filename="' . $filename . '"');
-    header('Cache-Control: max-age=0');
-    
-    $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
-    $objWriter->save('php://output');
-}
-
-/**
- * Formatar texto do período para o relatório
- */
-private function format_period_text($filters) {
-    if (isset($filters['period'])) {
-        switch ($filters['period']) {
-            case 'last_7_days':
-                return 'Últimos 7 dias';
-            case 'last_30_days':
-                return 'Últimos 30 dias';
-            case 'last_3_months':
-                return 'Últimos 3 meses';
-            case 'custom':
-                $from = isset($filters['date_from']) ? $filters['date_from'] : 'N/A';
-                $to = isset($filters['date_to']) ? $filters['date_to'] : 'N/A';
-                return "De {$from} até {$to}";
-        }
-    }
-    return 'Período não especificado';
-}
-
-/**
- * NOVO MÉTODO: Exportar amostras de texto de uma questão específica
- */
-public function export_question_text_samples() {
-    $question_id = $this->input->get('question_id');
-    
-    if (!$question_id) {
-        $this->session->set_flashdata('error', 'ID da questão não fornecido.');
-        redirect('reports');
-        return;
-    }
-    
-    $filters = $this->get_filters();
-    
-    // Obter informações da questão
-    $this->db->select('
-        q.question_text,
-        q.question_type,
-        q.order_index,
-        quest.title as questionnaire_title
-    ');
-    $this->db->from('questions q');
-    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'left');
-    $this->db->where('q.id', $question_id);
-    $question_info = $this->db->get()->row();
-    
-    if (!$question_info) {
-        $this->session->set_flashdata('error', 'Questão não encontrada.');
-        redirect('reports');
-        return;
-    }
-    
-    // Obter todas as amostras (sem limite)
-    $samples = $this->Response_model->get_question_text_samples($question_id, $filters, 1000);
-    
-    if (empty($samples)) {
-        $this->session->set_flashdata('error', 'Nenhuma amostra de texto encontrada para esta questão.');
-        redirect('reports');
-        return;
-    }
-    
-    $this->load->library('excel');
-    
-    // Criar arquivo Excel
-    $objPHPExcel = new PHPExcel();
-    $objPHPExcel->getProperties()
-                ->setCreator("SXData")
-                ->setLastModifiedBy("SXData")
-                ->setTitle("Amostras de Texto - Q" . $question_info->order_index)
-                ->setSubject("Amostras de Respostas de Texto")
-                ->setDescription("Amostras de respostas para a questão: " . $question_info->question_text);
-
-    // Definir planilha ativa
-    $objPHPExcel->setActiveSheetIndex(0);
-    $worksheet = $objPHPExcel->getActiveSheet();
-    $worksheet->setTitle('Amostras de Texto');
-    
-    // Cabeçalho informativo
-    $worksheet->setCellValue('A1', 'AMOSTRAS DE RESPOSTAS DE TEXTO');
-    $worksheet->mergeCells('A1:E1');
-    $worksheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
-    $worksheet->getStyle('A1')->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-    
-    // Informações da questão
-    $worksheet->setCellValue('A3', 'Questionário:');
-    $worksheet->setCellValue('B3', $question_info->questionnaire_title);
-    $worksheet->setCellValue('A4', 'Questão:');
-    $worksheet->setCellValue('B4', 'Q' . $question_info->order_index . ': ' . $question_info->question_text);
-    $worksheet->setCellValue('A5', 'Tipo:');
-    $worksheet->setCellValue('B5', ucfirst($question_info->question_type));
-    $worksheet->setCellValue('A6', 'Total de amostras:');
-    $worksheet->setCellValue('B6', count($samples));
-    $worksheet->setCellValue('A7', 'Período:');
-    $worksheet->setCellValue('B7', $this->format_period_text($filters));
-    $worksheet->setCellValue('A8', 'Gerado em:');
-    $worksheet->setCellValue('B8', date('d/m/Y H:i:s'));
-    
-    // Estilizar informações
-    $worksheet->getStyle('A3:A8')->getFont()->setBold(true);
-    $worksheet->getStyle('A3:B8')->getFill()
-              ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
-              ->getStartColor()->setRGB('F8F9FA');
-    
-    // Cabeçalhos da tabela
-    $headers = array(
-        'A10' => '#',
-        'B10' => 'Respondente',
-        'C10' => 'Data/Hora da Resposta',
-        'D10' => 'Resposta',
-        'E10' => 'Caracteres',
-        'F10' => 'Palavras'
-    );
-    
-    foreach ($headers as $cell => $value) {
-        $worksheet->setCellValue($cell, $value);
-    }
-    
-    // Estilizar cabeçalhos da tabela
-    $headerRange = 'A10:F10';
-    $worksheet->getStyle($headerRange)->getFont()->setBold(true);
-    $worksheet->getStyle($headerRange)->getFill()
-              ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
-              ->getStartColor()->setRGB('8fae5d');
-    $worksheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
-    
-    // Preencher dados
-    $row = 11;
-    $counter = 1;
-    
-    foreach ($samples as $sample) {
-        $response_text = $sample->response_text ?: '';
-        $char_count = strlen($response_text);
-        $word_count = str_word_count($response_text);
-        $formatted_date = date('d/m/Y H:i', strtotime($sample->completed_at));
-        
-        $worksheet->setCellValue('A' . $row, $counter);
-        $worksheet->setCellValue('B' . $row, $sample->respondent_name ?: 'Anônimo');
-        $worksheet->setCellValue('C' . $row, $formatted_date);
-        $worksheet->setCellValue('D' . $row, $response_text);
-        $worksheet->setCellValue('E' . $row, $char_count);
-        $worksheet->setCellValue('F' . $row, $word_count);
-        
-        // Colorir linhas alternadas
-        if ($counter % 2 == 0) {
-            $worksheet->getStyle('A' . $row . ':F' . $row)->getFill()
-                      ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
-                      ->getStartColor()->setRGB('F8F9FA');
-        }
-        
-        $row++;
-        $counter++;
-    }
-    
-    // Ajustar larguras das colunas
-    $worksheet->getColumnDimension('A')->setWidth(5);   // #
-    $worksheet->getColumnDimension('B')->setWidth(20);  // Respondente
-    $worksheet->getColumnDimension('C')->setWidth(18);  // Data/Hora
-    $worksheet->getColumnDimension('D')->setWidth(80);  // Resposta
-    $worksheet->getColumnDimension('E')->setWidth(12);  // Caracteres
     $worksheet->getColumnDimension('F')->setWidth(12);  // Palavras
     
     // Quebra de texto para respostas longas
@@ -675,15 +462,15 @@ public function export_question_text_samples() {
     // Adicionar bordas
     $dataRange = 'A10:F' . ($row-1);
     $worksheet->getStyle($dataRange)->getBorders()->getAllBorders()
-              ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+              ->setBorderStyle(Border::BORDER_THIN);
     
     // Adicionar filtros automáticos
     $worksheet->setAutoFilter('A10:F' . ($row-1));
     
     // Criar segunda planilha com estatísticas das respostas
-    $objPHPExcel->createSheet();
-    $objPHPExcel->setActiveSheetIndex(1);
-    $statsSheet = $objPHPExcel->getActiveSheet();
+    $spreadsheet->createSheet();
+    $spreadsheet->setActiveSheetIndex(1);
+    $statsSheet = $spreadsheet->getActiveSheet();
     $statsSheet->setTitle('Estatísticas');
     
     $this->create_text_statistics_sheet($statsSheet, $samples, $question_info);
@@ -697,8 +484,9 @@ public function export_question_text_samples() {
     header('Content-Disposition: attachment;filename="' . $filename . '"');
     header('Cache-Control: max-age=0');
     
-    $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
-    $objWriter->save('php://output');
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+    exit;
 }
 
 /**
@@ -750,7 +538,7 @@ private function create_text_statistics_sheet($sheet, $samples, $question_info) 
     $sheet->setCellValue('A1', 'ESTATÍSTICAS DAS RESPOSTAS DE TEXTO');
     $sheet->mergeCells('A1:B1');
     $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
-    $sheet->getStyle('A1')->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+    $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     
     // Estatísticas gerais
     $row = 3;
@@ -776,7 +564,7 @@ private function create_text_statistics_sheet($sheet, $samples, $question_info) 
         if (strpos($data[0], 'ESTATÍSTICAS') !== false || strpos($data[0], 'DISTRIBUIÇÃO') !== false) {
             $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
             $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
-                  ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+                  ->setFillType(Fill::FILL_SOLID)
                   ->getStartColor()->setRGB('E9ECEF');
         }
         
@@ -820,7 +608,7 @@ private function create_text_statistics_sheet($sheet, $samples, $question_info) 
     // Adicionar bordas
     $dataRange = 'A3:B' . ($row - 1);
     $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
-          ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+          ->setBorderStyle(Border::BORDER_THIN);
 }
 
 public function get_specific_questionnaire_analysis() {
@@ -873,11 +661,9 @@ public function export_specific_questionnaire() {
             return;
         }
         
-        $this->load->library('excel');
-        
-        // Criar arquivo Excel
-        $objPHPExcel = new PHPExcel();
-        $objPHPExcel->getProperties()
+        // Criar arquivo Excel usando PhpSpreadsheet
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->getProperties()
                     ->setCreator("SXData")
                     ->setLastModifiedBy("SXData")
                     ->setTitle("Análise Detalhada - " . $analysis['questionnaire']->title)
@@ -885,16 +671,16 @@ public function export_specific_questionnaire() {
                     ->setDescription("Análise detalhada do questionário: " . $analysis['questionnaire']->title);
 
         // PLANILHA 1: Resumo do Questionário
-        $objPHPExcel->setActiveSheetIndex(0);
-        $summarySheet = $objPHPExcel->getActiveSheet();
+        $spreadsheet->setActiveSheetIndex(0);
+        $summarySheet = $spreadsheet->getActiveSheet();
         $summarySheet->setTitle('Resumo');
         
         $this->create_summary_sheet($summarySheet, $analysis);
         
         // PLANILHA 2: Análise por Questão
-        $objPHPExcel->createSheet();
-        $objPHPExcel->setActiveSheetIndex(1);
-        $questionsSheet = $objPHPExcel->getActiveSheet();
+        $spreadsheet->createSheet();
+        $spreadsheet->setActiveSheetIndex(1);
+        $questionsSheet = $spreadsheet->getActiveSheet();
         $questionsSheet->setTitle('Análise por Questão');
         
         $this->create_questions_analysis_sheet($questionsSheet, $analysis);
@@ -906,15 +692,15 @@ public function export_specific_questionnaire() {
         header('Content-Disposition: attachment;filename="' . $filename . '"');
         header('Cache-Control: max-age=0');
         
-        $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
-        $objWriter->save('php://output');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
         
     } catch (Exception $e) {
         $this->session->set_flashdata('error', 'Erro ao gerar exportação: ' . $e->getMessage());
         redirect('reports');
     }
 }
-
 
 /**
  * Criar planilha de resumo
@@ -927,7 +713,7 @@ private function create_summary_sheet($sheet, $analysis) {
     $sheet->setCellValue('A1', 'ANÁLISE DETALHADA DO QUESTIONÁRIO');
     $sheet->mergeCells('A1:B1');
     $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
-    $sheet->getStyle('A1')->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+    $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     
     // Informações do questionário
     $row = 3;
@@ -953,7 +739,7 @@ private function create_summary_sheet($sheet, $analysis) {
         if ($data[0] === 'ESTATÍSTICAS GERAIS') {
             $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
             $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
-                  ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+                  ->setFillType(Fill::FILL_SOLID)
                   ->getStartColor()->setRGB('E9ECEF');
         }
         
@@ -967,7 +753,7 @@ private function create_summary_sheet($sheet, $analysis) {
     // Adicionar bordas
     $dataRange = 'A3:B' . ($row - 1);
     $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
-          ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+          ->setBorderStyle(Border::BORDER_THIN);
 }
 
 /**
@@ -992,7 +778,7 @@ private function create_questions_analysis_sheet($sheet, $analysis) {
     $headerRange = 'A1:F1';
     $sheet->getStyle($headerRange)->getFont()->setBold(true);
     $sheet->getStyle($headerRange)->getFill()
-          ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+          ->setFillType(Fill::FILL_SOLID)
           ->getStartColor()->setRGB('8fae5d');
     $sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
     
@@ -1040,7 +826,7 @@ private function create_questions_analysis_sheet($sheet, $analysis) {
     // Adicionar bordas
     $dataRange = 'A1:F' . ($row-1);
     $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
-          ->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+          ->setBorderStyle(Border::BORDER_THIN);
 }
 
 }
