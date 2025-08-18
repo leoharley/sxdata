@@ -1421,7 +1421,6 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             $this->db->group_by('qr.selected_options::text', FALSE);
 
             $result = $this->db->get()->result();
-            var_dump($this->db->last_query()); exit;
 
             // Obs: $result é um array, então precisa percorrer ou somar
             $count = !empty($result) ? $result[0]->count : 0;
