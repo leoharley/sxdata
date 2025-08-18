@@ -1399,13 +1399,13 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             // Para radio, buscar em selected_options (JSON contém o ID da opção)
             $this->db->select('COUNT(*) as count, qr.selected_options::text as selected_options_text, qr.response_text');
             $this->db->from('question_responses qr');
-            $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+           // $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
 
             // Condição correta para IS NOT NULL
             $this->db->where("qr.selected_options IS NOT NULL", null, false);
 
-            // Filtros
+        /*    // Filtros
             if (!empty($filters['date_from'])) {
                 $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
             }
@@ -1414,7 +1414,7 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             }
             if (!empty($filters['applied_by'])) {
                 $this->db->where('fr.applied_by', $filters['applied_by']);
-            }
+            } */
 
             // Group by com cast em Postgres
             $this->db->group_by('qr.response_text');
