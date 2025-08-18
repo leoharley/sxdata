@@ -1401,28 +1401,28 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             $this->db->from('question_responses qr');
             $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
-            
-            // Buscar no JSON - verificar se o ID da opção está no array JSON
-         //   $this->db->where("qr.selected_options::text LIKE", '%"' . $option->id . '"%');
 
-            $this->db->where("qr.selected_options", 'IS NOT NULL');
-            
-            // Alternativa mais precisa usando funções JSON do PostgreSQL:
-            // $this->db->where("qr.selected_options ? '$option->id'");
-            
-            // Aplicar filtros
-            if (isset($filters['date_from']) && $filters['date_from']) {
+            // Condição correta para IS NOT NULL
+            $this->db->where("qr.selected_options IS NOT NULL", null, false);
+
+            // Alternativa mais precisa (quando for buscar dentro do JSON):
+            // $this->db->where("qr.selected_options::text LIKE '%\"" . $option->id . "\"%'", null, false);
+            // ou
+            // $this->db->where("qr.selected_options ? '" . $option->id . "'", null, false);
+
+            // Filtros
+            if (!empty($filters['date_from'])) {
                 $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
             }
-            if (isset($filters['date_to']) && $filters['date_to']) {
+            if (!empty($filters['date_to'])) {
                 $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
             }
-            if (isset($filters['applied_by']) && $filters['applied_by']) {
+            if (!empty($filters['applied_by'])) {
                 $this->db->where('fr.applied_by', $filters['applied_by']);
             }
-            
+
             $result = $this->db->get()->row();
-            var_dump($this->db->last_query());exit;
+            var_dump($this->db->last_query()); exit;
             $count = $result ? $result->count : 0;
         } else {
             // Para checkbox, usar método mais seguro
