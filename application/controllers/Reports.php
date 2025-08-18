@@ -515,6 +515,42 @@ public function export_question_analysis() {
    exit;
 }
 
+
+public function debug_radio_questions() {
+    $this->check_auth();
+    
+    $filters = $this->get_filters();
+    $question_analysis = $this->Response_model->get_question_analysis($filters);
+    
+    echo "<h3>Debug - Análise de Questões Radio</h3>";
+    echo "<pre>";
+    
+    foreach ($question_analysis as $question) {
+        if ($question['question_type'] === 'radio') {
+            echo "=== QUESTÃO RADIO ===\n";
+            echo "ID: " . $question['question_id'] . "\n";
+            echo "Texto: " . $question['question_text'] . "\n";
+            echo "Total Respostas: " . $question['statistics']['total_responses'] . "\n";
+            echo "Dados:\n";
+            print_r($question['statistics']['data']);
+            echo "\n";
+            
+            // Verificar diretamente no banco
+            $this->db->select('response_text, selected_options, COUNT(*) as count');
+            $this->db->from('answers');
+            $this->db->where('question_id', $question['question_id']);
+            $this->db->where('response_text IS NOT NULL OR selected_options IS NOT NULL');
+            $this->db->group_by('response_text, selected_options');
+            $direct_query = $this->db->get()->result();
+            
+            echo "Consulta direta no banco:\n";
+            print_r($direct_query);
+            echo "\n==================\n\n";
+        }
+    }
+    echo "</pre>";
+}
+
 /**
  * Formatar texto do período para o relatório
  */
