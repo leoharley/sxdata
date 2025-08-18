@@ -239,7 +239,7 @@ class Reports extends CI_Controller {
         }
     }
 
-    **
+/**
  * NOVO MÉTODO: Obter dados de análise de questões
  */
 private function get_question_analysis($filters) {
