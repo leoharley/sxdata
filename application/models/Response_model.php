@@ -1405,18 +1405,18 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             // Condição correta para IS NOT NULL
             $this->db->where("qr.selected_options IS NOT NULL", null, false);
 
-            // Filtros
+            // Filtros - PostgreSQL não tem função DATE(), usar cast para date
             if (!empty($filters['date_from'])) {
-                $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+                $this->db->where('fr.completed_at::date >=', $filters['date_from']);
             }
             if (!empty($filters['date_to'])) {
-                $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+                $this->db->where('fr.completed_at::date <=', $filters['date_to']);
             }
             if (!empty($filters['applied_by'])) {
                 $this->db->where('fr.applied_by', $filters['applied_by']);
             }
 
-            // Group by com cast em Postgres
+            // Group by - todas as colunas não agregadas devem estar no GROUP BY
             $this->db->group_by('qr.response_text');
             $this->db->group_by('qr.selected_options::text');
 
