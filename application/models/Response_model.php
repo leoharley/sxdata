@@ -1397,13 +1397,15 @@ private function analyze_option_responses($question_id, $filters, $total_respons
         
         if ($question->question_type === 'radio') {
             // Para radio, buscar em selected_options (JSON contém o ID da opção)
-            $this->db->select('COUNT(*) as count');
+            $this->db->select('COUNT(*) as count, selected_options::text AS selected_options, response_text');
             $this->db->from('question_responses qr');
             $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
             
             // Buscar no JSON - verificar se o ID da opção está no array JSON
-            $this->db->where("qr.selected_options::text LIKE", '%"' . $option->id . '"%');
+         //   $this->db->where("qr.selected_options::text LIKE", '%"' . $option->id . '"%');
+
+            $this->db->where("qr.selected_options::text", 'IS NOT NULL');
             
             // Alternativa mais precisa usando funções JSON do PostgreSQL:
             // $this->db->where("qr.selected_options ? '$option->id'");
