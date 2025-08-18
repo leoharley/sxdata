@@ -1423,11 +1423,11 @@ private function analyze_option_responses($question_id, $filters, $total_respons
 
             // Group by (com cast no Postgres)
             $this->db->group_by('qr.response_text');
-            $this->db->group_by('qr.selected_options::text', false);
+            $this->db->group_by('qr.selected_options::text', true);
 
             $result = $this->db->get()->result();
             var_dump($this->db->last_query()); exit;
-            
+
             $count = $result ? $result->count : 0;
         } else {
             // Para checkbox, usar método mais seguro
