@@ -1420,6 +1420,7 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             }
             
             $result = $this->db->get()->row();
+            var_dump($result);exit;
             $count = $result ? $result->count : 0;
         } else {
             // Para checkbox, usar método mais seguro
