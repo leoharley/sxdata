@@ -516,6 +516,27 @@ public function export_question_analysis() {
 }
 
 /**
+ * Formatar texto do período para o relatório
+ */
+private function format_period_text($filters) {
+    if (isset($filters['period'])) {
+        switch ($filters['period']) {
+            case 'last_7_days':
+                return 'Últimos 7 dias';
+            case 'last_30_days':
+                return 'Últimos 30 dias';
+            case 'last_3_months':
+                return 'Últimos 3 meses';
+            case 'custom':
+                $from = isset($filters['date_from']) ? $filters['date_from'] : 'N/A';
+                $to = isset($filters['date_to']) ? $filters['date_to'] : 'N/A';
+                return "De {$from} até {$to}";
+        }
+    }
+    return 'Período não especificado';
+}
+
+/**
  * Criar planilha de estatísticas das respostas de texto
  */
 private function create_text_statistics_sheet($sheet, $samples, $question_info) {
