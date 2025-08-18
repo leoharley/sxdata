@@ -1008,4 +1008,419 @@ class Response_model extends CI_Model {
         
         return $this->db->count_all_results('users');
     }
+
+
+    /**
+ * Obter análise detalhada de respostas por questão
+ */
+public function get_question_analysis($filters = array()) {
+    // Primeiro, obter todas as questões dos questionários filtrados
+    $this->db->select('
+        q.id as question_id,
+        q.question_text,
+        q.question_type,
+        q.questionnaire_id,
+        quest.title as questionnaire_title,
+        q.order_index
+    ');
+    $this->db->from('questions q');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
+    
+    // Se houver filtro por questionário específico
+    if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+        $this->db->where('q.questionnaire_id', $filters['questionnaire_id']);
+    }
+    
+    $this->db->where('quest.status', 'active');
+    $this->db->order_by('quest.title, q.order_index');
+    
+    $questions = $this->db->get()->result();
+    
+    $analysis_data = array();
+    
+    foreach ($questions as $question) {
+        $question_stats = $this->get_question_statistics($question->question_id, $filters);
+        
+        $analysis_data[] = array(
+            'question_id' => $question->question_id,
+            'questionnaire_id' => $question->questionnaire_id,
+            'questionnaire_title' => $question->questionnaire_title,
+            'question_text' => $question->question_text,
+            'question_type' => $question->question_type,
+            'order_index' => $question->order_index,
+            'statistics' => $question_stats
+        );
+    }
+    
+    return $analysis_data;
+}
+
+/**
+ * Obter estatísticas específicas de uma questão
+ */
+public function get_question_statistics($question_id, $filters = array()) {
+    // Obter informações da questão
+    $this->db->select('question_type');
+    $this->db->where('id', $question_id);
+    $question = $this->db->get('questions')->row();
+    
+    if (!$question) {
+        return array();
+    }
+    
+    // Contar total de respostas para esta questão
+    $this->db->select('COUNT(qr.id) as total_responses');
+    $this->db->from('question_responses qr');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->where('qr.question_id', $question_id);
+    
+    // Aplicar filtros de data se fornecidos
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $total_result = $this->db->get()->row();
+    $total_responses = $total_result ? $total_result->total_responses : 0;
+    
+    $statistics = array(
+        'total_responses' => (int)$total_responses,
+        'response_rate' => 0,
+        'data' => array()
+    );
+    
+    if ($total_responses == 0) {
+        return $statistics;
+    }
+    
+    // Análise baseada no tipo de questão
+    switch ($question->question_type) {
+        case 'radio':
+        case 'checkbox':
+            $statistics['data'] = $this->analyze_option_responses($question_id, $filters, $total_responses);
+            break;
+            
+        case 'text':
+        case 'textarea':
+            $statistics['data'] = $this->analyze_text_responses($question_id, $filters, $total_responses);
+            break;
+            
+        case 'number':
+            $statistics['data'] = $this->analyze_number_responses($question_id, $filters, $total_responses);
+            break;
+            
+        case 'date':
+        case 'datetime':
+            $statistics['data'] = $this->analyze_date_responses($question_id, $filters, $total_responses);
+            break;
+            
+        default:
+            $statistics['data'] = $this->analyze_generic_responses($question_id, $filters, $total_responses);
+    }
+    
+    return $statistics;
+}
+
+/**
+ * Analisar respostas de questões com opções (radio, checkbox)
+ */
+private function analyze_option_responses($question_id, $filters, $total_responses) {
+    // Obter opções da questão
+    $this->db->select('id, option_text, option_value, order_index');
+    $this->db->where('question_id', $question_id);
+    $this->db->order_by('order_index');
+    $options = $this->db->get('question_options')->result();
+    
+    $analysis = array();
+    
+    foreach ($options as $option) {
+        // Para checkbox, as respostas estão em JSON
+        // Para radio, estão em response_text
+        $this->db->select('COUNT(*) as count');
+        $this->db->from('question_responses qr');
+        $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+        $this->db->where('qr.question_id', $question_id);
+        
+        // Aplicar filtros
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        if (isset($filters['applied_by']) && $filters['applied_by']) {
+            $this->db->where('fr.applied_by', $filters['applied_by']);
+        }
+        
+        // Condição para encontrar a opção (tanto em texto quanto em JSON)
+        $this->db->group_start();
+        $this->db->where('qr.response_text', $option->option_value);
+        $this->db->or_like('qr.selected_options', '"' . $option->option_value . '"');
+        $this->db->group_end();
+        
+        $result = $this->db->get()->row();
+        $count = $result ? $result->count : 0;
+        $percentage = $total_responses > 0 ? round(($count / $total_responses) * 100, 1) : 0;
+        
+        $analysis[] = array(
+            'option_id' => $option->id,
+            'option_text' => $option->option_text,
+            'option_value' => $option->option_value,
+            'count' => (int)$count,
+            'percentage' => (float)$percentage,
+            'order_index' => $option->order_index
+        );
+    }
+    
+    return $analysis;
+}
+
+/**
+ * Analisar respostas de texto
+ */
+private function analyze_text_responses($question_id, $filters, $total_responses) {
+    $this->db->select('
+        COUNT(*) as total_text_responses,
+        COUNT(CASE WHEN response_text IS NOT NULL AND response_text != \'\' THEN 1 END) as filled_responses,
+        AVG(LENGTH(response_text)) as avg_length
+    ');
+    $this->db->from('question_responses qr');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->where('qr.question_id', $question_id);
+    
+    // Aplicar filtros
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $result = $this->db->get()->row();
+    
+    $filled = $result ? $result->filled_responses : 0;
+    $empty = $total_responses - $filled;
+    
+    return array(
+        array(
+            'label' => 'Respostas Preenchidas',
+            'count' => (int)$filled,
+            'percentage' => round(($filled / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Respostas Vazias',
+            'count' => (int)$empty,
+            'percentage' => round(($empty / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Comprimento Médio',
+            'count' => $result ? round($result->avg_length, 0) : 0,
+            'percentage' => null,
+            'unit' => 'caracteres'
+        )
+    );
+}
+
+/**
+ * Analisar respostas numéricas
+ */
+private function analyze_number_responses($question_id, $filters, $total_responses) {
+    $this->db->select('
+        COUNT(CASE WHEN response_number IS NOT NULL THEN 1 END) as filled_responses,
+        MIN(response_number) as min_value,
+        MAX(response_number) as max_value,
+        AVG(response_number) as avg_value,
+        STDDEV(response_number) as std_dev
+    ');
+    $this->db->from('question_responses qr');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->where('qr.question_id', $question_id);
+    
+    // Aplicar filtros
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $result = $this->db->get()->row();
+    
+    $filled = $result ? $result->filled_responses : 0;
+    $empty = $total_responses - $filled;
+    
+    return array(
+        array(
+            'label' => 'Respostas Preenchidas',
+            'count' => (int)$filled,
+            'percentage' => round(($filled / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Respostas Vazias',
+            'count' => (int)$empty,
+            'percentage' => round(($empty / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Valor Mínimo',
+            'count' => $result ? $result->min_value : 0,
+            'percentage' => null
+        ),
+        array(
+            'label' => 'Valor Máximo',
+            'count' => $result ? $result->max_value : 0,
+            'percentage' => null
+        ),
+        array(
+            'label' => 'Valor Médio',
+            'count' => $result ? round($result->avg_value, 2) : 0,
+            'percentage' => null
+        )
+    );
+}
+
+/**
+ * Analisar respostas de data
+ */
+private function analyze_date_responses($question_id, $filters, $total_responses) {
+    $this->db->select('
+        COUNT(CASE WHEN response_date IS NOT NULL OR response_datetime IS NOT NULL THEN 1 END) as filled_responses,
+        MIN(COALESCE(response_date, DATE(response_datetime))) as earliest_date,
+        MAX(COALESCE(response_date, DATE(response_datetime))) as latest_date
+    ');
+    $this->db->from('question_responses qr');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->where('qr.question_id', $question_id);
+    
+    // Aplicar filtros
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $result = $this->db->get()->row();
+    
+    $filled = $result ? $result->filled_responses : 0;
+    $empty = $total_responses - $filled;
+    
+    return array(
+        array(
+            'label' => 'Respostas Preenchidas',
+            'count' => (int)$filled,
+            'percentage' => round(($filled / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Respostas Vazias',
+            'count' => (int)$empty,
+            'percentage' => round(($empty / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Data Mais Antiga',
+            'count' => $result && $result->earliest_date ? $result->earliest_date : 'N/A',
+            'percentage' => null,
+            'is_date' => true
+        ),
+        array(
+            'label' => 'Data Mais Recente',
+            'count' => $result && $result->latest_date ? $result->latest_date : 'N/A',
+            'percentage' => null,
+            'is_date' => true
+        )
+    );
+}
+
+/**
+ * Analisar respostas genéricas (fallback)
+ */
+private function analyze_generic_responses($question_id, $filters, $total_responses) {
+    $this->db->select('
+        COUNT(CASE WHEN response_text IS NOT NULL AND response_text != \'\' THEN 1 END) as filled_responses
+    ');
+    $this->db->from('question_responses qr');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->where('qr.question_id', $question_id);
+    
+    // Aplicar filtros
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $result = $this->db->get()->row();
+    
+    $filled = $result ? $result->filled_responses : 0;
+    $empty = $total_responses - $filled;
+    
+    return array(
+        array(
+            'label' => 'Respostas Preenchidas',
+            'count' => (int)$filled,
+            'percentage' => round(($filled / $total_responses) * 100, 1)
+        ),
+        array(
+            'label' => 'Respostas Vazias',
+            'count' => (int)$empty,
+            'percentage' => round(($empty / $total_responses) * 100, 1)
+        )
+    );
+}
+
+/**
+ * Obter top 5 questões com mais respostas
+ */
+public function get_top_answered_questions($filters = array(), $limit = 5) {
+    $this->db->select('
+        q.id,
+        q.question_text,
+        q.question_type,
+        quest.title as questionnaire_title,
+        COUNT(qr.id) as total_responses
+    ');
+    $this->db->from('questions q');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
+    $this->db->join('question_responses qr', 'q.id = qr.question_id', 'inner');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    
+    // Aplicar filtros
+    if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+        $this->db->where('q.questionnaire_id', $filters['questionnaire_id']);
+    }
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $this->db->where('quest.status', 'active');
+    $this->db->group_by('q.id, q.question_text, q.question_type, quest.title');
+    $this->db->order_by('total_responses', 'DESC');
+    $this->db->limit($limit);
+    
+    return $this->db->get()->result();
+}
+
 }
