@@ -1397,28 +1397,24 @@ private function analyze_option_responses($question_id, $filters, $total_respons
         
         if ($question->question_type === 'radio') {
             // Para radio, buscar em selected_options (JSON contém o ID da opção)
-            $this->db->select('COUNT(*) as count, qr.selected_options::text AS selected_options_text, qr.response_text');
+            $this->db->select('COUNT(*) as count, CAST(qr.selected_options AS TEXT) AS selected_options_text, qr.response_text', FALSE);
             $this->db->from('question_responses qr');
             $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
-
-            // Condição correta para IS NOT NULL
             $this->db->where("qr.selected_options IS NOT NULL", null, false);
 
-            // Filtros - PostgreSQL não tem função DATE(), usar cast para date
             if (!empty($filters['date_from'])) {
-                $this->db->where('fr.completed_at::date >=', $filters['date_from']);
+                $this->db->where('CAST(fr.completed_at AS DATE) >=', $filters['date_from'], FALSE);
             }
             if (!empty($filters['date_to'])) {
-                $this->db->where('fr.completed_at::date <=', $filters['date_to']);
+                $this->db->where('CAST(fr.completed_at AS DATE) <=', $filters['date_to'], FALSE);
             }
             if (!empty($filters['applied_by'])) {
                 $this->db->where('fr.applied_by', $filters['applied_by']);
             }
 
-            // Group by - todas as colunas não agregadas devem estar no GROUP BY
-            $this->db->group_by('qr.response_text');
-            $this->db->group_by('qr.selected_options::text');
+            $this->db->group_by('qr.response_text', FALSE);
+            $this->db->group_by('CAST(qr.selected_options AS TEXT)', FALSE);
 
             $result = $this->db->get()->result();
             var_dump($this->db->last_query()); exit;
