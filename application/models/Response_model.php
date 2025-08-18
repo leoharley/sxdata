@@ -1139,31 +1139,47 @@ private function analyze_option_responses($question_id, $filters, $total_respons
     $analysis = array();
     
     foreach ($options as $option) {
-        // Para checkbox, as respostas estão em JSON
-        // Para radio, estão em response_text
-        $this->db->select('COUNT(*) as count');
-        $this->db->from('question_responses qr');
-        $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
-        $this->db->where('qr.question_id', $question_id);
+        // Escapar valor da opção para evitar problemas de SQL injection
+        $escaped_value = $this->db->escape($option->option_value);
+        $escaped_json_value = $this->db->escape('"' . $option->option_value . '"');
         
-        // Aplicar filtros
+        // Query manual para ter controle total sobre a sintaxe
+        $sql = "
+            SELECT COUNT(*) as count 
+            FROM question_responses qr 
+            INNER JOIN form_responses fr ON qr.form_response_id = fr.id 
+            WHERE qr.question_id = ?
+        ";
+        
+        $params = array($question_id);
+        
+        // Aplicar filtros de data
         if (isset($filters['date_from']) && $filters['date_from']) {
-            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+            $sql .= " AND DATE(fr.completed_at) >= ?";
+            $params[] = $filters['date_from'];
         }
         if (isset($filters['date_to']) && $filters['date_to']) {
-            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+            $sql .= " AND DATE(fr.completed_at) <= ?";
+            $params[] = $filters['date_to'];
         }
         if (isset($filters['applied_by']) && $filters['applied_by']) {
-            $this->db->where('fr.applied_by', $filters['applied_by']);
+            $sql .= " AND fr.applied_by = ?";
+            $params[] = $filters['applied_by'];
         }
         
-        // Condição para encontrar a opção (tanto em texto quanto em JSON)
-        $this->db->group_start();
-        $this->db->where('qr.response_text', $option->option_value);
-        $this->db->or_like('qr.selected_options', '"' . $option->option_value . '"');
-        $this->db->group_end();
+        // Condição para encontrar a opção (radio em response_text OU checkbox em selected_options)
+        $sql .= " AND (
+            qr.response_text = ? 
+            OR (
+                qr.selected_options IS NOT NULL 
+                AND qr.selected_options::text LIKE ?
+            )
+        )";
         
-        $result = $this->db->get()->row();
+        $params[] = $option->option_value;
+        $params[] = '%"' . str_replace('"', '\\"', $option->option_value) . '"%';
+        
+        $result = $this->db->query($sql, $params)->row();
         $count = $result ? $result->count : 0;
         $percentage = $total_responses > 0 ? round(($count / $total_responses) * 100, 1) : 0;
         
