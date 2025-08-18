@@ -516,6 +516,9 @@ public function export_question_analysis() {
 }
 
 
+/**
+ * Método temporário para debug - verificar dados das questões radio
+ */
 public function debug_radio_questions() {
     $this->check_auth();
     
@@ -535,11 +538,14 @@ public function debug_radio_questions() {
             print_r($question['statistics']['data']);
             echo "\n";
             
-            // Verificar diretamente no banco
+            // Verificar diretamente no banco com tabelas corretas
             $this->db->select('response_text, selected_options, COUNT(*) as count');
-            $this->db->from('answers');
+            $this->db->from('question_responses');
             $this->db->where('question_id', $question['question_id']);
-            $this->db->where('response_text IS NOT NULL OR selected_options IS NOT NULL');
+            $this->db->group_start(); // Abre parênteses
+            $this->db->where('response_text IS NOT NULL');
+            $this->db->or_where('selected_options IS NOT NULL');
+            $this->db->group_end(); // Fecha parênteses
             $this->db->group_by('response_text, selected_options');
             $direct_query = $this->db->get()->result();
             
