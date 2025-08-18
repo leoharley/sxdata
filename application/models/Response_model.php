@@ -1421,8 +1421,13 @@ private function analyze_option_responses($question_id, $filters, $total_respons
                 $this->db->where('fr.applied_by', $filters['applied_by']);
             }
 
-            $result = $this->db->get()->row();
+            // Group by (com cast no Postgres)
+            $this->db->group_by('qr.response_text');
+            $this->db->group_by('qr.selected_options::text', false);
+
+            $result = $this->db->get()->result();
             var_dump($this->db->last_query()); exit;
+            
             $count = $result ? $result->count : 0;
         } else {
             // Para checkbox, usar método mais seguro
