@@ -1318,6 +1318,8 @@ mark {
 
 <script>
 
+    let questionnaireOverviewChartInstance = null;
+
     let currentQuestionnaireData = null;
 let currentViewMode = 'detailed'; // 'detailed' ou 'compact'
 
@@ -1369,6 +1371,8 @@ function showSpecificAnalysis() {
  * Ocultar seção de análise específica
  */
 function hideSpecificAnalysis() {
+    destroyExistingCharts();
+
     document.getElementById('specificAnalysisContainer').style.display = 'none';
 }
 
@@ -1402,6 +1406,9 @@ function displaySpecificAnalysis(data) {
     // Ocultar loading
     document.getElementById('specificAnalysisLoading').style.display = 'none';
     
+    // CORREÇÃO: Limpar gráficos existentes antes de criar novos
+    destroyExistingCharts();
+    
     // Atualizar título
     document.getElementById('specificQuestionnaireTitle').innerHTML = `
         <i class="fas fa-poll me-2"></i>
@@ -1425,6 +1432,17 @@ function displaySpecificAnalysis(data) {
     document.getElementById('specificQuestionnaireStats').style.display = 'block';
     document.getElementById('specificQuestionsAnalysis').style.display = 'block';
     document.getElementById('specificOverviewChart').style.display = 'block';
+}
+
+function destroyExistingCharts() {
+    if (window.chartInstances) {
+        Object.keys(window.chartInstances).forEach(chartId => {
+            if (window.chartInstances[chartId]) {
+                window.chartInstances[chartId].destroy();
+                delete window.chartInstances[chartId];
+            }
+        });
+    }
 }
 
 /**
@@ -1562,7 +1580,19 @@ function createQuestionAnalysisContent(question) {
  * Exibir gráfico de visão geral
  */
 function displayOverviewChart(data) {
-    const ctx = document.getElementById('questionnaireOverviewChart');
+    const canvasId = 'questionnaireOverviewChart';
+    const ctx = document.getElementById(canvasId);
+    
+    // CORREÇÃO: Destruir gráfico existente antes de criar novo
+    if (window.chartInstances && window.chartInstances[canvasId]) {
+        window.chartInstances[canvasId].destroy();
+        delete window.chartInstances[canvasId];
+    }
+    
+    // Inicializar armazenamento de instâncias se não existir
+    if (!window.chartInstances) {
+        window.chartInstances = {};
+    }
     
     // Preparar dados para o gráfico
     const labels = data.questions.map(q => `Q${q.order_index}`);
@@ -1572,7 +1602,8 @@ function displayOverviewChart(data) {
             Math.round((q.statistics.total_responses / data.summary.total_responses) * 100) : 0;
     });
     
-    new Chart(ctx, {
+    // Criar novo gráfico e armazenar a instância
+    window.chartInstances[canvasId] = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -1597,49 +1628,47 @@ function displayOverviewChart(data) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false }
             },
             scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Questões'
-                    }
-                },
+                x: { title: { display: true, text: 'Questões' } },
                 y: {
                     type: 'linear',
                     display: true,
                     position: 'left',
-                    title: {
-                        display: true,
-                        text: 'Número de Respostas'
-                    }
+                    title: { display: true, text: 'Número de Respostas' }
                 },
                 y1: {
                     type: 'linear',
                     display: true,
                     position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Taxa de Resposta (%)'
-                    },
-                    grid: {
-                        drawOnChartArea: false
-                    },
+                    title: { display: true, text: 'Taxa de Resposta (%)' },
+                    grid: { drawOnChartArea: false },
                     max: 100
                 }
             }
         }
     });
     
-    // Atualizar estatísticas do overview
     updateOverviewStats(data);
+}
+
+function destroyAllCharts() {
+    // Destruir gráfico principal se existir
+    if (questionnaireOverviewChartInstance) {
+        questionnaireOverviewChartInstance.destroy();
+        questionnaireOverviewChartInstance = null;
+    }
+    
+    // Destruir gráficos das questões individuais (se existirem)
+    const questionCharts = document.querySelectorAll('[id^="questionChart"]');
+    questionCharts.forEach(chartCanvas => {
+        const chartId = chartCanvas.id;
+        if (Chart.getChart(chartId)) {
+            Chart.getChart(chartId).destroy();
+        }
+    });
 }
 
 /**
@@ -2306,12 +2335,81 @@ function toggleHeatmapIntensity() {
 
 // Inicializar mapa quando a página carregar
 document.addEventListener('DOMContentLoaded', function() {
+
+    window.chartInstances = {};
+
     initLeafletMap();
 
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    // Gráficos principais (usando dados PHP)
+    <?php if (!empty($charts_data) && !empty($charts_data['responses_by_day'])): ?>
+    const responsesTimeCtx = document.getElementById('responsesTimeChart');
+    if (responsesTimeCtx) {
+        window.chartInstances['responsesTimeChart'] = new Chart(responsesTimeCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: <?= json_encode(array_column($charts_data['responses_by_day'], 'date')) ?>,
+                datasets: [{
+                    label: 'Respostas',
+                    data: <?= json_encode(array_column($charts_data['responses_by_day'], 'count')) ?>,
+                    borderColor: '#8fae5d',
+                    backgroundColor: 'rgba(143, 174, 93, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, title: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+    <?php endif; ?>
+
+    <?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
+    const applicatorsCtx = document.getElementById('applicatorsChart');
+    if (applicatorsCtx) {
+        window.chartInstances['applicatorsChart'] = new Chart(applicatorsCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: <?= json_encode(array_column($charts_data['top_applicators'], 'name')) ?>,
+                datasets: [{
+                    label: 'Respostas',
+                    data: <?= json_encode(array_column($charts_data['top_applicators'], 'count')) ?>,
+                    backgroundColor: '#8fae5d'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+    <?php endif; ?>
+
+    <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
+    const questionnairesCtx = document.getElementById('questionnairesPopularityChart');
+    if (questionnairesCtx) {
+        window.chartInstances['questionnairesPopularityChart'] = new Chart(questionnairesCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: <?= json_encode(array_column($charts_data['questionnaires_popularity'], 'title')) ?>,
+                datasets: [{
+                    data: <?= json_encode(array_column($charts_data['questionnaires_popularity'], 'count')) ?>,
+                    backgroundColor: ['#8fae5d', '#007bff', '#ffc107', '#dc3545', '#17a2b8']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+    <?php endif; ?>
     
     // Inicializar outros componentes se necessário
     console.log('Análise de questões carregada com sucesso');
@@ -2323,6 +2421,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     }
 
+     // Inicializar tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+});
+
+// Adicione também limpeza quando a página for recarregada
+window.addEventListener('beforeunload', function() {
+    destroyExistingCharts();
 });
 
 </script>
