@@ -1396,12 +1396,17 @@ private function analyze_option_responses($question_id, $filters, $total_respons
         $count = 0;
         
         if ($question->question_type === 'radio') {
-            // Para radio, buscar apenas em response_text
+            // Para radio, buscar em selected_options (JSON contém o ID da opção)
             $this->db->select('COUNT(*) as count');
             $this->db->from('question_responses qr');
             $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
             $this->db->where('qr.question_id', $question_id);
-            $this->db->where('qr.response_text', $option->option_value);
+            
+            // Buscar no JSON - verificar se o ID da opção está no array JSON
+            $this->db->where("qr.selected_options::text LIKE", '%"' . $option->id . '"%');
+            
+            // Alternativa mais precisa usando funções JSON do PostgreSQL:
+            // $this->db->where("qr.selected_options ? '$option->id'");
             
             // Aplicar filtros
             if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1416,7 +1421,6 @@ private function analyze_option_responses($question_id, $filters, $total_respons
             
             $result = $this->db->get()->row();
             $count = $result ? $result->count : 0;
-            
         } else {
             // Para checkbox, usar método mais seguro
             $count = $this->count_checkbox_option($question_id, $option->option_value, $filters);

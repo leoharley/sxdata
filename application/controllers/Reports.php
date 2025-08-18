@@ -542,7 +542,7 @@ public function debug_radio_questions() {
             echo "\n";
             
             // Verificar diretamente no banco com conversão JSON para texto
-            $this->db->select('response_text, selected_options::text as selected_options_text, COUNT(*) as count');
+            $this->db->select('response_text, selected_options::json as selected_options_text, COUNT(*) as count');
             $this->db->from('question_responses');
             $this->db->where('question_id', $question['question_id']);
             $this->db->group_start();
