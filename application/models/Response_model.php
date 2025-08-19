@@ -1278,9 +1278,7 @@ public function get_question_analysis($filters = array()) {
     $this->db->order_by('quest.title, q.order_index');
     
     $questions = $this->db->get()->result();
-
-    var_dump($this->db->last_query());exit;
-    
+   
     $analysis_data = array();
     
     foreach ($questions as $question) {
@@ -1296,7 +1294,7 @@ public function get_question_analysis($filters = array()) {
             'statistics' => $question_stats
         );
     }
-    
+    exit;
     return $analysis_data;
 }
 
