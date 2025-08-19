@@ -176,13 +176,13 @@
                             <?php endforeach; ?>
                         </select>
 
-                        <br><br>
+                        <br>
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
                             Esta análise mostra estatísticas detalhadas de um questionário específico
                         </small>
 
-                        <br><br>
+                        <br><br><br><br>
 
                          <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
                             <i class="fas fa-chart-pie me-1"></i>
