@@ -163,7 +163,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row align-items-end">
+                <div class="row text-center">
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Selecione um Questionário:</label>
                         <select class="form-select" id="specificQuestionnaireSelect" onchange="loadSpecificQuestionnaire()">
@@ -176,7 +176,7 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-6 text-end">
+                    <div class="col-md-6">
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
                             Esta análise mostra estatísticas detalhadas de um questionário específico
@@ -184,7 +184,7 @@
                     </div>
                 </div>
                 <br><br><br>
-                <div class="row align-center">
+                <div class="row">
                     <div class="col-md-12">
                         <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
                             <i class="fas fa-chart-pie me-1"></i>
