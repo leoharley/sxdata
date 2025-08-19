@@ -978,16 +978,7 @@ class Questionnaire_model extends CI_Model {
         return $simulation;
     }
 
-    <?php
-// Adicione estes métodos ao final da classe Questionnaire_model, antes do fechamento da classe
 
-    /**
-     * Obter histórico de aplicações de questionários de um usuário
-     * 
-     * @param int $user_id ID do usuário
-     * @param array $filters Filtros aplicados
-     * @return array Lista de aplicações
-     */
     public function get_application_history($user_id, $filters = []) {
         $this->db->select('
             fr.id,
@@ -1044,9 +1035,7 @@ class Questionnaire_model extends CI_Model {
         
         $this->db->order_by('fr.completed_at', 'DESC');
         
-        $this->db->get()->result();
-
-        var_dump($this->db->last_query());exit;
+        return $this->db->get()->result();
     }
 
     /**
