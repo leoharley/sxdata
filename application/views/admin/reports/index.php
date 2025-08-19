@@ -154,6 +154,48 @@
                 <?php endif; ?>
             </div>
         </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-microscope me-2"></i>
+                    Análise Detalhada por Questionário
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Selecione um Questionário:</label>
+                        <select class="form-select" id="specificQuestionnaireSelect" onchange="loadSpecificQuestionnaire()">
+                            <option value="">-- Escolha um questionário --</option>
+                            <?php foreach ($questionnaires as $questionnaire): ?>
+                            <option value="<?= $questionnaire->id ?>" 
+                                    <?= (isset($filters['questionnaire_id']) && $filters['questionnaire_id'] == $questionnaire->id) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($questionnaire->title) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
+                            <i class="fas fa-chart-pie me-1"></i>
+                            Analisar
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" onclick="exportSpecificAnalysis()">
+                            <i class="fas fa-download me-1"></i>
+                            Exportar
+                        </button>
+                    </div>
+                    <div class="col-md-5 text-end">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Esta análise mostra estatísticas detalhadas de um questionário específico
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
     
     <div class="col-lg-4">
@@ -260,48 +302,6 @@
             </div>
         </div>
 
-    </div>
-</div>
-
-
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="fas fa-microscope me-2"></i>
-            Análise Detalhada por Questionário
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row align-items-end">
-            <div class="col-md-4">
-                <label class="form-label fw-bold">Selecione um Questionário:</label>
-                <select class="form-select" id="specificQuestionnaireSelect" onchange="loadSpecificQuestionnaire()">
-                    <option value="">-- Escolha um questionário --</option>
-                    <?php foreach ($questionnaires as $questionnaire): ?>
-                    <option value="<?= $questionnaire->id ?>" 
-                            <?= (isset($filters['questionnaire_id']) && $filters['questionnaire_id'] == $questionnaire->id) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($questionnaire->title) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
-                    <i class="fas fa-chart-pie me-1"></i>
-                    Analisar
-                </button>
-                <button type="button" class="btn btn-outline-secondary ms-2" onclick="exportSpecificAnalysis()">
-                    <i class="fas fa-download me-1"></i>
-                    Exportar
-                </button>
-            </div>
-            <div class="col-md-5 text-end">
-                <small class="text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Esta análise mostra estatísticas detalhadas de um questionário específico
-                </small>
-            </div>
-        </div>
     </div>
 </div>
 
