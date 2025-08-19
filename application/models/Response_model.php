@@ -1294,7 +1294,7 @@ public function get_question_analysis($filters = array()) {
             'statistics' => $question_stats
         );
     }
-
+    
     return $analysis_data;
 }
 
@@ -1390,44 +1390,52 @@ private function analyze_option_responses($question_id, $filters, $total_respons
     $this->db->order_by('order_index');
     $options = $this->db->get('question_options')->result();
     
+    // Obter todas as respostas para análise
+    $this->db->select('qr.selected_options');
+    $this->db->from('question_responses qr');
+    $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->where('qr.question_id', $question_id);
+    $this->db->where('qr.selected_options IS NOT NULL');
+    
+    // Aplicar filtros
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    if (isset($filters['applied_by']) && $filters['applied_by']) {
+        $this->db->where('fr.applied_by', $filters['applied_by']);
+    }
+    
+    $responses = $this->db->get()->result();
+    
     $analysis = array();
     
     foreach ($options as $option) {
         $count = 0;
         
-        if ($question->question_type === 'radio') {
-            // Para radio, buscar em selected_options (JSON contém o ID da opção)
-            $this->db->select('COUNT(*) as count, qr.selected_options::text AS selected_options_text, qr.response_text', FALSE);
-            $this->db->from('question_responses qr');
-            $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
-            $this->db->where('qr.question_id', $question_id);
-
-            // Condição correta para IS NOT NULL
-            $this->db->where("qr.selected_options IS NOT NULL", null, false);
-
-            // Filtros - usando where com FALSE para não escapar o cast
-            if (!empty($filters['date_from'])) {
-                $this->db->where('fr.completed_at >=', $filters['date_from']);
+        // Contar respostas para esta opção
+        foreach ($responses as $response) {
+            if (!empty($response->selected_options)) {
+                // Tentar decodificar JSON
+                $selected = json_decode($response->selected_options, true);
+                
+                if (is_array($selected)) {
+                    // Verificar se a opção está selecionada (case-insensitive)
+                    foreach ($selected as $selected_value) {
+                        if ($this->compareOptionValues($selected_value, $option->option_value)) {
+                            $count++;
+                            break; // Evitar contagem dupla se a mesma opção aparece múltiplas vezes
+                        }
+                    }
+                } else {
+                    // Fallback: buscar como string se não for JSON válido
+                    if ($this->compareOptionValues($response->selected_options, $option->option_value)) {
+                        $count++;
+                    }
+                }
             }
-            if (!empty($filters['date_to'])) {
-                $this->db->where('fr.completed_at <=', $filters['date_to']);
-            }
-            if (!empty($filters['applied_by'])) {
-                $this->db->where('fr.applied_by', $filters['applied_by']);
-            }
-
-            // Group by também precisa do FALSE para não escapar
-            $this->db->group_by('qr.response_text', FALSE);
-            $this->db->group_by('qr.selected_options::text', FALSE);
-
-            $result = $this->db->get()->result();
-
-            // Obs: $result é um array, então precisa percorrer ou somar
-            $count = !empty($result) ? $result[0]->count : 0;
-
-        } else {
-            // Para checkbox, usar método mais seguro
-            $count = $this->count_checkbox_option($question_id, $option->option_value, $filters);
         }
         
         $percentage = $total_responses > 0 ? round(($count / $total_responses) * 100, 1) : 0;
@@ -1443,6 +1451,54 @@ private function analyze_option_responses($question_id, $filters, $total_respons
     }
     
     return $analysis;
+}
+
+private function compareOptionValues($response_value, $option_value) {
+    // Limpar e normalizar os valores
+    $response_clean = trim(strtolower($response_value));
+    $option_clean = trim(strtolower($option_value));
+    
+    // Comparação direta
+    if ($response_clean === $option_clean) {
+        return true;
+    }
+    
+    // Remover caracteres especiais e acentos para comparação mais flexível
+    $response_normalized = $this->normalizeString($response_clean);
+    $option_normalized = $this->normalizeString($option_clean);
+    
+    if ($response_normalized === $option_normalized) {
+        return true;
+    }
+    
+    // Verificar variações comuns
+    $common_variations = array(
+        'sim' => array('sim', 'yes', 's', 'verdadeiro', 'true', '1'),
+        'não' => array('não', 'nao', 'no', 'n', 'falso', 'false', '0'),
+        'yes' => array('sim', 'yes', 's', 'verdadeiro', 'true', '1'),
+        'no' => array('não', 'nao', 'no', 'n', 'falso', 'false', '0')
+    );
+    
+    foreach ($common_variations as $key => $variations) {
+        if (in_array($response_normalized, $variations) && in_array($option_normalized, $variations)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+private function normalizeString($string) {
+    // Converter para minúsculas
+    $string = strtolower($string);
+    
+    // Remover acentos
+    $string = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $string);
+    
+    // Remover caracteres especiais exceto letras e números
+    $string = preg_replace('/[^a-z0-9]/', '', $string);
+    
+    return $string;
 }
 
 /**
@@ -1476,11 +1532,16 @@ private function count_checkbox_option($question_id, $option_value, $filters) {
             $selected = json_decode($response->selected_options, true);
             
             // Verificar se a decodificação foi bem-sucedida e se é um array
-            if (is_array($selected) && in_array($option_value, $selected)) {
-                $count++;
+            if (is_array($selected)) {
+                foreach ($selected as $selected_value) {
+                    if ($this->compareOptionValues($selected_value, $option_value)) {
+                        $count++;
+                        break; // Evitar contagem dupla
+                    }
+                }
             } elseif (is_string($response->selected_options)) {
                 // Fallback: buscar como string se não for JSON válido
-                if (strpos($response->selected_options, $option_value) !== false) {
+                if ($this->compareOptionValues($response->selected_options, $option_value)) {
                     $count++;
                 }
             }
