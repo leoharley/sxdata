@@ -978,6 +978,16 @@ class Questionnaire_model extends CI_Model {
         return $simulation;
     }
 
+    <?php
+// Adicione estes métodos ao final da classe Questionnaire_model, antes do fechamento da classe
+
+    /**
+     * Obter histórico de aplicações de questionários de um usuário
+     * 
+     * @param int $user_id ID do usuário
+     * @param array $filters Filtros aplicados
+     * @return array Lista de aplicações
+     */
     public function get_application_history($user_id, $filters = []) {
         $this->db->select('
             fr.id,
@@ -994,7 +1004,7 @@ class Questionnaire_model extends CI_Model {
             fr.consent_given,
             fr.created_at,
             q.title as questionnaire_title,
-            q.code as questionnaire_code
+            CONCAT(\'#\', LPAD(q.id::text, 3, \'0\')) as questionnaire_code
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
@@ -1163,7 +1173,7 @@ class Questionnaire_model extends CI_Model {
             fr.completed_at,
             fr.sync_status,
             q.title as questionnaire_title,
-            q.code as questionnaire_code
+            CONCAT(\'#\', LPAD(q.id::text, 3, \'0\')) as questionnaire_code
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
@@ -1185,26 +1195,26 @@ class Questionnaire_model extends CI_Model {
         $this->db->select('
             q.id,
             q.title,
-            q.code,
+            CONCAT(\'#\', LPAD(q.id::text, 3, \'0\')) as code,
             COUNT(fr.id) as total_applications,
             MAX(fr.completed_at) as last_application,
             MIN(fr.completed_at) as first_application,
-            SUM(CASE WHEN fr.sync_status = "synced" THEN 1 ELSE 0 END) as synced_count,
-            SUM(CASE WHEN fr.sync_status = "pending" THEN 1 ELSE 0 END) as pending_count,
-            SUM(CASE WHEN fr.sync_status = "error" THEN 1 ELSE 0 END) as error_count,
-            SUM(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != "" THEN 1 ELSE 0 END) as photos_count,
+            SUM(CASE WHEN fr.sync_status = \'synced\' THEN 1 ELSE 0 END) as synced_count,
+            SUM(CASE WHEN fr.sync_status = \'pending\' THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN fr.sync_status = \'error\' THEN 1 ELSE 0 END) as error_count,
+            SUM(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != \'\' THEN 1 ELSE 0 END) as photos_count,
             SUM(CASE WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL THEN 1 ELSE 0 END) as locations_count,
             AVG(CASE 
                 WHEN fr.started_at IS NOT NULL AND fr.completed_at IS NOT NULL 
-                THEN TIMESTAMPDIFF(MINUTE, fr.started_at, fr.completed_at) 
+                THEN EXTRACT(EPOCH FROM (fr.completed_at - fr.started_at))/60 
                 ELSE NULL 
             END) as avg_duration_minutes
         ');
         $this->db->from('questionnaires q');
         $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'left');
         $this->db->where('q.status', 'active');
-        $this->db->group_by('q.id, q.title, q.code');
-        $this->db->having('total_applications > 0');
+        $this->db->group_by('q.id, q.title');
+        $this->db->having('COUNT(fr.id) > 0');
         $this->db->order_by('total_applications', 'DESC');
         
         $results = $this->db->get()->result();
@@ -1232,7 +1242,7 @@ class Questionnaire_model extends CI_Model {
         $this->db->select('
             fr.*,
             q.title as questionnaire_title,
-            q.code as questionnaire_code,
+            CONCAT(\'#\', LPAD(q.id::text, 3, \'0\')) as questionnaire_code,
             q.description as questionnaire_description,
             u.full_name as applied_by_name
         ');
@@ -1251,18 +1261,49 @@ class Questionnaire_model extends CI_Model {
         if ($application) {
             // Buscar as respostas das perguntas
             $this->db->select('
-                ra.question_id,
-                ra.response_value,
+                qr.question_id,
+                qr.response_text,
+                qr.response_number,
+                qr.response_date,
+                qr.response_datetime,
+                qr.selected_options,
                 q.question_text,
                 q.question_type,
                 q.order_index
             ');
-            $this->db->from('response_answers ra');
-            $this->db->join('questions q', 'ra.question_id = q.id', 'left');
-            $this->db->where('ra.response_id', $response_id);
+            $this->db->from('question_responses qr');
+            $this->db->join('questions q', 'qr.question_id = q.id', 'left');
+            $this->db->where('qr.form_response_id', $response_id);
             $this->db->order_by('q.order_index', 'ASC');
             
-            $application->answers = $this->db->get()->result();
+            $answers = $this->db->get()->result();
+            
+            // Processar as respostas para formato unificado
+            foreach ($answers as &$answer) {
+                // Determinar o valor da resposta baseado no tipo
+                switch ($answer->question_type) {
+                    case 'number':
+                        $answer->response_value = $answer->response_number;
+                        break;
+                    case 'date':
+                        $answer->response_value = $answer->response_date;
+                        break;
+                    case 'datetime':
+                        $answer->response_value = $answer->response_datetime;
+                        break;
+                    case 'checkbox':
+                    case 'radio':
+                        $answer->response_value = $answer->selected_options ? 
+                            json_decode($answer->selected_options, true) : 
+                            $answer->response_text;
+                        break;
+                    default:
+                        $answer->response_value = $answer->response_text;
+                        break;
+                }
+            }
+            
+            $application->answers = $answers;
         }
         
         return $application;
@@ -1278,17 +1319,11 @@ class Questionnaire_model extends CI_Model {
      */
     public function update_sync_status($response_id, $status, $sync_message = null) {
         $data = [
-            'sync_status' => $status,
-            'updated_at' => date('Y-m-d H:i:s')
+            'sync_status' => $status
         ];
         
-        if ($sync_message !== null) {
-            $data['sync_message'] = $sync_message;
-        }
-        
-        if ($status === 'synced') {
-            $data['synced_at'] = date('Y-m-d H:i:s');
-        }
+        // Note: Como não há campo updated_at na tabela form_responses, 
+        // não incluímos na atualização
         
         $this->db->where('id', $response_id);
         return $this->db->update('form_responses', $data);
@@ -1346,6 +1381,121 @@ class Questionnaire_model extends CI_Model {
         $stats['daily_breakdown'] = $daily_stats;
         $stats['period_days'] = $days;
         $stats['total_applications'] = $total;
+        
+        return $stats;
+    }
+
+    /**
+     * Buscar formulários pendentes de sincronização
+     * 
+     * @param int $user_id ID do usuário (opcional)
+     * @param int $limit Limite de resultados
+     * @return array Lista de formulários pendentes
+     */
+    public function get_pending_sync_forms($user_id = null, $limit = 50) {
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.location_name,
+            fr.completed_at,
+            fr.created_at,
+            q.title as questionnaire_title
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.sync_status', 'pending');
+        
+        if ($user_id) {
+            $this->db->where('fr.applied_by', $user_id);
+        }
+        
+        $this->db->order_by('fr.created_at', 'ASC'); // Mais antigos primeiro
+        $this->db->limit($limit);
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Marcar múltiplos formulários como sincronizados
+     * 
+     * @param array $response_ids IDs dos formulários
+     * @return bool Sucesso na operação
+     */
+    public function mark_as_synced($response_ids) {
+        if (empty($response_ids)) {
+            return false;
+        }
+        
+        $this->db->where_in('id', $response_ids);
+        return $this->db->update('form_responses', ['sync_status' => 'synced']);
+    }
+
+    /**
+     * Obter estatísticas de desempenho de aplicação
+     * 
+     * @param int $user_id ID do usuário
+     * @param int $days Período em dias
+     * @return array Estatísticas de desempenho
+     */
+    public function get_performance_stats($user_id, $days = 30) {
+        $stats = [];
+        
+        // Aplicações por dia da semana
+        $this->db->select('
+            EXTRACT(DOW FROM completed_at) as day_of_week,
+            COUNT(*) as count
+        ');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->group_by('EXTRACT(DOW FROM completed_at)');
+        $this->db->order_by('day_of_week');
+        
+        $stats['by_day_of_week'] = $this->db->get('form_responses')->result();
+        
+        // Aplicações por hora do dia
+        $this->db->select('
+            EXTRACT(HOUR FROM completed_at) as hour_of_day,
+            COUNT(*) as count
+        ');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->group_by('EXTRACT(HOUR FROM completed_at)');
+        $this->db->order_by('hour_of_day');
+        
+        $stats['by_hour_of_day'] = $this->db->get('form_responses')->result();
+        
+        // Duração média por questionário
+        $this->db->select('
+            q.title,
+            q.id,
+            COUNT(fr.id) as total_applications,
+            AVG(CASE 
+                WHEN fr.started_at IS NOT NULL AND fr.completed_at IS NOT NULL 
+                THEN EXTRACT(EPOCH FROM (fr.completed_at - fr.started_at))/60 
+                ELSE NULL 
+            END) as avg_duration_minutes
+        ');
+        $this->db->from('questionnaires q');
+        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'inner');
+        $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        $this->db->where('fr.started_at IS NOT NULL');
+        $this->db->where('fr.completed_at IS NOT NULL');
+        $this->db->group_by('q.id, q.title');
+        $this->db->having('COUNT(fr.id) > 0');
+        $this->db->order_by('total_applications', 'DESC');
+        
+        $duration_stats = $this->db->get()->result();
+        
+        // Processar duração média
+        foreach ($duration_stats as &$stat) {
+            $stat->avg_duration_minutes = $stat->avg_duration_minutes ? 
+                round($stat->avg_duration_minutes, 1) : null;
+        }
+        
+        $stats['duration_by_questionnaire'] = $duration_stats;
         
         return $stats;
     }
