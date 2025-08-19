@@ -155,7 +155,7 @@
             </div>
         </div>
 
-        <div class="card mb-4" style="height:360px">
+        <div class="card mb-4" style="height:370px">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-microscope me-2"></i>
@@ -182,7 +182,7 @@
                             Esta análise mostra estatísticas detalhadas de um questionário específico
                         </small>
 
-                        <br><br><br><br>
+                        <br><br><br><br><br><br>
 
                          <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
                             <i class="fas fa-chart-pie me-1"></i>
