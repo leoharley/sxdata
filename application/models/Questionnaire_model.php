@@ -1044,7 +1044,9 @@ class Questionnaire_model extends CI_Model {
         
         $this->db->order_by('fr.completed_at', 'DESC');
         
-        return $this->db->get()->result();
+        $this->db->get()->result();
+
+        var_dump($this->db->last_query());exit;
     }
 
     /**
