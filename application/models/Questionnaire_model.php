@@ -977,4 +977,376 @@ class Questionnaire_model extends CI_Model {
         
         return $simulation;
     }
+
+    public function get_application_history($user_id, $filters = []) {
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.respondent_email,
+            fr.location_name,
+            fr.latitude,
+            fr.longitude,
+            fr.started_at,
+            fr.completed_at,
+            fr.sync_status,
+            fr.photo_path,
+            fr.consent_given,
+            fr.created_at,
+            q.title as questionnaire_title,
+            q.code as questionnaire_code
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.applied_by', $user_id);
+        
+        // Aplicar filtros
+        if (!empty($filters['period']) && $filters['period'] !== 'all') {
+            switch ($filters['period']) {
+                case 'today':
+                    $this->db->where('DATE(fr.completed_at)', date('Y-m-d'));
+                    break;
+                case 'week':
+                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-7 days')));
+                    break;
+                case 'month':
+                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-30 days')));
+                    break;
+            }
+        }
+        
+        if (!empty($filters['sync_status'])) {
+            $this->db->where('fr.sync_status', $filters['sync_status']);
+        }
+        
+        if (!empty($filters['questionnaire_id'])) {
+            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        }
+        
+        // Paginação
+        if (isset($filters['limit']) && is_numeric($filters['limit'])) {
+            $this->db->limit($filters['limit']);
+        }
+        
+        if (isset($filters['offset']) && is_numeric($filters['offset'])) {
+            $this->db->offset($filters['offset']);
+        }
+        
+        $this->db->order_by('fr.completed_at', 'DESC');
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter contadores para filtros do histórico
+     * 
+     * @param int $user_id ID do usuário
+     * @return array Contadores por filtro
+     */
+    public function get_history_counters($user_id) {
+        $counters = [];
+        
+        // Total
+        $this->db->where('applied_by', $user_id);
+        $counters['total'] = $this->db->count_all_results('form_responses');
+        
+        // Hoje
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('DATE(completed_at)', date('Y-m-d'));
+        $counters['today'] = $this->db->count_all_results('form_responses');
+        
+        // Esta semana
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-7 days')));
+        $counters['week'] = $this->db->count_all_results('form_responses');
+        
+        // Por status de sincronização
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('sync_status', 'pending');
+        $counters['pending'] = $this->db->count_all_results('form_responses');
+        
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('sync_status', 'synced');
+        $counters['synced'] = $this->db->count_all_results('form_responses');
+        
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('sync_status', 'error');
+        $counters['error'] = $this->db->count_all_results('form_responses');
+        
+        return $counters;
+    }
+
+    /**
+     * Obter resumo do histórico de aplicações
+     * 
+     * @param int $user_id ID do usuário
+     * @return array Resumo do histórico
+     */
+    public function get_history_summary($user_id) {
+        $summary = [];
+        
+        // Total de formulários aplicados
+        $this->db->where('applied_by', $user_id);
+        $summary['total_applications'] = $this->db->count_all_results('form_responses');
+        
+        // Formulários aplicados hoje
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('DATE(completed_at)', date('Y-m-d'));
+        $summary['today_applications'] = $this->db->count_all_results('form_responses');
+        
+        // Formulários aplicados esta semana
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-7 days')));
+        $summary['week_applications'] = $this->db->count_all_results('form_responses');
+        
+        // Formulários aplicados este mês
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-30 days')));
+        $summary['month_applications'] = $this->db->count_all_results('form_responses');
+        
+        // Questionários únicos aplicados
+        $this->db->select('COUNT(DISTINCT questionnaire_id) as unique_questionnaires');
+        $this->db->where('applied_by', $user_id);
+        $result = $this->db->get('form_responses')->row();
+        $summary['unique_questionnaires'] = $result ? $result->unique_questionnaires : 0;
+        
+        // Última aplicação
+        $this->db->select('MAX(completed_at) as last_application');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
+        $result = $this->db->get('form_responses')->row();
+        $summary['last_application'] = $result ? $result->last_application : null;
+        
+        // Taxa de sucesso na sincronização
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('sync_status', 'synced');
+        $synced_count = $this->db->count_all_results('form_responses');
+        
+        $summary['sync_success_rate'] = $summary['total_applications'] > 0 
+            ? round(($synced_count / $summary['total_applications']) * 100, 2)
+            : 100;
+        
+        // Média de aplicações por dia (últimos 30 dias)
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-30 days')));
+        $last_30_days = $this->db->count_all_results('form_responses');
+        $summary['avg_applications_per_day'] = round($last_30_days / 30, 2);
+        
+        // Total de fotos capturadas
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('photo_path IS NOT NULL');
+        $this->db->where('photo_path !=', '');
+        $summary['total_photos'] = $this->db->count_all_results('form_responses');
+        
+        // Total de localizações capturadas
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('latitude IS NOT NULL');
+        $this->db->where('longitude IS NOT NULL');
+        $summary['total_locations'] = $this->db->count_all_results('form_responses');
+        
+        return $summary;
+    }
+
+    /**
+     * Obter aplicações recentes
+     * 
+     * @param int $user_id ID do usuário
+     * @param int $limit Limite de resultados
+     * @return array Lista de aplicações recentes
+     */
+    public function get_recent_applications($user_id, $limit = 5) {
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.location_name,
+            fr.completed_at,
+            fr.sync_status,
+            q.title as questionnaire_title,
+            q.code as questionnaire_code
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->where('fr.applied_by', $user_id);
+        $this->db->where('fr.completed_at IS NOT NULL');
+        $this->db->order_by('fr.completed_at', 'DESC');
+        $this->db->limit($limit);
+        
+        return $this->db->get()->result();
+    }
+
+    /**
+     * Obter estatísticas de questionários por usuário
+     * 
+     * @param int $user_id ID do usuário
+     * @return array Estatísticas por questionário
+     */
+    public function get_user_questionnaire_stats($user_id) {
+        $this->db->select('
+            q.id,
+            q.title,
+            q.code,
+            COUNT(fr.id) as total_applications,
+            MAX(fr.completed_at) as last_application,
+            MIN(fr.completed_at) as first_application,
+            SUM(CASE WHEN fr.sync_status = "synced" THEN 1 ELSE 0 END) as synced_count,
+            SUM(CASE WHEN fr.sync_status = "pending" THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN fr.sync_status = "error" THEN 1 ELSE 0 END) as error_count,
+            SUM(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != "" THEN 1 ELSE 0 END) as photos_count,
+            SUM(CASE WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL THEN 1 ELSE 0 END) as locations_count,
+            AVG(CASE 
+                WHEN fr.started_at IS NOT NULL AND fr.completed_at IS NOT NULL 
+                THEN TIMESTAMPDIFF(MINUTE, fr.started_at, fr.completed_at) 
+                ELSE NULL 
+            END) as avg_duration_minutes
+        ');
+        $this->db->from('questionnaires q');
+        $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->group_by('q.id, q.title, q.code');
+        $this->db->having('total_applications > 0');
+        $this->db->order_by('total_applications', 'DESC');
+        
+        $results = $this->db->get()->result();
+        
+        // Processar resultados para incluir taxa de sucesso
+        foreach ($results as &$stat) {
+            $total = (int)$stat->total_applications;
+            $synced = (int)$stat->synced_count;
+            
+            $stat->success_rate = $total > 0 ? round(($synced / $total) * 100, 2) : 0;
+            $stat->avg_duration_minutes = $stat->avg_duration_minutes ? round($stat->avg_duration_minutes, 1) : null;
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Obter detalhes de uma aplicação específica
+     * 
+     * @param int $response_id ID da resposta
+     * @param int $user_id ID do usuário (para verificação de permissão)
+     * @return object|null Detalhes da aplicação
+     */
+    public function get_application_details($response_id, $user_id = null) {
+        $this->db->select('
+            fr.*,
+            q.title as questionnaire_title,
+            q.code as questionnaire_code,
+            q.description as questionnaire_description,
+            u.full_name as applied_by_name
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+        $this->db->where('fr.id', $response_id);
+        
+        // Se especificado user_id, verificar permissão
+        if ($user_id !== null) {
+            $this->db->where('fr.applied_by', $user_id);
+        }
+        
+        $application = $this->db->get()->row();
+        
+        if ($application) {
+            // Buscar as respostas das perguntas
+            $this->db->select('
+                ra.question_id,
+                ra.response_value,
+                q.question_text,
+                q.question_type,
+                q.order_index
+            ');
+            $this->db->from('response_answers ra');
+            $this->db->join('questions q', 'ra.question_id = q.id', 'left');
+            $this->db->where('ra.response_id', $response_id);
+            $this->db->order_by('q.order_index', 'ASC');
+            
+            $application->answers = $this->db->get()->result();
+        }
+        
+        return $application;
+    }
+
+    /**
+     * Atualizar status de sincronização de uma aplicação
+     * 
+     * @param int $response_id ID da resposta
+     * @param string $status Novo status (pending, synced, error)
+     * @param string $sync_message Mensagem de sincronização (opcional)
+     * @return bool Sucesso na atualização
+     */
+    public function update_sync_status($response_id, $status, $sync_message = null) {
+        $data = [
+            'sync_status' => $status,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        if ($sync_message !== null) {
+            $data['sync_message'] = $sync_message;
+        }
+        
+        if ($status === 'synced') {
+            $data['synced_at'] = date('Y-m-d H:i:s');
+        }
+        
+        $this->db->where('id', $response_id);
+        return $this->db->update('form_responses', $data);
+    }
+
+    /**
+     * Obter estatísticas de sincronização por período
+     * 
+     * @param int $user_id ID do usuário
+     * @param int $days Número de dias para análise
+     * @return array Estatísticas de sincronização
+     */
+    public function get_sync_stats($user_id, $days = 30) {
+        $stats = [];
+        
+        // Estatísticas gerais
+        $this->db->select('
+            sync_status,
+            COUNT(*) as count,
+            MAX(completed_at) as last_occurrence
+        ');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        $this->db->group_by('sync_status');
+        
+        $results = $this->db->get('form_responses')->result();
+        
+        foreach ($results as $result) {
+            $stats[$result->sync_status] = [
+                'count' => (int)$result->count,
+                'last_occurrence' => $result->last_occurrence
+            ];
+        }
+        
+        // Calcular porcentagens
+        $total = array_sum(array_column($stats, 'count'));
+        
+        foreach ($stats as $status => &$data) {
+            $data['percentage'] = $total > 0 ? round(($data['count'] / $total) * 100, 2) : 0;
+        }
+        
+        // Estatísticas por dia
+        $this->db->select('
+            DATE(completed_at) as date,
+            sync_status,
+            COUNT(*) as count
+        ');
+        $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
+        $this->db->group_by('DATE(completed_at), sync_status');
+        $this->db->order_by('date', 'ASC');
+        
+        $daily_stats = $this->db->get('form_responses')->result();
+        
+        $stats['daily_breakdown'] = $daily_stats;
+        $stats['period_days'] = $days;
+        $stats['total_applications'] = $total;
+        
+        return $stats;
+    }
 }
