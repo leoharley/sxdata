@@ -183,7 +183,8 @@
                         </small>
                     </div>
                 </div>
-                <div class="row align-items-center">
+                <br><br><br>
+                <div class="row align-center">
                     <div class="col-md-12">
                         <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
                             <i class="fas fa-chart-pie me-1"></i>
