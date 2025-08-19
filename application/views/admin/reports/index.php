@@ -155,7 +155,7 @@
             </div>
         </div>
 
-        <div class="card mb-4" style="height:380px">
+        <div class="card mb-4" style="height:360px">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-microscope me-2"></i>
@@ -164,7 +164,7 @@
             </div>
             <div class="card-body">
                 <div class="row align-items-end">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label fw-bold">Selecione um Questionário:</label>
                         <select class="form-select" id="specificQuestionnaireSelect" onchange="loadSpecificQuestionnaire()">
                             <option value="">-- Escolha um questionário --</option>
@@ -176,7 +176,15 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6 text-end">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Esta análise mostra estatísticas detalhadas de um questionário específico
+                        </small>
+                    </div>
+                </div>
+                <div class="row align-items-center">
+                    <div class="col-md-12">
                         <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
                             <i class="fas fa-chart-pie me-1"></i>
                             Analisar
@@ -186,13 +194,7 @@
                             Exportar
                         </button>
                     </div>
-                    <div class="col-md-5 text-end">
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Esta análise mostra estatísticas detalhadas de um questionário específico
-                        </small>
-                    </div>
-                </div>
+                </div>    
             </div>
         </div>
 
