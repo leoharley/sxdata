@@ -155,7 +155,7 @@
             </div>
         </div>
 
-        <div class="card mb-4">
+        <div class="card mb-4" style="height:400px">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-microscope me-2"></i>
