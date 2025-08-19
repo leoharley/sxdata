@@ -164,7 +164,7 @@
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <label class="form-label fw-bold">Selecione um Questionário:</label>
                         <select class="form-select" id="specificQuestionnaireSelect" onchange="loadSpecificQuestionnaire()">
                             <option value="">-- Escolha um questionário --</option>
@@ -175,18 +175,13 @@
                             </option>
                             <?php endforeach; ?>
                         </select>
-                    </div>
-                    <div class="col-md-6">
+
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
                             Esta análise mostra estatísticas detalhadas de um questionário específico
                         </small>
-                    </div>
-                </div>
-                <br><br><br>
-                <div class="row">
-                    <div class="col-md-12">
-                        <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
+
+                         <button type="button" class="btn btn-primary" onclick="loadSpecificQuestionnaire()">
                             <i class="fas fa-chart-pie me-1"></i>
                             Analisar
                         </button>
@@ -194,8 +189,11 @@
                             <i class="fas fa-download me-1"></i>
                             Exportar
                         </button>
+
                     </div>
-                </div>    
+                    
+                </div>
+                  
             </div>
         </div>
 
