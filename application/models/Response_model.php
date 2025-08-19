@@ -1294,7 +1294,7 @@ public function get_question_analysis($filters = array()) {
             'statistics' => $question_stats
         );
     }
-    exit;
+
     return $analysis_data;
 }
 
