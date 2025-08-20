@@ -949,7 +949,7 @@ class Stats extends CI_Controller {
                 $questions_result = $this->db->get('questions')->row();
                 $total_questions = $questions_result ? $questions_result->total_questions : 0;
                 
-                $this->db->select('MAX(completed_at) as last_response, description');
+                $this->db->select('MAX(updated_at) as last_response, description');
                 $this->db->from('questionnaires');
                 $this->db->where('id', $q->id);
                 $questionnaire_info = $this->db->get()->row();
