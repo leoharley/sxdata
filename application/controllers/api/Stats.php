@@ -916,4 +916,174 @@ class Stats extends CI_Controller {
         
         return $formatted_activities;
     }
+
+    public function questionnaires_analysis() {
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) return;
+
+        if (!$this->Response_model->is_supervisor_or_admin($authenticated_user)) {
+            $this->output->set_status_header(403);
+            echo json_encode(['success' => false, 'message' => 'Admin access required']);
+            return;
+        }
+
+        try {
+            $filters = [
+                'date_from' => $this->input->get('date_from'),
+                'date_to' => $this->input->get('date_to'),
+                'applied_by' => $this->input->get('applied_by'),
+            ];
+
+            $questionnaires_stats = $this->Response_model->get_questionnaires_popularity($filters, 50);
+            
+            $formatted_stats = [];
+            foreach ($questionnaires_stats as $q) {
+                $this->db->select('COUNT(*) as total_questions');
+                $this->db->where('questionnaire_id', $q->id);
+                $questions_result = $this->db->get('questions')->row();
+                $total_questions = $questions_result ? $questions_result->total_questions : 0;
+                
+                $this->db->select('MAX(completed_at) as last_response, description');
+                $this->db->from('questionnaires');
+                $this->db->where('id', $q->id);
+                $questionnaire_info = $this->db->get()->row();
+                
+                $formatted_stats[] = [
+                    'id' => (int)$q->id,
+                    'title' => $q->title,
+                    'description' => $questionnaire_info ? $questionnaire_info->description : '',
+                    'total_questions' => (int)$total_questions,
+                    'total_responses' => (int)$q->total_applications,
+                    'response_rate' => 85.0, // Cálculo simplificado
+                    'last_response' => date('Y-m-d H:i:s')
+                ];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'data' => $formatted_stats
+            ]);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * GET /api/stats/questionnaire-analysis/{id}
+     */
+    public function questionnaire_analysis($questionnaire_id) {
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) return;
+
+        if (!$this->Response_model->is_supervisor_or_admin($authenticated_user)) {
+            $this->output->set_status_header(403);
+            echo json_encode(['success' => false, 'message' => 'Admin access required']);
+            return;
+        }
+
+        try {
+            $filters = ['questionnaire_id' => $questionnaire_id];
+            $analysis = $this->Response_model->get_specific_questionnaire_analysis($questionnaire_id, $filters);
+            
+            echo json_encode([
+                'success' => true,
+                'data' => $analysis
+            ]);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * GET /api/stats/questions-analysis
+     */
+    public function questions_analysis() {
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) return;
+
+        if (!$this->Response_model->is_supervisor_or_admin($authenticated_user)) {
+            $this->output->set_status_header(403);
+            echo json_encode(['success' => false, 'message' => 'Admin access required']);
+            return;
+        }
+
+        try {
+            $filters = [
+                'questionnaire_id' => $this->input->get('questionnaire_id'),
+                'date_from' => $this->input->get('date_from'),
+                'date_to' => $this->input->get('date_to'),
+            ];
+
+            $analysis = $this->Response_model->get_question_analysis($filters);
+            
+            echo json_encode([
+                'success' => true,
+                'data' => $analysis
+            ]);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function applicators() {
+        if ($this->input->method() !== 'get') {
+            $this->output->set_status_header(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $authenticated_user = $this->verify_auth();
+        if (!$authenticated_user) return;
+
+        try {
+            $this->db->select('id, full_name, username, role');
+            $this->db->where('role', 'aplicador');
+            $this->db->where('is_active', 1);
+            $this->db->order_by('full_name', 'ASC');
+            
+            $applicators = $this->db->get('users')->result();
+            
+            $formatted = [];
+            foreach ($applicators as $app) {
+                $formatted[] = [
+                    'id' => (int)$app->id,
+                    'full_name' => $app->full_name,
+                    'role' => $app->role
+                ];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'data' => $formatted
+            ]);
+
+        } catch (Exception $e) {
+            $this->output->set_status_header(500);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
 }

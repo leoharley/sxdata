@@ -41,3 +41,8 @@ $route['api/stats/history'] = 'api/stats/history';
 $route['api/stats/history/(:num)'] = 'api/stats/history/$1';
 $route['api/stats/history/(:num)/summary'] = 'api/stats/history_summary/$1';
 $route['api/stats/history/summary'] = 'api/stats/history_summary';
+
+$route['api/stats/questionnaires-analysis'] = 'api/stats/questionnaires_analysis';
+$route['api/stats/questionnaire-analysis/(:num)'] = 'api/stats/questionnaire_analysis/$1';
+$route['api/stats/questions-analysis'] = 'api/stats/questions_analysis';
+$route['api/users/applicators'] = 'api/stats/applicators';
