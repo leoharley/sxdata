@@ -1063,7 +1063,7 @@ class Stats extends CI_Controller {
         try {
             $this->db->select('id, full_name, username, role');
             $this->db->where('role', 'aplicador');
-            $this->db->where('is_active', 1);
+            $this->db->where('is_active', true);
             $this->db->order_by('full_name', 'ASC');
             
             $applicators = $this->db->get('users')->result();
