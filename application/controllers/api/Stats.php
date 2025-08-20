@@ -952,6 +952,7 @@ class Stats extends CI_Controller {
                 $this->db->select('MAX(updated_at) as last_response, description');
                 $this->db->from('questionnaires');
                 $this->db->where('id', $q->id);
+                $this->db->group_by('description');
                 $questionnaire_info = $this->db->get()->row();
                 
                 $formatted_stats[] = [
