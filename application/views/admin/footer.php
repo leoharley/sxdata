@@ -25,7 +25,19 @@
                 responsive: true,
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json'
-                }
+                },
+                "order": [[5, "desc"]], // Ordenar por Data/Hora descendente (mais recente primeiro)
+                "columnDefs": [
+                    {
+                        "targets": 5, // Coluna Data/Hora
+                        "type": "date-br"
+                    },
+                    {
+                        "targets": 7, // Coluna Ações
+                        "orderable": false,
+                        "searchable": false
+                    }
+                ]
             });
         });
         
