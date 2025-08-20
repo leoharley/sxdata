@@ -1049,7 +1049,7 @@ class Stats extends CI_Controller {
         }
     }
 
-    public function applicators() {
+    public function applicators_app() {
         if ($this->input->method() !== 'get') {
             $this->output->set_status_header(405);
             echo json_encode(['success' => false, 'message' => 'Method not allowed']);

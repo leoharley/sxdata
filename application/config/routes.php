@@ -45,4 +45,4 @@ $route['api/stats/history/summary'] = 'api/stats/history_summary';
 $route['api/stats/questionnaires-analysis'] = 'api/stats/questionnaires_analysis';
 $route['api/stats/questionnaire-analysis/(:num)'] = 'api/stats/questionnaire_analysis/$1';
 $route['api/stats/questions-analysis'] = 'api/stats/questions_analysis';
-$route['api/users/applicators'] = 'api/stats/applicators';
+$route['api/stats/applicators_app'] = 'api/stats/applicators_app';
