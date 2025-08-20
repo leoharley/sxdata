@@ -21,6 +21,46 @@
         
         // Initialize DataTables
         $(document).ready(function() {
+
+            if ($.fn.DataTable) {
+                // Função para converter data brasileira em timestamp
+                $.fn.dataTable.ext.type.order['date-br-pre'] = function (data) {
+                    if (!data || data === '' || typeof data !== 'string') return 0;
+                    
+                    // Extrair apenas a parte da data/hora, ignorando HTML
+                    const textContent = $('<div>').html(data).text().trim();
+                    
+                    // Buscar padrão dd/mm/yyyy HH:mm
+                    const match = textContent.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+                    if (match) {
+                        const day = parseInt(match[1], 10);
+                        const month = parseInt(match[2], 10) - 1; // Mês é 0-based
+                        const year = parseInt(match[3], 10);
+                        const hour = parseInt(match[4], 10);
+                        const minute = parseInt(match[5], 10);
+                        
+                        return new Date(year, month, day, hour, minute).getTime();
+                    }
+                    
+                    // Se for "Incompleto" ou similar, retornar 0
+                    return 0;
+                };
+
+                // Detectar automaticamente colunas de data brasileira
+                $.fn.dataTable.ext.type.detect.unshift(function (data) {
+                    if (typeof data !== 'string') return null;
+                    
+                    const textContent = $('<div>').html(data).text().trim();
+                    
+                    if (textContent.match(/\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}/) || 
+                        textContent.includes('Incompleto')) {
+                        return 'date-br';
+                    }
+                    
+                    return null;
+                });
+
+                
             $('.data-table').DataTable({
                 responsive: true,
                 language: {
