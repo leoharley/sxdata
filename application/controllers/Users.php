@@ -134,10 +134,24 @@ class Users extends CI_Controller {
     }
 
     public function toggle_status($id, $status) {
-        $status = $status === 'true' ? TRUE : FALSE;
+        $new_status = ($status === '1' || $status === 'true' || $status === 1) ? TRUE : FALSE;
         
-        if ($this->User_model->update($id, array('is_active' => $status))) {
-            $action = $status ? 'ativado' : 'desativado';
+        $user = $this->User_model->get_by_id($id);
+        if (!$user) {
+            $this->session->set_flashdata('error', 'Usuário não encontrado.');
+            redirect('users');
+            return;
+        }
+        
+        $current_user_id = $this->session->userdata('admin_id') ?? $this->session->userdata('user_id');
+        if ($id == $current_user_id) {
+            $this->session->set_flashdata('error', 'Você não pode alterar seu próprio status.');
+            redirect('users');
+            return;
+        }
+        
+        if ($this->User_model->update($id, array('is_active' => $new_status))) {
+            $action = $new_status ? 'ativado' : 'desativado';
             $this->session->set_flashdata('success', "Usuário {$action} com sucesso!");
         } else {
             $this->session->set_flashdata('error', 'Erro ao alterar status do usuário.');

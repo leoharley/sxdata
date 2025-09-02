@@ -118,11 +118,23 @@
                                         onclick="resetPassword(<?= $user->id ?>)" title="Redefinir Senha">
                                     <i class="fas fa-key"></i>
                                 </button>
-                                <?php if ($user->id != $this->session->userdata('admin_id')): ?>
-                                <button type="button" class="btn btn-sm btn-outline-<?= $user->is_active ? 'danger' : 'success' ?>" 
-                                        onclick="toggleUserStatus(<?= $user->id ?>, <?= $user->is_active ? 'false' : 'true' ?>)" 
-                                        title="<?= $user->is_active ? 'Desativar' : 'Ativar' ?>">
-                                    <i class="fas fa-<?= $user->is_active ? 'ban' : 'check' ?>"></i>
+                                <?php 
+                                $current_user_id = $this->session->userdata('admin_id') ?? $this->session->userdata('user_id');
+                                if ($user->id != $current_user_id): 
+                                    $is_active = ($user->is_active == 1 || $user->is_active === true || $user->is_active === 't');
+                                    $button_class = $is_active ? 'danger' : 'success';
+                                    $button_action = $is_active ? 'Desativar' : 'Ativar';
+                                    $button_icon = $is_active ? 'ban' : 'check';
+                                    $new_status = $is_active ? '0' : '1';
+                                ?>
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-<?= $button_class ?>" 
+                                        onclick="toggleUserStatus(<?= $user->id ?>, '<?= $new_status ?>')" 
+                                        title="<?= $button_action ?>"
+                                        data-user-id="<?= $user->id ?>"
+                                        data-user-name="<?= $user->full_name ?>"
+                                        data-current-status="<?= $is_active ? '1' : '0' ?>">
+                                    <i class="fas fa-<?= $button_icon ?>"></i>
                                 </button>
                                 <?php endif; ?>
                             </div>
@@ -275,6 +287,21 @@
     font-size: 0.875em;
     color: #6c757d;
 }
+
+.btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 </style>
 
 <script>
@@ -320,11 +347,53 @@ function resetPassword(userId) {
 }
 
 // Função para alternar status do usuário
-function toggleUserStatus(userId, activate) {
-    const action = activate === 'true' ? 'ativar' : 'desativar';
-    if (confirm(`Tem certeza que deseja ${action} este usuário?`)) {
-        window.location.href = `<?= base_url('users/toggle_status/') ?>${userId}/${activate}`;
+function toggleUserStatus(userId, newStatus) {
+    const status = parseInt(newStatus);
+    const action = status === 1 ? 'ativar' : 'desativar';
+    const button = event.target.closest('button');
+    const userName = button.getAttribute('data-user-name');
+    
+    if (confirm(`Tem certeza que deseja ${action} o usuário "${userName}"?`)) {
+        // Mostrar loading
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        button.disabled = true;
+        
+        // Tentar primeiro com AJAX
+        toggleUserStatusAjax(userId, newStatus, button, originalHTML);
     }
+}
+
+function toggleUserStatusAjax(userId, newStatus, button, originalHTML) {
+    fetch('<?= base_url('users/toggle_status_ajax/') ?>' + userId + '/' + newStatus, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Sucesso - recarregar página
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.log('AJAX falhou, tentando redirecionamento...', error);
+        // Fallback para redirecionamento
+        window.location.href = '<?= base_url('users/toggle_status/') ?>' + userId + '/' + newStatus;
+    });
 }
 
 // Validação do formulário de edição
