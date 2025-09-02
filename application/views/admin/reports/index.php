@@ -1784,37 +1784,7 @@ function debugChartsData() {
  * Carregar análise de questionário específico
  */
 async function loadSpecificQuestionnaire() {
-    const select = document.getElementById('specificQuestionnaireSelect');
-    const questionnaireId = select.value;
-    
-    if (!questionnaireId) {
-        hideSpecificAnalysis();
-        return;
-    }
-    
-    // Mostrar container e loading
-    showSpecificAnalysis();
-    showLoading();
-    
-    try {
-        // Buscar dados via AJAX
-        const filters = <?= json_encode($filters ?? []) ?>;
-        filters.questionnaire_id = questionnaireId;
-        
-        const response = await fetch(`<?= base_url('reports/get_specific_questionnaire_analysis') ?>?${new URLSearchParams(filters)}`);
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        currentQuestionnaireData = data;
-        displaySpecificAnalysis(data);
-        
-    } catch (error) {
-        console.error('Erro ao carregar análise:', error);
-        showError('Erro ao carregar análise do questionário. Tente novamente.');
-    }
+   
 }
 
 /**
@@ -2816,7 +2786,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     <?php endif; ?>
 
-    <?php //if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
+    <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
     const questionnairesCtx = document.getElementById('questionnairesPopularityChart');
     if (questionnairesCtx) {
         const questionnairesData = <?= json_encode($charts_data['questionnaires_popularity']) ?>;
@@ -2867,7 +2837,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    <?php //endif; ?>
+    <?php endif; ?>
     
     // Inicializar outros componentes se necessário
     console.log('Análise de questões carregada com sucesso');
