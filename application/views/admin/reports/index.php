@@ -1864,7 +1864,7 @@ function displaySpecificAnalysis(data) {
     document.getElementById('specificAnalysisLoading').style.display = 'none';
     
     // CORREÇÃO: Limpar gráficos existentes antes de criar novos
-    destroyExistingCharts();
+   // destroyExistingCharts();
     
     // Atualizar título
     document.getElementById('specificQuestionnaireTitle').innerHTML = `
