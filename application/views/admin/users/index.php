@@ -92,10 +92,27 @@
                             <span class="badge bg-<?= $color ?>"><?= ucfirst($user->role) ?></span>
                         </td>
                         <td>
-                            <?php if ($user->is_active): ?>
+                            <?php 
+                            // Função robusta para verificar se usuário está ativo
+                            $is_user_active = false;
+                            if (isset($user->is_active)) {
+                                // Tratamento para diferentes tipos de retorno do banco
+                                if ($user->is_active === true || $user->is_active === 1 || $user->is_active === '1' || 
+                                    $user->is_active === 't' || strtolower($user->is_active) === 'true') {
+                                    $is_user_active = true;
+                                }
+                            }
+                            ?>
+                            <?php if ($is_user_active): ?>
                                 <span class="badge bg-success">Ativo</span>
                             <?php else: ?>
                                 <span class="badge bg-danger">Inativo</span>
+                            <?php endif; ?>
+                            
+                            <?php if (ENVIRONMENT === 'development'): ?>
+                                <small class="text-muted d-block" style="font-size: 10px;">
+                                    Debug: <?= var_export($user->is_active, true) ?>
+                                </small>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -121,20 +138,11 @@
                                 <?php 
                                 $current_user_id = $this->session->userdata('admin_id') ?? $this->session->userdata('user_id');
                                 if ($user->id != $current_user_id): 
-                                    $is_active = ($user->is_active == 1 || $user->is_active === true || $user->is_active === 't');
-                                    $button_class = $is_active ? 'danger' : 'success';
-                                    $button_action = $is_active ? 'Desativar' : 'Ativar';
-                                    $button_icon = $is_active ? 'ban' : 'check';
-                                    $new_status = $is_active ? '0' : '1';
                                 ?>
-                                <button type="button" 
-                                        class="btn btn-sm btn-outline-<?= $button_class ?>" 
-                                        onclick="toggleUserStatus(<?= $user->id ?>, '<?= $new_status ?>')" 
-                                        title="<?= $button_action ?>"
-                                        data-user-id="<?= $user->id ?>"
-                                        data-user-name="<?= $user->full_name ?>"
-                                        data-current-status="<?= $is_active ? '1' : '0' ?>">
-                                    <i class="fas fa-<?= $button_icon ?>"></i>
+                                <button type="button" class="btn btn-sm btn-outline-<?= ($user->is_active == 1 || $user->is_active === true) ? 'danger' : 'success' ?>" 
+                                        onclick="toggleUserStatus(<?= $user->id ?>, '<?= ($user->is_active == 1 || $user->is_active === true) ? '0' : '1' ?>')" 
+                                        title="<?= ($user->is_active == 1 || $user->is_active === true) ? 'Desativar' : 'Ativar' ?>">
+                                    <i class="fas fa-<?= ($user->is_active == 1 || $user->is_active === true) ? 'ban' : 'check' ?>"></i>
                                 </button>
                                 <?php endif; ?>
                             </div>
@@ -287,21 +295,6 @@
     font-size: 0.875em;
     color: #6c757d;
 }
-
-.btn[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.btn .fa-spinner {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
 </style>
 
 <script>
@@ -351,7 +344,7 @@ function toggleUserStatus(userId, newStatus) {
     const status = parseInt(newStatus);
     const action = status === 1 ? 'ativar' : 'desativar';
     const button = event.target.closest('button');
-    const userName = button.getAttribute('data-user-name');
+    const userName = button.getAttribute('data-user-name') || 'este usuário';
     
     if (confirm(`Tem certeza que deseja ${action} o usuário "${userName}"?`)) {
         // Mostrar loading
@@ -364,6 +357,7 @@ function toggleUserStatus(userId, newStatus) {
     }
 }
 
+// Versão AJAX como primary method
 function toggleUserStatusAjax(userId, newStatus, button, originalHTML) {
     fetch('<?= base_url('users/toggle_status_ajax/') ?>' + userId + '/' + newStatus, {
         method: 'POST',
@@ -395,6 +389,24 @@ function toggleUserStatusAjax(userId, newStatus, button, originalHTML) {
         window.location.href = '<?= base_url('users/toggle_status/') ?>' + userId + '/' + newStatus;
     });
 }
+
+// Função para debug de status (apenas em desenvolvimento)
+<?php if (ENVIRONMENT === 'development'): ?>
+function debugUserStatus(userId) {
+    window.open('<?= base_url('users/check_user_status/') ?>' + userId, '_blank');
+}
+
+// Adicionar botão de debug em desenvolvimento
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof userId !== 'undefined') {
+        const debugButton = document.createElement('button');
+        debugButton.textContent = 'Debug Status';
+        debugButton.className = 'btn btn-sm btn-info me-2';
+        debugButton.onclick = () => debugUserStatus(1); // Trocar pelo ID desejado
+        document.querySelector('h2').appendChild(debugButton);
+    }
+});
+<?php endif; ?>
 
 // Validação do formulário de edição
 document.getElementById('editUserForm').addEventListener('submit', function(e) {
