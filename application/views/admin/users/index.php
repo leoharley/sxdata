@@ -92,11 +92,7 @@
                             <span class="badge bg-<?= $color ?>"><?= ucfirst($user->role) ?></span>
                         </td>
                         <td>
-                            <?php if ($user->is_active): ?>
-                                <span class="badge bg-success">Ativo</span>
-                            <?php else: ?>
-                                <span class="badge bg-danger">Inativo</span>
-                            <?php endif; ?>
+                            <span class="badge <?= $is_active ? 'bg-danger' : 'bg-success'?>"><?= $is_active ? 'Desativar' : 'Ativar' ?></span>
                         </td>
                         <td>
                             <?php if (isset($user->updated_at) && $user->updated_at): ?>
