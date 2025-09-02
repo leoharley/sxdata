@@ -99,8 +99,8 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if (isset($user->last_login) && $user->last_login): ?>
-                                <small><?= date('d/m/Y H:i', strtotime($user->last_login)) ?></small>
+                            <?php if (isset($user->updated_at) && $user->updated_at): ?>
+                                <small><?= date('d/m/Y H:i', strtotime($user->updated_at)) ?></small>
                             <?php else: ?>
                                 <small class="text-muted">Nunca</small>
                             <?php endif; ?>
@@ -191,6 +191,68 @@
     </div>
 </div>
 
+<!-- Modal Editar Usuário -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editUserForm" method="post">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_user_id" name="user_id">
+                    
+                    <div class="mb-3">
+                        <label for="edit_full_name" class="form-label">Nome Completo *</label>
+                        <input type="text" class="form-control" id="edit_full_name" name="full_name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_username" class="form-label">Usuário *</label>
+                        <input type="text" class="form-control" id="edit_username" name="username" required>
+                        <div class="form-text">Deve ser único no sistema</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_email" class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="edit_email" name="email" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_role" class="form-label">Função *</label>
+                        <select class="form-select" id="edit_role" name="role" required>
+                            <option value="">Selecione...</option>
+                            <option value="aplicador">Aplicador</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="administrador">Administrador</option>
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    <h6 class="text-muted">Alterar Senha (opcional)</h6>
+                    <div class="mb-3">
+                        <label for="edit_password" class="form-label">Nova Senha</label>
+                        <input type="password" class="form-control" id="edit_password" name="password" minlength="6">
+                        <div class="form-text">Deixe em branco para manter a senha atual. Mínimo 6 caracteres se alterar.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_password_confirm" class="form-label">Confirmar Nova Senha</label>
+                        <input type="password" class="form-control" id="edit_password_confirm" name="password_confirm">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <style>
 .avatar-circle {
     width: 40px;
@@ -204,20 +266,60 @@
     font-weight: 600;
     font-size: 14px;
 }
+
+.btn-group .btn {
+    margin: 0 1px;
+}
+
+#editUserModal .form-text {
+    font-size: 0.875em;
+    color: #6c757d;
+}
 </style>
 
 <script>
+// Função para editar usuário
 function editUser(userId) {
-    // Implementar modal de edição
-    alert('Funcionalidade de edição em desenvolvimento');
+    // Fazer requisição AJAX para buscar dados do usuário
+    fetch(`<?= base_url('users/get_user/') ?>${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Popular o modal com os dados do usuário
+                document.getElementById('edit_user_id').value = data.user.id;
+                document.getElementById('edit_full_name').value = data.user.full_name;
+                document.getElementById('edit_username').value = data.user.username;
+                document.getElementById('edit_email').value = data.user.email;
+                document.getElementById('edit_role').value = data.user.role;
+                
+                // Limpar campos de senha
+                document.getElementById('edit_password').value = '';
+                document.getElementById('edit_password_confirm').value = '';
+                
+                // Definir a action do formulário
+                document.getElementById('editUserForm').action = `<?= base_url('users/edit/') ?>${userId}`;
+                
+                // Exibir o modal
+                const editModal = new bootstrap.Modal(document.getElementById('editUserModal'));
+                editModal.show();
+            } else {
+                alert('Erro ao carregar dados do usuário: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar dados do usuário');
+        });
 }
 
+// Função para resetar senha
 function resetPassword(userId) {
     if (confirm('Tem certeza que deseja redefinir a senha deste usuário?')) {
         window.location.href = '<?= base_url('users/reset_password/') ?>' + userId;
     }
 }
 
+// Função para alternar status do usuário
 function toggleUserStatus(userId, activate) {
     const action = activate === 'true' ? 'ativar' : 'desativar';
     if (confirm(`Tem certeza que deseja ${action} este usuário?`)) {
@@ -225,7 +327,28 @@ function toggleUserStatus(userId, activate) {
     }
 }
 
-// Validação de senhas iguais
+// Validação do formulário de edição
+document.getElementById('editUserForm').addEventListener('submit', function(e) {
+    const password = document.getElementById('edit_password').value;
+    const confirmPassword = document.getElementById('edit_password_confirm').value;
+    
+    // Se uma nova senha foi informada, validar confirmação
+    if (password || confirmPassword) {
+        if (password !== confirmPassword) {
+            e.preventDefault();
+            alert('As senhas não coincidem!');
+            return false;
+        }
+        
+        if (password.length < 6) {
+            e.preventDefault();
+            alert('A nova senha deve ter pelo menos 6 caracteres!');
+            return false;
+        }
+    }
+});
+
+// Validação do formulário de criação
 document.getElementById('createUserForm').addEventListener('submit', function(e) {
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('password_confirm').value;
@@ -235,5 +358,10 @@ document.getElementById('createUserForm').addEventListener('submit', function(e)
         alert('As senhas não coincidem!');
         return false;
     }
+});
+
+// Limpar formulário de edição quando modal for fechado
+document.getElementById('editUserModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('editUserForm').reset();
 });
 </script>

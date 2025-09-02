@@ -51,6 +51,88 @@ class Users extends CI_Controller {
         redirect('users');
     }
 
+    public function get_user($id) {
+        // Método para buscar dados do usuário via AJAX
+        $user = $this->User_model->get_by_id($id);
+        
+        if ($user) {
+            // Remove dados sensíveis antes de enviar
+            unset($user->password_hash);
+            
+            $response = array(
+                'success' => true,
+                'user' => $user
+            );
+        } else {
+            $response = array(
+                'success' => false,
+                'message' => 'Usuário não encontrado'
+            );
+        }
+        
+        $this->output
+            ->set_content_type('application/json')
+            ->set_output(json_encode($response));
+    }
+
+    public function edit($id) {
+        // Verificar se o usuário existe
+        $existing_user = $this->User_model->get_by_id($id);
+        if (!$existing_user) {
+            $this->session->set_flashdata('error', 'Usuário não encontrado.');
+            redirect('users');
+        }
+
+        // Configurar regras de validação
+        $this->form_validation->set_rules('full_name', 'Nome Completo', 'required|max_length[100]');
+        
+        // Username deve ser único, mas pode ser o mesmo do usuário atual
+        $username_rule = 'required|max_length[50]';
+        if ($this->input->post('username') !== $existing_user->username) {
+            $username_rule .= '|is_unique[users.username]';
+        }
+        $this->form_validation->set_rules('username', 'Usuário', $username_rule);
+        
+        // Email deve ser único, mas pode ser o mesmo do usuário atual
+        $email_rule = 'required|valid_email';
+        if ($this->input->post('email') !== $existing_user->email) {
+            $email_rule .= '|is_unique[users.email]';
+        }
+        $this->form_validation->set_rules('email', 'Email', $email_rule);
+        
+        $this->form_validation->set_rules('role', 'Função', 'required|in_list[aplicador,supervisor,administrador]');
+        
+        // Senha é opcional na edição
+        if ($this->input->post('password')) {
+            $this->form_validation->set_rules('password', 'Nova Senha', 'min_length[6]');
+            $this->form_validation->set_rules('password_confirm', 'Confirmação da Nova Senha', 'matches[password]');
+        }
+
+        if ($this->form_validation->run()) {
+            $user_data = array(
+                'full_name' => $this->input->post('full_name'),
+                'username' => $this->input->post('username'),
+                'email' => $this->input->post('email'),
+                'role' => $this->input->post('role')
+            );
+
+            // Adicionar senha apenas se uma nova foi fornecida
+            if ($this->input->post('password')) {
+                $user_data['password'] = $this->input->post('password');
+            }
+
+            if ($this->User_model->update($id, $user_data)) {
+                $this->session->set_flashdata('success', 'Usuário atualizado com sucesso!');
+            } else {
+                $this->session->set_flashdata('error', 'Erro ao atualizar usuário.');
+            }
+        } else {
+            $this->session->set_flashdata('error', validation_errors());
+        }
+
+        redirect('users');
+    }
+
     public function toggle_status($id, $status) {
         $status = $status === 'true' ? TRUE : FALSE;
         
