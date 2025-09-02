@@ -192,10 +192,12 @@ class Response_model extends CI_Model {
             fr.completed_at,
             fr.created_at,
             q.title as questionnaire_title,
-            u.full_name as applied_by_name
+            u.full_name as applied_by_name,
+            r.question_id as indexador
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->join('question_responses r', 'r.form_response_id = fr.id and r.question_id = 1', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
         
         // Filtrar apenas respostas que possuem localização

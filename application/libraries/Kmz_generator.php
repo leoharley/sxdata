@@ -60,7 +60,8 @@ class KMZ_Generator {
         foreach ($responses as $response) {
             if ($response->latitude && $response->longitude) {
                 $kml .= '<Placemark>' . "\n";
-                $kml .= '<name>Resposta #' . $response->id . '</name>' . "\n";
+                //$kml .= '<name>Resposta #' . $response->id . '</name>' . "\n";
+                $kml .= '<name>' . $response->indexador . '</name>' . "\n";
                 $kml .= '<description><![CDATA[' . "\n";
                 $kml .= '<strong>Questionário:</strong> ' . htmlspecialchars($response->questionnaire_title ?? 'N/A') . '<br/>' . "\n";
                 $kml .= '<strong>Aplicador:</strong> ' . htmlspecialchars($response->applied_by_name ?? 'N/A') . '<br/>' . "\n";
