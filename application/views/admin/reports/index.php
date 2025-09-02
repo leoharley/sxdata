@@ -1809,7 +1809,7 @@ async function loadSpecificQuestionnaire() {
         }
         
         currentQuestionnaireData = data;
-      //  displaySpecificAnalysis(data);
+        displaySpecificAnalysis(data);
         
     } catch (error) {
         console.error('Erro ao carregar análise:', error);
