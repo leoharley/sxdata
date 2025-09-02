@@ -176,142 +176,116 @@ class Response_model extends CI_Model {
     }
 
     public function get_with_location($filters = array()) {
-    // Buscar dados principais SEM subquery complexa
-    $this->db->select('
-        fr.id,
-        fr.questionnaire_id,
-        fr.respondent_name,
-        fr.respondent_email,
-        fr.applied_by,
-        fr.latitude,
-        fr.longitude,
-        fr.location_name,
-        fr.photo_path,
-        fr.consent_given,
-        fr.sync_status,
-        fr.started_at,
-        fr.completed_at,
-        fr.created_at,
-        q.title as questionnaire_title,
-        u.full_name as applied_by_name
-    ');
+    // Construir WHERE conditions
+    $where_conditions = array();
+    $where_conditions[] = "fr.latitude IS NOT NULL";
+    $where_conditions[] = "fr.longitude IS NOT NULL";
+    $where_conditions[] = "fr.latitude != 0";
+    $where_conditions[] = "fr.longitude != 0";
+    $where_conditions[] = "fr.completed_at IS NOT NULL";
     
-    $this->db->from('form_responses fr');
-    $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-    $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+    // Parâmetros para prepared statement
+    $params = array();
     
-    // Filtros básicos
-    $this->db->where('fr.latitude IS NOT NULL');
-    $this->db->where('fr.longitude IS NOT NULL');
-    $this->db->where('fr.latitude !=', 0);
-    $this->db->where('fr.longitude !=', 0);
-    $this->db->where('fr.completed_at IS NOT NULL');
-    
-    // Filtros condicionais
     if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
-        $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        $where_conditions[] = "fr.questionnaire_id = ?";
+        $params[] = $filters['questionnaire_id'];
     }
     
     if (isset($filters['applied_by']) && $filters['applied_by']) {
-        $this->db->where('fr.applied_by', $filters['applied_by']);
+        $where_conditions[] = "fr.applied_by = ?";
+        $params[] = $filters['applied_by'];
     }
     
     if (isset($filters['date_from']) && $filters['date_from']) {
-        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        $where_conditions[] = "DATE(fr.completed_at) >= ?";
+        $params[] = $filters['date_from'];
     }
     
     if (isset($filters['date_to']) && $filters['date_to']) {
-        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        $where_conditions[] = "DATE(fr.completed_at) <= ?";
+        $params[] = $filters['date_to'];
     }
     
     if (isset($filters['sync_status']) && $filters['sync_status']) {
-        $this->db->where('fr.sync_status', $filters['sync_status']);
+        $where_conditions[] = "fr.sync_status = ?";
+        $params[] = $filters['sync_status'];
     }
     
-    $this->db->order_by('fr.completed_at', 'DESC');
-    $results = $this->db->get()->result();
+    $where_clause = implode(' AND ', $where_conditions);
     
-    // Debug da query principal
+    // Query manual para evitar problemas de escaping
+    $sql = "
+        SELECT 
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.respondent_email,
+            fr.applied_by,
+            fr.latitude,
+            fr.longitude,
+            fr.location_name,
+            fr.photo_path,
+            fr.consent_given,
+            fr.sync_status,
+            fr.started_at,
+            fr.completed_at,
+            fr.created_at,
+            q.title as questionnaire_title,
+            u.full_name as applied_by_name,
+            (
+                SELECT COALESCE(
+                    qr.response_text, 
+                    CASE 
+                        WHEN qr.response_number IS NOT NULL THEN qr.response_number::text
+                        ELSE NULL
+                    END,
+                    CASE 
+                        WHEN qr.response_date IS NOT NULL THEN TO_CHAR(qr.response_date, 'DD/MM/YYYY')
+                        ELSE NULL
+                    END,
+                    CASE 
+                        WHEN qr.response_datetime IS NOT NULL THEN TO_CHAR(qr.response_datetime, 'DD/MM/YYYY HH24:MI')
+                        ELSE NULL
+                    END,
+                    CASE 
+                        WHEN qr.selected_options IS NOT NULL THEN qr.selected_options::text
+                        ELSE NULL
+                    END
+                )
+                FROM question_responses qr
+                JOIN questions quest ON qr.question_id = quest.id
+                WHERE qr.form_response_id = fr.id
+                AND quest.order_index = (
+                    SELECT MIN(order_index) 
+                    FROM questions 
+                    WHERE questionnaire_id = fr.questionnaire_id
+                )
+                LIMIT 1
+            ) as indexador
+        FROM form_responses fr
+        LEFT JOIN questionnaires q ON fr.questionnaire_id = q.id
+        LEFT JOIN users u ON fr.applied_by = u.id
+        WHERE {$where_clause}
+        ORDER BY fr.completed_at DESC
+    ";
+    
+    // Executar query
+    if (!empty($params)) {
+        $query = $this->db->query($sql, $params);
+    } else {
+        $query = $this->db->query($sql);
+    }
+    
+    $result = $query->result();
+    
+    // Debug em desenvolvimento
     if (ENVIRONMENT === 'development') {
-        log_message('debug', 'Query principal: ' . $this->db->last_query());
+        log_message('debug', 'Query get_with_location: ' . $this->db->last_query());
+        log_message('debug', 'Total resultados: ' . count($result));
     }
     
-    // Se não há resultados, retornar vazio
-    if (empty($results)) {
-        return array();
-    }
-    
-    // Buscar indexadores usando queries separadas e simples
-    foreach ($results as &$result) {
-        $result->indexador = $this->buscar_indexador($result->id, $result->questionnaire_id);
-    }
-    
-    return $results;
-}
-
-// Método auxiliar para buscar indexador (sem CAST problemático)
-private function buscar_indexador($form_response_id, $questionnaire_id) {
-    try {
-        // Passo 1: Encontrar ID da primeira questão
-        $this->db->select('id');
-        $this->db->from('questions');
-        $this->db->where('questionnaire_id', $questionnaire_id);
-        $this->db->order_by('order_index', 'ASC');
-        $this->db->limit(1);
-        
-        $primeira_questao = $this->db->get()->row();
-        
-        if (!$primeira_questao) {
-            return 'Sem questões';
-        }
-        
-        // Passo 2: Buscar resposta para esta questão
-        $this->db->select('*');
-        $this->db->from('question_responses');
-        $this->db->where('form_response_id', $form_response_id);
-        $this->db->where('question_id', $primeira_questao->id);
-        $this->db->limit(1);
-        
-        $resposta = $this->db->get()->row();
-        
-        if (!$resposta) {
-            return 'Sem resposta';
-        }
-        
-        // Passo 3: Determinar qual campo usar (em PHP, sem SQL complexo)
-        if (!empty($resposta->response_text)) {
-            return $resposta->response_text;
-        }
-        
-        if (!is_null($resposta->response_number) && $resposta->response_number !== '') {
-            return (string) $resposta->response_number;
-        }
-        
-        if (!is_null($resposta->response_date) && $resposta->response_date !== '') {
-            return date('d/m/Y', strtotime($resposta->response_date));
-        }
-        
-        if (!is_null($resposta->response_datetime) && $resposta->response_datetime !== '') {
-            return date('d/m/Y H:i', strtotime($resposta->response_datetime));
-        }
-        
-        if (!empty($resposta->selected_options)) {
-            // Tentar decodificar JSON
-            $opcoes = json_decode($resposta->selected_options, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($opcoes)) {
-                return implode(', ', $opcoes);
-            }
-            return $resposta->selected_options;
-        }
-        
-        return 'Resposta vazia';
-        
-    } catch (Exception $e) {
-        if (ENVIRONMENT === 'development') {
-            log_message('error', 'Erro ao buscar indexador: ' . $e->getMessage());
-        }
-        return 'Erro';
-    }
+    return $result;
 }
 
 
