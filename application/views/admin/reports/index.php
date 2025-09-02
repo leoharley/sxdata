@@ -236,12 +236,35 @@
                 <?php endif; ?>
             </div>
             <div class="card-body">
-               
+                <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
                     <div class="chart-container-fixed">
                         <canvas id="questionnairesPopularityChart"></canvas>
                     </div>
                     
-                 
+                    <!-- Lista dos questionários -->
+                    <div class="mt-3">
+                        <h6 class="text-muted mb-2">Mais utilizados:</h6>
+                        <?php foreach (array_slice($charts_data['questionnaires_popularity'], 0, 5) as $index => $questionnaire): ?>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="flex-grow-1">
+                                <div class="fw-bold"><?= htmlspecialchars($questionnaire['title']) ?></div>
+                                <small class="text-muted"><?= $questionnaire['count'] ?> aplicações</small>
+                            </div>
+                            <span class="badge bg-primary">#<?= $index + 1 ?></span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="chart-placeholder" style="height: 200px;">
+                        <div class="d-flex align-items-center justify-content-center h-100">
+                            <div class="text-center">
+                                <i class="fas fa-poll fa-2x text-muted mb-2"></i>
+                                <p class="text-muted mb-0">Sem dados de popularidade</p>
+                                <small class="text-muted">Crie questionários e colete respostas</small>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -2793,7 +2816,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     <?php endif; ?>
 
-    <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
+    <?php //if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
     const questionnairesCtx = document.getElementById('questionnairesPopularityChart');
     if (questionnairesCtx) {
         const questionnairesData = <?= json_encode($charts_data['questionnaires_popularity']) ?>;
@@ -2844,7 +2867,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    <?php endif; ?>
+    <?php //endif; ?>
     
     // Inicializar outros componentes se necessário
     console.log('Análise de questões carregada com sucesso');
