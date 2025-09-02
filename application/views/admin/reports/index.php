@@ -143,7 +143,9 @@
             </div>
             <div class="card-body">
                 <?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
-                    <canvas id="applicatorsChart" width="20%" height="auto"></canvas>
+                    <div class="chart-container-fixed">
+                        <canvas id="applicatorsChart"></canvas>
+                    </div>
                     
                     <!-- Lista dos top aplicadores -->
                     <div class="mt-3">
@@ -235,7 +237,9 @@
             </div>
             <div class="card-body">
                 <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
-                    <canvas id="questionnairesPopularityChart" width="20%" height="auto"></canvas>
+                    <div class="chart-container-fixed">
+                        <canvas id="questionnairesPopularityChart"></canvas>
+                    </div>
                     
                     <!-- Lista dos questionários -->
                     <div class="mt-3">
@@ -999,6 +1003,20 @@
 </div>
 
 <style>
+/* Container para gráficos com altura fixa */
+.chart-container-fixed {
+    position: relative;
+    height: 280px;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.chart-container-fixed canvas {
+    max-height: 280px !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .chart-placeholder {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border: 2px dashed #dee2e6;
@@ -2277,7 +2295,6 @@ function exportSpecificAnalysis() {
     }, 3000);
 }
 
-
 /**
  * Carregar detalhes de uma questão específica (se necessário via AJAX)
  */
@@ -2464,19 +2481,7 @@ function removeHighlight(item) {
  */
 function escapeRegex(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\');
-}    
-    
-// Inicialização após carregamento da página
-document.addEventListener('DOMContentLoaded', function() {
-    // Adicionar tooltips se necessário
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    
-    // Inicializar outros componentes se necessário
-    console.log('Análise de questões carregada com sucesso');
-});
+}
 
 /**
  * Atualizar indicador de resultados de busca
@@ -2784,7 +2789,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1.5,
                     plugins: { 
                         legend: { display: false },
                         tooltip: {
@@ -2836,14 +2842,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1,
                     plugins: { 
                         legend: { 
                             position: 'bottom',
                             labels: {
                                 boxWidth: 12,
-                                padding: 15,
-                                font: { size: 11 }
+                                padding: 10,
+                                font: { size: 11 },
+                                maxRotation: 0
                             }
                         },
                         tooltip: {
