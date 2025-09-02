@@ -2889,7 +2889,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Adicione também limpeza quando a página for recarregada
 window.addEventListener('beforeunload', function() {
-    destroyExistingCharts();
+  //  destroyExistingCharts();
 });
 
 </script>
