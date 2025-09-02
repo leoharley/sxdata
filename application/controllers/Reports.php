@@ -1390,4 +1390,262 @@ private function create_questions_analysis_sheet($sheet, $analysis) {
           ->setBorderStyle(Border::BORDER_THIN);
 }
 
+
+/**
+ * NOVA PLANILHA: Análise por Questionário
+ */
+private function create_questionnaire_analysis_sheet($spreadsheet, $filters, $sheetIndex) {
+    $spreadsheet->setActiveSheetIndex($sheetIndex);
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Análise por Questionário');
+    
+    // Obter dados detalhados dos questionários
+    $detailed_analysis = $this->get_detailed_analysis($filters);
+    
+    // Título
+    $sheet->setCellValue('A1', 'ANÁLISE DETALHADA POR QUESTIONÁRIO');
+    $sheet->mergeCells('A1:J1');
+    $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
+    $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $sheet->getStyle('A1')->getFill()
+          ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('8fae5d');
+    $sheet->getStyle('A1')->getFont()->getColor()->setRGB('FFFFFF');
+    
+    $row = 3;
+    
+    // Cabeçalhos
+    $headers = [
+        'Questionário', 'Total Respostas', 'Média por Dia', 'Taxa Conclusão (%)',
+        'Tempo Médio (min)', 'Fotos Capturadas', 'Localizações', 'Última Resposta',
+        'Status', 'Avaliação Performance'
+    ];
+    
+    $col = 1;
+    foreach ($headers as $header) {
+        $sheet->setCellValueByColumnAndRow($col, $row, $header);
+        $col++;
+    }
+    
+    // Estilizar cabeçalhos
+    $headerRange = 'A' . $row . ':J' . $row;
+    $sheet->getStyle($headerRange)->getFont()->setBold(true);
+    $sheet->getStyle($headerRange)->getFill()
+          ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('007bff');
+    $sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
+    
+    $row++;
+    
+    // Preencher dados
+    if (!empty($detailed_analysis)) {
+        foreach ($detailed_analysis as $analysis) {
+            // Calcular performance do questionário
+            $performance = $this->evaluate_questionnaire_performance($analysis);
+            
+            // Última resposta formatada
+            $last_response = 'Nunca';
+            if (isset($analysis->last_activity) && $analysis->last_activity) {
+                $last_response = date('d/m/Y H:i', strtotime($analysis->last_activity));
+            } elseif (isset($analysis->last_application) && $analysis->last_application) {
+                $last_response = date('d/m/Y H:i', strtotime($analysis->last_application));
+            }
+            
+            // Status baseado na atividade recente
+            $status = $this->determine_questionnaire_status($analysis);
+            
+            $data = [
+                $analysis->questionnaire_title ?? 'N/A',
+                $analysis->total_responses ?? 0,
+                number_format($analysis->avg_per_day ?? 0, 1),
+                number_format($analysis->completion_rate ?? 0, 1),
+                number_format($analysis->avg_time ?? 0, 1),
+                $analysis->photos_count ?? 0,
+                $analysis->locations_count ?? 0,
+                $last_response,
+                $status,
+                $performance
+            ];
+            
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $row, $value);
+                $col++;
+            }
+            $row++;
+        }
+    } else {
+        // Se não há dados, adicionar linha informativa
+        $sheet->setCellValue('A' . $row, 'Nenhum dado encontrado para o período selecionado');
+        $sheet->mergeCells('A' . $row . ':J' . $row);
+        $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A' . $row)->getFont()->setItalic(true);
+        $row++;
+    }
+    
+    // Adicionar resumo estatístico
+    $row += 2;
+    $this->add_questionnaire_summary($sheet, $row, $detailed_analysis, $filters);
+    
+    // Ajustar larguras das colunas
+    $columnWidths = [
+        'A' => 30, // Questionário
+        'B' => 15, // Total Respostas
+        'C' => 15, // Média por Dia
+        'D' => 18, // Taxa Conclusão
+        'E' => 18, // Tempo Médio
+        'F' => 16, // Fotos
+        'G' => 16, // Localizações
+        'H' => 18, // Última Resposta
+        'I' => 12, // Status
+        'J' => 20  // Performance
+    ];
+    
+    foreach ($columnWidths as $column => $width) {
+        $sheet->getColumnDimension($column)->setWidth($width);
+    }
+    
+    // Adicionar bordas
+    if ($row > 4) {
+        $dataRange = 'A1:J' . ($row - 1);
+        $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
+              ->setBorderStyle(Border::BORDER_THIN);
+    }
+}
+
+/**
+ * Avaliar performance do questionário
+ */
+private function evaluate_questionnaire_performance($analysis) {
+    $score = 0;
+    
+    // Critérios de avaliação
+    $total_responses = $analysis->total_responses ?? 0;
+    $completion_rate = $analysis->completion_rate ?? 0;
+    $avg_per_day = $analysis->avg_per_day ?? 0;
+    
+    // Pontuação baseada no número de respostas
+    if ($total_responses >= 100) $score += 3;
+    elseif ($total_responses >= 50) $score += 2;
+    elseif ($total_responses >= 10) $score += 1;
+    
+    // Pontuação baseada na taxa de conclusão
+    if ($completion_rate >= 90) $score += 3;
+    elseif ($completion_rate >= 70) $score += 2;
+    elseif ($completion_rate >= 50) $score += 1;
+    
+    // Pontuação baseada na média por dia
+    if ($avg_per_day >= 5) $score += 2;
+    elseif ($avg_per_day >= 2) $score += 1;
+    
+    // Classificação
+    if ($score >= 7) return 'Excelente';
+    elseif ($score >= 5) return 'Bom';
+    elseif ($score >= 3) return 'Regular';
+    else return 'Precisa Melhorar';
+}
+
+/**
+ * Determinar status do questionário
+ */
+private function determine_questionnaire_status($analysis) {
+    $total_responses = $analysis->total_responses ?? 0;
+    $avg_per_day = $analysis->avg_per_day ?? 0;
+    
+    if ($total_responses == 0) {
+        return 'Sem Uso';
+    } elseif ($avg_per_day >= 2) {
+        return 'Ativo';
+    } elseif ($avg_per_day >= 0.5) {
+        return 'Moderado';
+    } else {
+        return 'Baixo Uso';
+    }
+}
+
+/**
+ * Adicionar resumo estatístico dos questionários
+ */
+private function add_questionnaire_summary($sheet, $startRow, $detailed_analysis, $filters) {
+    if (empty($detailed_analysis)) {
+        return;
+    }
+    
+    $row = $startRow;
+    
+    // Título do resumo
+    $sheet->setCellValue('A' . $row, 'RESUMO ESTATÍSTICO');
+    $sheet->mergeCells('A' . $row . ':B' . $row);
+    $sheet->getStyle('A' . $row)->getFont()->setBold(true);
+    $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
+          ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('6c757d');
+    $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->getColor()->setRGB('FFFFFF');
+    $row++;
+    
+    // Calcular estatísticas
+    $total_questionnaires = count($detailed_analysis);
+    $total_responses = array_sum(array_column($detailed_analysis, 'total_responses'));
+    $avg_responses_per_questionnaire = $total_questionnaires > 0 ? 
+        round($total_responses / $total_questionnaires, 1) : 0;
+    
+    $active_questionnaires = 0;
+    $total_photos = 0;
+    $total_locations = 0;
+    
+    foreach ($detailed_analysis as $analysis) {
+        if (($analysis->total_responses ?? 0) > 0) {
+            $active_questionnaires++;
+        }
+        $total_photos += ($analysis->photos_count ?? 0);
+        $total_locations += ($analysis->locations_count ?? 0);
+    }
+    
+    $utilization_rate = $total_questionnaires > 0 ? 
+        round(($active_questionnaires / $total_questionnaires) * 100, 1) : 0;
+    
+    // Dados do resumo
+    $summary_data = [
+        ['Total de Questionários:', $total_questionnaires],
+        ['Questionários Ativos:', $active_questionnaires],
+        ['Taxa de Utilização:', $utilization_rate . '%'],
+        ['Total de Respostas:', number_format($total_responses)],
+        ['Média de Respostas/Questionário:', $avg_responses_per_questionnaire],
+        ['Total de Fotos Capturadas:', number_format($total_photos)],
+        ['Total de Localizações:', number_format($total_locations)],
+        ['Período Analisado:', $this->format_period_text($filters)]
+    ];
+    
+    foreach ($summary_data as $data) {
+        $sheet->setCellValue('A' . $row, $data[0]);
+        $sheet->setCellValue('B' . $row, $data[1]);
+        $row++;
+    }
+    
+    // Top 3 questionários mais usados
+    if (count($detailed_analysis) > 0) {
+        $row++;
+        $sheet->setCellValue('A' . $row, 'TOP 3 QUESTIONÁRIOS MAIS UTILIZADOS');
+        $sheet->mergeCells('A' . $row . ':C' . $row);
+        $sheet->getStyle('A' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        // Ordenar por total de respostas
+        usort($detailed_analysis, function($a, $b) {
+            return ($b->total_responses ?? 0) - ($a->total_responses ?? 0);
+        });
+        
+        $sheet->setCellValue('A' . $row, 'Posição');
+        $sheet->setCellValue('B' . $row, 'Questionário');
+        $sheet->setCellValue('C' . $row, 'Total Respostas');
+        $sheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        $top_questionnaires = array_slice($detailed_analysis, 0, 3);
+        foreach ($top_questionnaires as $index => $questionnaire) {
+            $sheet->setCellValue('A' . $row, '#' . ($index + 1));
+            $sheet->setCellValue('B' . $row, $questionnaire->questionnaire_title ?? 'N/A');
+            $sheet->setCellValue('C' . $row, $questionnaire->total_responses ?? 0);
+            $row++;
+        }
+    }
+}
+
 }
