@@ -235,7 +235,7 @@
             </div>
             <div class="card-body">
                 <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
-                    <canvas id="questionnairesPopularityChart" width="200" height="200"></canvas>
+                    <canvas id="questionnairesPopularityChart" width="20%" height="auto"></canvas>
                     
                     <!-- Lista dos questionários -->
                     <div class="mt-3">
