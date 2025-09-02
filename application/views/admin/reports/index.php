@@ -143,7 +143,7 @@
             </div>
             <div class="card-body">
                 <?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
-                    <canvas id="applicatorsChart" width="400" height="200"></canvas>
+                    <canvas id="applicatorsChart" width="20%" height="auto"></canvas>
                     
                     <!-- Lista dos top aplicadores -->
                     <div class="mt-3">
