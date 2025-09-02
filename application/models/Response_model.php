@@ -245,8 +245,6 @@ class Response_model extends CI_Model {
     foreach ($results as &$result) {
         $result->indexador = $this->buscar_indexador($result->id, $result->questionnaire_id);
     }
-
-    var_dump($this->db->last_query());exit;
     
     return $results;
 }
