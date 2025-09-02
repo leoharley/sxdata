@@ -135,12 +135,35 @@
         </div>
         
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Aplicadores Mais Ativos</h5>
+                <?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
+                <span class="badge bg-primary"><?= count($charts_data['top_applicators']) ?> aplicadores</span>
+                <?php endif; ?>
             </div>
             <div class="card-body">
                 <?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
                     <canvas id="applicatorsChart" width="400" height="200"></canvas>
+                    
+                    <!-- Lista dos top aplicadores -->
+                    <div class="mt-3">
+                        <h6 class="text-muted mb-2">Ranking dos Aplicadores:</h6>
+                        <div class="row">
+                            <?php foreach (array_slice($charts_data['top_applicators'], 0, 6) as $index => $applicator): ?>
+                            <div class="col-md-6 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-<?= $index < 3 ? 'success' : 'secondary' ?> me-2">
+                                        #<?= $index + 1 ?>
+                                    </span>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-bold"><?= htmlspecialchars($applicator['name']) ?></div>
+                                        <small class="text-muted"><?= $applicator['count'] ?> aplicações</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
                 <?php else: ?>
                     <div class="chart-placeholder" style="height: 200px;">
                         <div class="d-flex align-items-center justify-content-center h-100">
@@ -204,12 +227,29 @@
     
     <div class="col-lg-4">
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Questionários por Popularidade</h5>
+                <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
+                <span class="badge bg-success"><?= count($charts_data['questionnaires_popularity']) ?> questionários</span>
+                <?php endif; ?>
             </div>
             <div class="card-body">
                 <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
                     <canvas id="questionnairesPopularityChart" width="200" height="200"></canvas>
+                    
+                    <!-- Lista dos questionários -->
+                    <div class="mt-3">
+                        <h6 class="text-muted mb-2">Mais utilizados:</h6>
+                        <?php foreach (array_slice($charts_data['questionnaires_popularity'], 0, 5) as $index => $questionnaire): ?>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="flex-grow-1">
+                                <div class="fw-bold"><?= htmlspecialchars($questionnaire['title']) ?></div>
+                                <small class="text-muted"><?= $questionnaire['count'] ?> aplicações</small>
+                            </div>
+                            <span class="badge bg-primary">#<?= $index + 1 ?></span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
                 <?php else: ?>
                     <div class="chart-placeholder" style="height: 200px;">
                         <div class="d-flex align-items-center justify-content-center h-100">
@@ -854,10 +894,10 @@
         if (!$has_valid_data && !empty($charts_data['questionnaires_popularity'])) {
             foreach ($charts_data['questionnaires_popularity'] as $q) {
                 $obj = new stdClass();
-                $obj->questionnaire_id = $q->id;
-                $obj->questionnaire_title = $q->title;
-                $obj->total_responses = $q->total_responses;
-                $obj->avg_per_day = round($q->total_responses / 30, 1);
+                $obj->questionnaire_id = $q['id'];
+                $obj->questionnaire_title = $q['title'];
+                $obj->total_responses = $q['count'];
+                $obj->avg_per_day = round($q['count'] / 30, 1);
                 $obj->completion_rate = 95; // Valor padrão
                 $obj->avg_time = rand(5, 12);
                 $obj->locations_count = 0; // Será calculado se necessário
@@ -1638,6 +1678,63 @@ mark {
     background-color: #7a9851 !important;
     border-color: #7a9851 !important;
 }
+
+/* ADICIONAL: Estilos para stat-box que pode estar faltando */
+.stat-box {
+    text-align: center;
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.stat-box:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.stat-box .stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #23345F;
+    display: block;
+}
+
+.stat-box .stat-label {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #8fae5d;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Melhorias nos badges dos gráficos */
+.badge {
+    font-weight: 500;
+}
+
+.badge.bg-primary {
+    background-color: #8fae5d !important;
+}
+
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
 </style>
 
 <script>
@@ -1646,6 +1743,24 @@ mark {
 
     let currentQuestionnaireData = null;
 let currentViewMode = 'detailed'; // 'detailed' ou 'compact'
+
+/**
+ * CORRIGIDO: Função para debug de dados dos gráficos
+ */
+function debugChartsData() {
+    const chartsData = <?= json_encode($charts_data ?? []) ?>;
+    console.log('Charts Data Debug:', chartsData);
+    
+    if (chartsData.top_applicators) {
+        console.log('Top Applicators:', chartsData.top_applicators.length, 'items');
+        console.log('First applicator:', chartsData.top_applicators[0]);
+    }
+    
+    if (chartsData.questionnaires_popularity) {
+        console.log('Questionnaires Popularity:', chartsData.questionnaires_popularity.length, 'items');
+        console.log('First questionnaire:', chartsData.questionnaires_popularity[0]);
+    }
+}
 
 /**
  * Carregar análise de questionário específico
@@ -2422,11 +2537,37 @@ function toggleCustomDates(period) {
 }
 
 function exportAllData() {
+    // Mostrar loading no botão
+    const exportBtn = document.querySelector('button[onclick="exportAllData()"]');
+    const originalContent = exportBtn.innerHTML;
+    exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando Relatório...';
+    exportBtn.disabled = true;
+    
+    // Fazer download
     window.location.href = '<?= base_url('reports/export_all?' . http_build_query($filters ?? [])) ?>';
+    
+    // Restaurar botão
+    setTimeout(() => {
+        exportBtn.innerHTML = originalContent;
+        exportBtn.disabled = false;
+    }, 5000); // 5 segundos para exportação completa
 }
 
 function generateKMZ() {
+    // Mostrar loading no botão
+    const kmzBtn = document.querySelector('button[onclick="generateKMZ()"]');
+    const originalContent = kmzBtn.innerHTML;
+    kmzBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando KMZ...';
+    kmzBtn.disabled = true;
+    
+    // Fazer download
     window.location.href = '<?= base_url('reports/generate_kmz?' . http_build_query($filters ?? [])) ?>';
+    
+    // Restaurar botão
+    setTimeout(() => {
+        kmzBtn.innerHTML = originalContent;
+        kmzBtn.disabled = false;
+    }, 3000);
 }
 
 function resetFilters() {
@@ -2434,81 +2575,6 @@ function resetFilters() {
     // Remove parâmetros da URL e recarrega a página
     window.location.href = window.location.pathname;
 }
-
-// Gráficos (usando dados PHP)
-<?php if (!empty($charts_data) && !empty($charts_data['responses_by_day'])): ?>
-// Gráfico de Respostas por Dia
-const responsesTimeCtx = document.getElementById('responsesTimeChart').getContext('2d');
-new Chart(responsesTimeCtx, {
-    type: 'line',
-    data: {
-        labels: <?= json_encode(array_column($charts_data['responses_by_day'], 'date')) ?>,
-        datasets: [{
-            label: 'Respostas',
-            data: <?= json_encode(array_column($charts_data['responses_by_day'], 'count')) ?>,
-            borderColor: '#8fae5d',
-            backgroundColor: 'rgba(143, 174, 93, 0.1)',
-            tension: 0.4,
-            fill: true
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { 
-            legend: { display: false },
-            title: { display: false }
-        },
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
-});
-<?php endif; ?>
-
-<?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
-// Gráfico de Aplicadores
-const applicatorsCtx = document.getElementById('applicatorsChart').getContext('2d');
-new Chart(applicatorsCtx, {
-    type: 'bar',
-    data: {
-        labels: <?= json_encode(array_column($charts_data['top_applicators'], 'name')) ?>,
-        datasets: [{
-            label: 'Respostas',
-            data: <?= json_encode(array_column($charts_data['top_applicators'], 'count')) ?>,
-            backgroundColor: '#8fae5d'
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-    }
-});
-<?php endif; ?>
-
-<?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
-// Gráfico de Popularidade dos Questionários
-const questionnairesCtx = document.getElementById('questionnairesPopularityChart').getContext('2d');
-new Chart(questionnairesCtx, {
-    type: 'doughnut',
-    data: {
-        labels: <?= json_encode(array_column($charts_data['questionnaires_popularity'], 'title')) ?>,
-        datasets: [{
-            data: <?= json_encode(array_column($charts_data['questionnaires_popularity'], 'count')) ?>,
-            backgroundColor: ['#8fae5d', '#007bff', '#ffc107', '#dc3545', '#17a2b8']
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'bottom' }
-        }
-    }
-});
-<?php endif; ?>
 
 // Dados do mapa de calor vindos do PHP
 const heatmapData = <?= json_encode($heatmap_locations ?? ['points' => [], 'stats' => []]) ?>;
@@ -2663,8 +2729,11 @@ document.addEventListener('DOMContentLoaded', function() {
     window.chartInstances = {};
 
     initLeafletMap();
+    
+    // Debug dos dados dos gráficos
+    debugChartsData();
 
-    // Gráficos principais (usando dados PHP)
+    // CORREÇÃO: Gráficos principais com tratamento de dados vazios
     <?php if (!empty($charts_data) && !empty($charts_data['responses_by_day'])): ?>
     const responsesTimeCtx = document.getElementById('responsesTimeChart');
     if (responsesTimeCtx) {
@@ -2694,44 +2763,101 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php if (!empty($charts_data) && !empty($charts_data['top_applicators'])): ?>
     const applicatorsCtx = document.getElementById('applicatorsChart');
     if (applicatorsCtx) {
-        window.chartInstances['applicatorsChart'] = new Chart(applicatorsCtx.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: <?= json_encode(array_column($charts_data['top_applicators'], 'name')) ?>,
-                datasets: [{
-                    label: 'Respostas',
-                    data: <?= json_encode(array_column($charts_data['top_applicators'], 'count')) ?>,
-                    backgroundColor: '#8fae5d'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
+        const applicatorsData = <?= json_encode($charts_data['top_applicators']) ?>;
+        console.log('Applicators data for chart:', applicatorsData);
+        
+        if (applicatorsData && applicatorsData.length > 0) {
+            const labels = applicatorsData.map(item => item.name || 'Sem nome');
+            const data = applicatorsData.map(item => parseInt(item.count) || 0);
+            
+            window.chartInstances['applicatorsChart'] = new Chart(applicatorsCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Respostas',
+                        data: data,
+                        backgroundColor: '#8fae5d',
+                        borderColor: '#7a9851',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y + ' aplicações';
+                                }
+                            }
+                        }
+                    },
+                    scales: { 
+                        y: { beginAtZero: true },
+                        x: { 
+                            ticks: { 
+                                maxRotation: 45,
+                                minRotation: 0 
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
     <?php endif; ?>
 
     <?php if (!empty($charts_data) && !empty($charts_data['questionnaires_popularity'])): ?>
     const questionnairesCtx = document.getElementById('questionnairesPopularityChart');
     if (questionnairesCtx) {
-        window.chartInstances['questionnairesPopularityChart'] = new Chart(questionnairesCtx.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: <?= json_encode(array_column($charts_data['questionnaires_popularity'], 'title')) ?>,
-                datasets: [{
-                    data: <?= json_encode(array_column($charts_data['questionnaires_popularity'], 'count')) ?>,
-                    backgroundColor: ['#8fae5d', '#007bff', '#ffc107', '#dc3545', '#17a2b8']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } }
-            }
-        });
+        const questionnairesData = <?= json_encode($charts_data['questionnaires_popularity']) ?>;
+        console.log('Questionnaires data for chart:', questionnairesData);
+        
+        if (questionnairesData && questionnairesData.length > 0) {
+            const labels = questionnairesData.map(item => {
+                const title = item.title || 'Sem título';
+                return title.length > 20 ? title.substring(0, 20) + '...' : title;
+            });
+            const data = questionnairesData.map(item => parseInt(item.count) || 0);
+            
+            window.chartInstances['questionnairesPopularityChart'] = new Chart(questionnairesCtx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#8fae5d', '#007bff', '#ffc107', '#dc3545', '#17a2b8', '#6f42c1', '#e83e8c'],
+                        borderColor: ['#7a9851', '#0056b3', '#e0a800', '#c82333', '#138496', '#59359a', '#e619af'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 15,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const fullTitle = questionnairesData[context.dataIndex].title || 'Sem título';
+                                    return fullTitle + ': ' + context.parsed + ' aplicações';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
     <?php endif; ?>
     

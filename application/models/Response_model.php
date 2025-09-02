@@ -404,10 +404,16 @@ class Response_model extends CI_Model {
         return $this->db->get()->result();
     }
 
+    // CORRIGIDO: Top aplicadores com estrutura garantida
     public function get_top_applicators($filters = array(), $limit = 10) {
-        $this->db->select('u.id, u.full_name, COUNT(fr.id) as total_responses');
+        $this->db->select('
+            u.id, 
+            u.full_name, 
+            u.username,
+            COUNT(fr.id) as total_responses
+        ');
         $this->db->from('form_responses fr');
-        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+        $this->db->join('users u', 'fr.applied_by = u.id', 'inner'); // INNER JOIN para garantir usuário válido
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         
         // Aplicar filtros
@@ -431,27 +437,40 @@ class Response_model extends CI_Model {
             $this->db->where('fr.sync_status', $filters['sync_status']);
         }
         
-        // Garantir que há um aplicador válido
+        // Garantir que há um aplicador válido e ativo
         $this->db->where('fr.applied_by IS NOT NULL');
         $this->db->where('u.full_name IS NOT NULL');
+        $this->db->where("u.full_name != ''");
+        $this->db->where('u.is_active', TRUE); // Apenas usuários ativos
         
         // Incluir todas as colunas não agregadas no GROUP BY
-        $this->db->group_by('u.id, u.full_name');
+        $this->db->group_by('u.id, u.full_name, u.username');
+        $this->db->having('COUNT(fr.id) > 0'); // Apenas aplicadores com respostas
         $this->db->order_by('total_responses', 'DESC');
         $this->db->limit($limit);
         
-        return $this->db->get()->result();
+        $result = $this->db->get()->result();
+        
+        // Log para debug (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Top Applicators Query: ' . $this->db->last_query());
+            log_message('debug', 'Top Applicators Result: ' . json_encode($result));
+        }
+        
+        return $result;
     }
 
+    // CORRIGIDO: Questionários por popularidade com estrutura garantida
     public function get_questionnaires_popularity($filters = array(), $limit = 10) {
         $this->db->select('
             q.id, 
             q.title, 
             COUNT(fr.id) as total_applications,
+            COUNT(fr.id) as total_responses, -- Alias adicional para compatibilidade
             MAX(fr.completed_at) as last_application
         ');
         $this->db->from('form_responses fr');
-        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'inner'); // INNER JOIN para garantir questionário válido
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
         
         // Aplicar filtros
@@ -478,13 +497,24 @@ class Response_model extends CI_Model {
         // Garantir que há um questionário válido
         $this->db->where('fr.questionnaire_id IS NOT NULL');
         $this->db->where('q.title IS NOT NULL');
+        $this->db->where("q.title != ''");
+        $this->db->where('q.status', 'active'); // Apenas questionários ativos
         
         // Incluir todas as colunas não agregadas no GROUP BY
         $this->db->group_by('q.id, q.title');
+        $this->db->having('COUNT(fr.id) > 0'); // Apenas questionários com respostas
         $this->db->order_by('total_applications', 'DESC');
         $this->db->limit($limit);
         
-        return $this->db->get()->result();
+        $result = $this->db->get()->result();
+        
+        // Log para debug (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Questionnaires Popularity Query: ' . $this->db->last_query());
+            log_message('debug', 'Questionnaires Popularity Result: ' . json_encode($result));
+        }
+        
+        return $result;
     }
 
     public function get_detailed_analysis($filters = array()) {
@@ -586,8 +616,10 @@ class Response_model extends CI_Model {
             fr.longitude,
             fr.location_name,
             fr.consent_given,
+            fr.started_at,
             fr.completed_at,
-            fr.sync_status
+            fr.sync_status,
+            fr.photo_path
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');

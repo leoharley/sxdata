@@ -18,7 +18,6 @@ class Reports extends CI_Controller {
         $this->load->library('session');
         $this->load->model('Response_model');
         $this->load->model('Questionnaire_model');
-        $this->load->library('excel');
         $this->load->library('kmz_generator');
         $this->check_auth();
     }
@@ -50,13 +49,658 @@ class Reports extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
-    public function export_all() {
-        $filters = $this->get_filters();
-        $responses = $this->Response_model->get_for_export($filters);
+    // MÉTODO CORRIGIDO: Melhorar dados dos gráficos
+    private function get_charts_data($filters) {
+        $charts_data = array();
         
-        $this->excel->create_export($responses);
+        // 1. Respostas por dia
+        $responses_by_day = $this->Response_model->get_responses_by_day_filtered($filters, 30);
+        $charts_data['responses_by_day'] = $responses_by_day;
+        
+        // 2. CORRIGIDO: Top aplicadores - garantir estrutura correta
+        $top_applicators_raw = $this->Response_model->get_top_applicators($filters, 10);
+        $top_applicators = array();
+        
+        foreach ($top_applicators_raw as $applicator) {
+            $top_applicators[] = array(
+                'name' => $applicator->full_name ?: 'Aplicador #' . $applicator->id,
+                'count' => (int)$applicator->total_responses,
+                'id' => $applicator->id
+            );
+        }
+        
+        $charts_data['top_applicators'] = $top_applicators;
+        
+        // 3. CORRIGIDO: Questionários por popularidade - garantir estrutura correta  
+        $questionnaires_popularity_raw = $this->Response_model->get_questionnaires_popularity($filters, 10);
+        $questionnaires_popularity = array();
+        
+        foreach ($questionnaires_popularity_raw as $questionnaire) {
+            $questionnaires_popularity[] = array(
+                'title' => $questionnaire->title ?: 'Questionário #' . $questionnaire->id,
+                'count' => (int)$questionnaire->total_applications,
+                'id' => $questionnaire->id
+            );
+        }
+        
+        $charts_data['questionnaires_popularity'] = $questionnaires_popularity;
+        
+        // Log para debug (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'Charts data: ' . json_encode($charts_data));
+        }
+        
+        return $charts_data;
     }
 
+    // MÉTODO MELHORADO: Exportação completa com muito mais informações
+    public function export_all() {
+        $filters = $this->get_filters();
+        
+        try {
+            // Criar novo arquivo Excel
+            $spreadsheet = new Spreadsheet();
+            $spreadsheet->getProperties()
+                        ->setCreator("SXData System")
+                        ->setLastModifiedBy("SXData System")
+                        ->setTitle("Relatório Completo SXData")
+                        ->setSubject("Análise Completa de Dados Coletados")
+                        ->setDescription("Relatório abrangente com todas as informações coletadas no período selecionado");
+
+            // PLANILHA 1: Resumo Executivo
+            $this->create_executive_summary_sheet($spreadsheet, $filters);
+            
+            // PLANILHA 2: Respostas Detalhadas
+            $spreadsheet->createSheet();
+            $this->create_detailed_responses_sheet($spreadsheet, $filters, 1);
+            
+            // PLANILHA 3: Análise por Questionário
+            $spreadsheet->createSheet();
+            $this->create_questionnaire_analysis_sheet($spreadsheet, $filters, 2);
+            
+            // PLANILHA 4: Performance dos Aplicadores
+            $spreadsheet->createSheet();
+            $this->create_applicators_performance_sheet($spreadsheet, $filters, 3);
+            
+            // PLANILHA 5: Análise Geográfica
+            $spreadsheet->createSheet();
+            $this->create_geographic_analysis_sheet($spreadsheet, $filters, 4);
+            
+            // PLANILHA 6: Estatísticas de Tempo
+            $spreadsheet->createSheet();
+            $this->create_time_statistics_sheet($spreadsheet, $filters, 5);
+
+            // Definir a primeira planilha como ativa
+            $spreadsheet->setActiveSheetIndex(0);
+            
+            // Gerar arquivo
+            $filename = 'relatorio_completo_' . date('Y-m-d_H-i-s') . '.xlsx';
+            
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+            
+        } catch (Exception $e) {
+            log_message('error', 'Erro na exportação completa: ' . $e->getMessage());
+            $this->session->set_flashdata('error', 'Erro ao gerar exportação: ' . $e->getMessage());
+            redirect('reports');
+        }
+    }
+
+    /**
+     * NOVA PLANILHA: Resumo Executivo
+     */
+    private function create_executive_summary_sheet($spreadsheet, $filters) {
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Resumo Executivo');
+        
+        // Título principal
+        $sheet->setCellValue('A1', 'RELATÓRIO EXECUTIVO - SXDATA');
+        $sheet->mergeCells('A1:F1');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('23345F');
+        $sheet->getStyle('A1')->getFont()->getColor()->setRGB('FFFFFF');
+        
+        $row = 3;
+        
+        // Informações do relatório
+        $period_text = $this->format_period_text($filters);
+        $report_info = [
+            ['Período do Relatório:', $period_text],
+            ['Data de Geração:', date('d/m/Y H:i:s')],
+            ['Gerado por:', $this->session->userdata('user_name') ?: 'Sistema'],
+            ['', ''],
+            ['MÉTRICAS GERAIS', '']
+        ];
+        
+        foreach ($report_info as $info) {
+            $sheet->setCellValue('A' . $row, $info[0]);
+            $sheet->setCellValue('B' . $row, $info[1]);
+            
+            if (strpos($info[0], 'MÉTRICAS') !== false) {
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
+                      ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('8fae5d');
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->getColor()->setRGB('FFFFFF');
+            }
+            $row++;
+        }
+        
+        // Calcular estatísticas
+        $period_stats = $this->calculate_period_stats($filters);
+        $charts_data = $this->get_charts_data($filters);
+        
+        $metrics = [
+            ['Total de Respostas Coletadas:', number_format($period_stats['total_responses'] ?? 0)],
+            ['Respondentes Únicos:', number_format($period_stats['unique_respondents'] ?? 0)],
+            ['Fotos Capturadas:', number_format($period_stats['photos_captured'] ?? 0)],
+            ['Localizações Registradas:', number_format($period_stats['locations_captured'] ?? 0)],
+            ['Taxa de Consentimento:', ($period_stats['consent_rate'] ?? 0) . '%'],
+            ['', ''],
+            ['ANÁLISE DE ATIVIDADE', ''],
+            ['Aplicadores Ativos:', count($charts_data['top_applicators'] ?? [])],
+            ['Questionários Utilizados:', count($charts_data['questionnaires_popularity'] ?? [])],
+            ['Média de Respostas/Dia:', $this->calculate_daily_average($filters)],
+        ];
+        
+        foreach ($metrics as $metric) {
+            $sheet->setCellValue('A' . $row, $metric[0]);
+            $sheet->setCellValue('B' . $row, $metric[1]);
+            
+            if (strpos($metric[0], 'ANÁLISE') !== false) {
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
+                      ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('8fae5d');
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->getColor()->setRGB('FFFFFF');
+            }
+            $row++;
+        }
+        
+        // Top 5 Aplicadores
+        $row += 2;
+        $sheet->setCellValue('A' . $row, 'TOP 5 APLICADORES MAIS ATIVOS');
+        $sheet->mergeCells('A' . $row . ':C' . $row);
+        $sheet->getStyle('A' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        $sheet->setCellValue('A' . $row, 'Posição');
+        $sheet->setCellValue('B' . $row, 'Nome');
+        $sheet->setCellValue('C' . $row, 'Total de Aplicações');
+        $sheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        $top_applicators = array_slice($charts_data['top_applicators'] ?? [], 0, 5);
+        foreach ($top_applicators as $index => $applicator) {
+            $sheet->setCellValue('A' . $row, '#' . ($index + 1));
+            $sheet->setCellValue('B' . $row, $applicator['name']);
+            $sheet->setCellValue('C' . $row, $applicator['count']);
+            $row++;
+        }
+        
+        // Top 5 Questionários
+        $row += 2;
+        $sheet->setCellValue('A' . $row, 'TOP 5 QUESTIONÁRIOS MAIS UTILIZADOS');
+        $sheet->mergeCells('A' . $row . ':C' . $row);
+        $sheet->getStyle('A' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        $sheet->setCellValue('A' . $row, 'Posição');
+        $sheet->setCellValue('B' . $row, 'Título');
+        $sheet->setCellValue('C' . $row, 'Total de Aplicações');
+        $sheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        $top_questionnaires = array_slice($charts_data['questionnaires_popularity'] ?? [], 0, 5);
+        foreach ($top_questionnaires as $index => $questionnaire) {
+            $sheet->setCellValue('A' . $row, '#' . ($index + 1));
+            $sheet->setCellValue('B' . $row, $questionnaire['title']);
+            $sheet->setCellValue('C' . $row, $questionnaire['count']);
+            $row++;
+        }
+        
+        // Ajustar larguras das colunas
+        $sheet->getColumnDimension('A')->setWidth(30);
+        $sheet->getColumnDimension('B')->setWidth(40);
+        $sheet->getColumnDimension('C')->setWidth(20);
+        
+        // Adicionar bordas
+        $dataRange = 'A1:C' . ($row - 1);
+        $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    }
+
+    /**
+     * NOVA PLANILHA: Respostas Detalhadas
+     */
+    private function create_detailed_responses_sheet($spreadsheet, $filters, $sheetIndex) {
+        $spreadsheet->setActiveSheetIndex($sheetIndex);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Respostas Detalhadas');
+        
+        // Obter dados completos das respostas
+        $responses = $this->Response_model->get_for_export($filters);
+        
+        // Cabeçalhos
+        $headers = [
+            'ID', 'Questionário', 'Aplicador', 'Respondente', 'Email Respondente',
+            'Data/Hora Início', 'Data/Hora Conclusão', 'Duração (min)', 
+            'Latitude', 'Longitude', 'Local', 'Consentimento', 
+            'Foto Capturada', 'Status Sinc', 'Observações'
+        ];
+        
+        $col = 1;
+        foreach ($headers as $header) {
+            $sheet->setCellValueByColumnAndRow($col, 1, $header);
+            $col++;
+        }
+        
+        // Estilizar cabeçalhos
+        $headerRange = 'A1:' . chr(64 + count($headers)) . '1';
+        $sheet->getStyle($headerRange)->getFont()->setBold(true);
+        $sheet->getStyle($headerRange)->getFill()
+              ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('8fae5d');
+        $sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
+        
+        // Preencher dados
+        $row = 2;
+        foreach ($responses as $response) {
+            $duration = null;
+            if ($response->started_at && $response->completed_at) {
+                $start = new DateTime($response->started_at);
+                $end = new DateTime($response->completed_at);
+                $duration = round($end->diff($start)->i + ($end->diff($start)->h * 60), 1);
+            }
+            
+            $data = [
+                $response->id,
+                $response->questionnaire ?? 'N/A',
+                $response->aplicador ?? 'N/A',
+                $response->respondent_name ?? 'Não informado',
+                $response->respondent_email ?? 'N/A',
+                $response->started_at ? date('d/m/Y H:i:s', strtotime($response->started_at)) : 'N/A',
+                $response->completed_at ? date('d/m/Y H:i:s', strtotime($response->completed_at)) : 'N/A',
+                $duration ?? 'N/A',
+                $response->latitude ?? 'N/A',
+                $response->longitude ?? 'N/A',
+                $response->location_name ?? 'N/A',
+                $response->consent_given ? 'Sim' : 'Não',
+                !empty($response->photo_path) ? 'Sim' : 'Não',
+                $this->format_sync_status($response->sync_status ?? 'pending'),
+                $this->generate_response_observations($response)
+            ];
+            
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $row, $value);
+                $col++;
+            }
+            $row++;
+        }
+        
+        // Autoajustar larguras
+        foreach (range('A', chr(64 + count($headers))) as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+        
+        // Adicionar bordas
+        if ($row > 2) {
+            $dataRange = 'A1:' . chr(64 + count($headers)) . ($row - 1);
+            $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        }
+    }
+
+    /**
+     * NOVA PLANILHA: Performance dos Aplicadores
+     */
+    private function create_applicators_performance_sheet($spreadsheet, $filters, $sheetIndex) {
+        $spreadsheet->setActiveSheetIndex($sheetIndex);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Performance Aplicadores');
+        
+        // Obter dados dos aplicadores
+        $applicators_data = $this->Response_model->get_applicators_stats($filters);
+        
+        // Cabeçalhos
+        $headers = [
+            'Nome Completo', 'Username', 'Status', 'Total Formulários',
+            'Formulários Hoje', 'Fotos Capturadas', 'Locais Visitados', 
+            'Última Atividade', 'Dias Ativos', 'Média por Dia',
+            'Taxa de Sucesso (%)', 'Avaliação Performance'
+        ];
+        
+        $col = 1;
+        foreach ($headers as $header) {
+            $sheet->setCellValueByColumnAndRow($col, 1, $header);
+            $col++;
+        }
+        
+        // Estilizar cabeçalhos
+        $headerRange = 'A1:' . chr(64 + count($headers)) . '1';
+        $sheet->getStyle($headerRange)->getFont()->setBold(true);
+        $sheet->getStyle($headerRange)->getFill()
+              ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('007bff');
+        $sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
+        
+        // Preencher dados
+        $row = 2;
+        foreach ($applicators_data as $applicator) {
+            $avg_per_day = $applicator->active_days > 0 ? 
+                round($applicator->total_forms / $applicator->active_days, 1) : 0;
+            
+            $success_rate = $applicator->total_forms > 0 ? 
+                round(($applicator->total_forms / $applicator->total_forms) * 100, 1) : 0;
+                
+            $performance = $this->evaluate_applicator_performance($applicator);
+            
+            $data = [
+                $applicator->full_name,
+                $applicator->username,
+                $applicator->is_active ? 'Ativo' : 'Inativo',
+                $applicator->total_forms,
+                $applicator->today_forms,
+                $applicator->photos_captured,
+                $applicator->locations_captured,
+                $applicator->last_activity ? date('d/m/Y H:i', strtotime($applicator->last_activity)) : 'Nunca',
+                $applicator->active_days,
+                $avg_per_day,
+                $success_rate,
+                $performance
+            ];
+            
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $row, $value);
+                $col++;
+            }
+            $row++;
+        }
+        
+        // Autoajustar larguras
+        foreach (range('A', chr(64 + count($headers))) as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+        
+        // Adicionar bordas e formatação condicional para performance
+        if ($row > 2) {
+            $dataRange = 'A1:' . chr(64 + count($headers)) . ($row - 1);
+            $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        }
+    }
+
+    /**
+     * NOVA PLANILHA: Análise Geográfica
+     */
+    private function create_geographic_analysis_sheet($spreadsheet, $filters, $sheetIndex) {
+        $spreadsheet->setActiveSheetIndex($sheetIndex);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Análise Geográfica');
+        
+        // Obter dados geográficos
+        $location_stats = $this->Response_model->get_location_stats($filters);
+        $coverage_stats = $this->Response_model->get_coverage_stats($filters);
+        
+        // Título
+        $sheet->setCellValue('A1', 'ANÁLISE GEOGRÁFICA DA COLETA');
+        $sheet->mergeCells('A1:E1');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        
+        // Estatísticas de cobertura
+        $row = 3;
+        $coverage_data = [
+            ['ESTATÍSTICAS DE COBERTURA', ''],
+            ['Pontos únicos de coleta:', $coverage_stats['unique_collection_points']],
+            ['Percentual de cobertura estimado:', $coverage_stats['coverage_percentage'] . '%'],
+            ['Novas áreas este mês:', $coverage_stats['new_areas_this_month']],
+            ['Zonas de alta densidade:', $coverage_stats['high_density_zones']],
+            ['Área total coberta:', $coverage_stats['total_area_covered']],
+            ['', ''],
+            ['LOCAIS MAIS VISITADOS', '']
+        ];
+        
+        foreach ($coverage_data as $data) {
+            $sheet->setCellValue('A' . $row, $data[0]);
+            $sheet->setCellValue('B' . $row, $data[1]);
+            
+            if (strpos($data[0], 'ESTATÍSTICAS') !== false || strpos($data[0], 'LOCAIS') !== false) {
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
+                      ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('17a2b8');
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->getColor()->setRGB('FFFFFF');
+            }
+            $row++;
+        }
+        
+        // Cabeçalhos para locais
+        $headers = ['Local', 'Total Formulários', 'Aplicadores Únicos', 'Lat. Média', 'Long. Média'];
+        $col = 1;
+        foreach ($headers as $header) {
+            $sheet->setCellValueByColumnAndRow($col, $row, $header);
+            $col++;
+        }
+        $sheet->getStyle('A' . $row . ':E' . $row)->getFont()->setBold(true);
+        $row++;
+        
+        // Dados dos locais
+        foreach ($location_stats as $location) {
+            $data = [
+                $location->location_name,
+                $location->total_forms,
+                $location->unique_applicators,
+                round($location->avg_latitude, 6),
+                round($location->avg_longitude, 6)
+            ];
+            
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $row, $value);
+                $col++;
+            }
+            $row++;
+        }
+        
+        // Ajustar larguras
+        $sheet->getColumnDimension('A')->setWidth(30);
+        $sheet->getColumnDimension('B')->setWidth(15);
+        $sheet->getColumnDimension('C')->setWidth(15);
+        $sheet->getColumnDimension('D')->setWidth(12);
+        $sheet->getColumnDimension('E')->setWidth(12);
+        
+        // Bordas
+        $dataRange = 'A1:E' . ($row - 1);
+        $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    }
+
+    /**
+     * NOVA PLANILHA: Estatísticas de Tempo
+     */
+    private function create_time_statistics_sheet($spreadsheet, $filters, $sheetIndex) {
+        $spreadsheet->setActiveSheetIndex($sheetIndex);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Análise Temporal');
+        
+        // Obter dados temporais
+        $responses_by_day = $this->Response_model->get_responses_by_day_filtered($filters, 30);
+        
+        // Título
+        $sheet->setCellValue('A1', 'ANÁLISE TEMPORAL DA COLETA DE DADOS');
+        $sheet->mergeCells('A1:D1');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        
+        $row = 3;
+        
+        // Cabeçalhos para dados por dia
+        $headers = ['Data', 'Dia da Semana', 'Total Respostas', 'Variação'];
+        $col = 1;
+        foreach ($headers as $header) {
+            $sheet->setCellValueByColumnAndRow($col, $row, $header);
+            $col++;
+        }
+        $sheet->getStyle('A' . $row . ':D' . $row)->getFont()->setBold(true);
+        $sheet->getStyle('A' . $row . ':D' . $row)->getFill()
+              ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('ffc107');
+        $row++;
+        
+        // Dados por dia
+        $previous_count = 0;
+        foreach ($responses_by_day as $day_data) {
+            $date = new DateTime($day_data->date);
+            $day_name = $this->get_day_name($date->format('w'));
+            $variation = $previous_count > 0 ? 
+                round((($day_data->count - $previous_count) / $previous_count) * 100, 1) : 0;
+            
+            $data = [
+                $date->format('d/m/Y'),
+                $day_name,
+                $day_data->count,
+                ($variation >= 0 ? '+' : '') . $variation . '%'
+            ];
+            
+            $col = 1;
+            foreach ($data as $value) {
+                $sheet->setCellValueByColumnAndRow($col, $row, $value);
+                $col++;
+            }
+            
+            $previous_count = $day_data->count;
+            $row++;
+        }
+        
+        // Resumo estatístico
+        $row += 2;
+        $total_responses = array_sum(array_column($responses_by_day, 'count'));
+        $avg_per_day = count($responses_by_day) > 0 ? round($total_responses / count($responses_by_day), 1) : 0;
+        $max_day = !empty($responses_by_day) ? max(array_column($responses_by_day, 'count')) : 0;
+        $min_day = !empty($responses_by_day) ? min(array_column($responses_by_day, 'count')) : 0;
+        
+        $summary = [
+            ['RESUMO ESTATÍSTICO', ''],
+            ['Total de respostas no período:', $total_responses],
+            ['Média de respostas por dia:', $avg_per_day],
+            ['Maior volume em um dia:', $max_day],
+            ['Menor volume em um dia:', $min_day],
+            ['Desvio padrão:', $this->calculate_standard_deviation(array_column($responses_by_day, 'count'))],
+        ];
+        
+        foreach ($summary as $data) {
+            $sheet->setCellValue('A' . $row, $data[0]);
+            $sheet->setCellValue('B' . $row, $data[1]);
+            
+            if (strpos($data[0], 'RESUMO') !== false) {
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
+                      ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('6c757d');
+                $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->getColor()->setRGB('FFFFFF');
+            }
+            $row++;
+        }
+        
+        // Ajustar larguras
+        foreach (range('A', 'D') as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+        
+        // Bordas
+        $dataRange = 'A1:D' . ($row - 1);
+        $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    }
+
+    // MÉTODOS AUXILIARES
+
+    private function calculate_daily_average($filters) {
+        $total_responses = $this->Response_model->count_by_filters($filters);
+        $days = $this->calculate_period_days($filters);
+        return $days > 0 ? round($total_responses / $days, 1) : 0;
+    }
+
+    private function calculate_period_days($filters) {
+        if (isset($filters['date_from']) && isset($filters['date_to'])) {
+            $from = new DateTime($filters['date_from']);
+            $to = new DateTime($filters['date_to']);
+            return $to->diff($from)->days + 1;
+        }
+        
+        switch ($filters['period'] ?? 'last_30_days') {
+            case 'last_7_days': return 7;
+            case 'last_3_months': return 90;
+            default: return 30;
+        }
+    }
+
+    private function format_sync_status($status) {
+        switch ($status) {
+            case 'pending': return 'Pendente';
+            case 'synced': return 'Sincronizado';
+            case 'error': return 'Erro';
+            default: return 'Desconhecido';
+        }
+    }
+
+    private function generate_response_observations($response) {
+        $observations = [];
+        
+        if (empty($response->respondent_email)) {
+            $observations[] = 'Sem email';
+        }
+        
+        if (empty($response->latitude) || empty($response->longitude)) {
+            $observations[] = 'Sem localização';
+        }
+        
+        if (empty($response->photo_path)) {
+            $observations[] = 'Sem foto';
+        }
+        
+        if (!$response->consent_given) {
+            $observations[] = 'Sem consentimento';
+        }
+        
+        return empty($observations) ? 'Completo' : implode(', ', $observations);
+    }
+
+    private function evaluate_applicator_performance($applicator) {
+        $score = 0;
+        
+        // Critérios de avaliação
+        if ($applicator->total_forms >= 50) $score += 3;
+        elseif ($applicator->total_forms >= 20) $score += 2;
+        elseif ($applicator->total_forms >= 5) $score += 1;
+        
+        if ($applicator->active_days >= 15) $score += 2;
+        elseif ($applicator->active_days >= 7) $score += 1;
+        
+        if ($applicator->photos_captured >= $applicator->total_forms * 0.8) $score += 2;
+        elseif ($applicator->photos_captured >= $applicator->total_forms * 0.5) $score += 1;
+        
+        // Classificação
+        if ($score >= 6) return 'Excelente';
+        elseif ($score >= 4) return 'Bom';
+        elseif ($score >= 2) return 'Regular';
+        else return 'Precisa Melhorar';
+    }
+
+    private function get_day_name($day_number) {
+        $days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        return $days[$day_number] ?? 'Desconhecido';
+    }
+
+    private function calculate_standard_deviation($values) {
+        if (empty($values)) return 0;
+        
+        $mean = array_sum($values) / count($values);
+        $sum_squares = array_sum(array_map(function($x) use ($mean) {
+            return pow($x - $mean, 2);
+        }, $values));
+        
+        return round(sqrt($sum_squares / count($values)), 2);
+    }
+
+    // MANTER MÉTODOS ORIGINAIS QUE AINDA FUNCIONAM
     public function generate_kmz() {
         $filters = $this->get_filters();
         $responses = $this->Response_model->get_with_location($filters);
@@ -205,14 +849,6 @@ class Reports extends CI_Controller {
             'photos_captured' => $this->Response_model->count_photos($filters),
             'locations_captured' => $this->Response_model->count_locations($filters),
             'consent_rate' => $this->Response_model->get_consent_rate($filters)
-        );
-    }
-
-    private function get_charts_data($filters) {
-        return array(
-            'responses_by_day' => $this->Response_model->get_responses_by_day_filtered($filters),
-            'top_applicators' => $this->Response_model->get_top_applicators($filters),
-            'questionnaires_popularity' => $this->Response_model->get_questionnaires_popularity($filters)
         );
     }
 
@@ -536,128 +1172,6 @@ private function format_period_text($filters) {
     return 'Período não especificado';
 }
 
-/**
- * Criar planilha de estatísticas das respostas de texto
- */
-private function create_text_statistics_sheet($sheet, $samples, $question_info) {
-    // Calcular estatísticas
-    $total_samples = count($samples);
-    $total_chars = 0;
-    $total_words = 0;
-    $char_lengths = array();
-    $word_counts = array();
-    $responses_by_hour = array();
-    $responses_by_date = array();
-    
-    foreach ($samples as $sample) {
-        $text = $sample->response_text ?: '';
-        $char_count = strlen($text);
-        $word_count = str_word_count($text);
-        
-        $total_chars += $char_count;
-        $total_words += $word_count;
-        $char_lengths[] = $char_count;
-        $word_counts[] = $word_count;
-        
-        // Agrupar por hora
-        $hour = date('H', strtotime($sample->completed_at));
-        if (!isset($responses_by_hour[$hour])) {
-            $responses_by_hour[$hour] = 0;
-        }
-        $responses_by_hour[$hour]++;
-        
-        // Agrupar por data
-        $date = date('Y-m-d', strtotime($sample->completed_at));
-        if (!isset($responses_by_date[$date])) {
-            $responses_by_date[$date] = 0;
-        }
-        $responses_by_date[$date]++;
-    }
-    
-    $avg_chars = $total_samples > 0 ? round($total_chars / $total_samples, 1) : 0;
-    $avg_words = $total_samples > 0 ? round($total_words / $total_samples, 1) : 0;
-    $min_chars = !empty($char_lengths) ? min($char_lengths) : 0;
-    $max_chars = !empty($char_lengths) ? max($char_lengths) : 0;
-    $min_words = !empty($word_counts) ? min($word_counts) : 0;
-    $max_words = !empty($word_counts) ? max($word_counts) : 0;
-    
-    // Título
-    $sheet->setCellValue('A1', 'ESTATÍSTICAS DAS RESPOSTAS DE TEXTO');
-    $sheet->mergeCells('A1:B1');
-    $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
-    $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    
-    // Estatísticas gerais
-    $row = 3;
-    $stats_data = array(
-        array('ESTATÍSTICAS GERAIS', ''),
-        array('Total de amostras', $total_samples),
-        array('Total de caracteres', number_format($total_chars)),
-        array('Total de palavras', number_format($total_words)),
-        array('Média de caracteres por resposta', $avg_chars),
-        array('Média de palavras por resposta', $avg_words),
-        array('Menor resposta (caracteres)', $min_chars),
-        array('Maior resposta (caracteres)', $max_chars),
-        array('Menor resposta (palavras)', $min_words),
-        array('Maior resposta (palavras)', $max_words),
-        array('', ''),
-        array('DISTRIBUIÇÃO POR COMPRIMENTO', ''),
-    );
-    
-    foreach ($stats_data as $data) {
-        $sheet->setCellValue('A' . $row, $data[0]);
-        $sheet->setCellValue('B' . $row, $data[1]);
-        
-        if (strpos($data[0], 'ESTATÍSTICAS') !== false || strpos($data[0], 'DISTRIBUIÇÃO') !== false) {
-            $sheet->getStyle('A' . $row . ':B' . $row)->getFont()->setBold(true);
-            $sheet->getStyle('A' . $row . ':B' . $row)->getFill()
-                  ->setFillType(Fill::FILL_SOLID)
-                  ->getStartColor()->setRGB('E9ECEF');
-        }
-        
-        $row++;
-    }
-    
-    // Distribuição por faixas de comprimento
-    $length_ranges = array(
-        '0-50 caracteres' => 0,
-        '51-100 caracteres' => 0,
-        '101-200 caracteres' => 0,
-        '201-500 caracteres' => 0,
-        'Mais de 500 caracteres' => 0
-    );
-    
-    foreach ($char_lengths as $length) {
-        if ($length <= 50) {
-            $length_ranges['0-50 caracteres']++;
-        } elseif ($length <= 100) {
-            $length_ranges['51-100 caracteres']++;
-        } elseif ($length <= 200) {
-            $length_ranges['101-200 caracteres']++;
-        } elseif ($length <= 500) {
-            $length_ranges['201-500 caracteres']++;
-        } else {
-            $length_ranges['Mais de 500 caracteres']++;
-        }
-    }
-    
-    foreach ($length_ranges as $range => $count) {
-        $percentage = $total_samples > 0 ? round(($count / $total_samples) * 100, 1) : 0;
-        $sheet->setCellValue('A' . $row, $range);
-        $sheet->setCellValue('B' . $row, $count . ' (' . $percentage . '%)');
-        $row++;
-    }
-    
-    // Ajustar larguras
-    $sheet->getColumnDimension('A')->setWidth(30);
-    $sheet->getColumnDimension('B')->setWidth(20);
-    
-    // Adicionar bordas
-    $dataRange = 'A3:B' . ($row - 1);
-    $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
-          ->setBorderStyle(Border::BORDER_THIN);
-}
-
 public function get_specific_questionnaire_analysis() {
     // Verificar autenticação
     $this->check_auth();
@@ -877,4 +1391,3 @@ private function create_questions_analysis_sheet($sheet, $analysis) {
 }
 
 }
-?>
