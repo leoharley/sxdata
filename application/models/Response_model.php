@@ -237,7 +237,7 @@ class Response_model extends CI_Model {
         
         var_dump($this->db->last_query());exit;
         
-        return 
+    //    return 
     }
 
     public function count_photos($filters = array()) {
