@@ -233,9 +233,11 @@ class Response_model extends CI_Model {
         // Ordenar por data de conclusão (mais recentes primeiro)
         $this->db->order_by('fr.completed_at', 'DESC');
 
+        $this->db->get()->result();
+        
         var_dump($this->db->last_query());exit;
         
-        return $this->db->get()->result();
+        return 
     }
 
     public function count_photos($filters = array()) {
