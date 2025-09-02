@@ -1788,7 +1788,7 @@ async function loadSpecificQuestionnaire() {
     const questionnaireId = select.value;
     
     if (!questionnaireId) {
-        hideSpecificAnalysis();
+       // hideSpecificAnalysis();
         return;
     }
     
