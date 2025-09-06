@@ -1026,19 +1026,34 @@ function setupDragAndDrop(questionItem) {
     questionItem.addEventListener('drop', handleDrop);
 }
 
-// Handlers de drag and drop
+// Handlers de drag and drop (melhorados)
 function handleDragStart(e) {
     draggedElement = e.currentTarget;
     draggedIndex = parseInt(draggedElement.getAttribute('data-index'));
     
     e.currentTarget.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', ''); // Necessário para alguns browsers
     
     showDropIndicators();
+    
+    // Adicionar delay para melhor visual
+    setTimeout(() => {
+        if (draggedElement) {
+            draggedElement.style.opacity = '0.7';
+        }
+    }, 50);
 }
 
 function handleDragEnd(e) {
     e.currentTarget.classList.remove('dragging');
+    e.currentTarget.style.opacity = '';
+    
+    // Limpar todos os estados de drag
+    document.querySelectorAll('.question-item').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+    
     hideDropIndicators();
     
     draggedElement = null;
@@ -1053,6 +1068,13 @@ function handleDragOver(e) {
     
     const currentElement = e.currentTarget;
     const currentIndex = parseInt(currentElement.getAttribute('data-index'));
+    
+    // Remover classe de outros elementos
+    document.querySelectorAll('.question-item').forEach(item => {
+        if (item !== currentElement) {
+            item.classList.remove('drag-over');
+        }
+    });
     
     if (currentIndex !== draggedIndex) {
         currentElement.classList.add('drag-over');
@@ -1070,7 +1092,7 @@ function handleDrop(e) {
     
     targetElement.classList.remove('drag-over');
     
-    if (targetIndex !== draggedIndex) {
+    if (targetIndex !== draggedIndex && targetIndex >= 0) {
         moveQuestion(draggedIndex, targetIndex);
         animateQuestionReorder(targetIndex);
     }
@@ -1081,6 +1103,14 @@ function handleDropIndicatorDragOver(e) {
     
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    
+    // Remover active de outros indicadores
+    document.querySelectorAll('.drop-indicator').forEach(indicator => {
+        if (indicator !== e.currentTarget) {
+            indicator.classList.remove('active');
+        }
+    });
+    
     e.currentTarget.classList.add('active');
 }
 
@@ -1095,14 +1125,85 @@ function handleDropIndicatorDrop(e) {
     
     indicator.classList.remove('active');
     
-    let newIndex = targetPosition;
-    if (draggedIndex < targetPosition) {
+    // Calcular nova posição mais precisamente
+    let newIndex;
+    
+    if (targetPosition === 0) {
+        // Mover para o início
+        newIndex = 0;
+    } else if (targetPosition > draggedIndex) {
+        // Movendo para baixo
         newIndex = targetPosition - 1;
+    } else {
+        // Movendo para cima
+        newIndex = targetPosition;
     }
     
     if (newIndex !== draggedIndex && newIndex >= 0) {
         moveQuestion(draggedIndex, newIndex);
         animateQuestionReorder(newIndex);
+    }
+}
+
+function setupDragAndDrop(questionItem) {
+    // Remover listeners antigos se existirem
+    questionItem.removeEventListener('dragstart', handleDragStart);
+    questionItem.removeEventListener('dragend', handleDragEnd);
+    questionItem.removeEventListener('dragover', handleDragOver);
+    questionItem.removeEventListener('drop', handleDrop);
+    
+    // Adicionar novos listeners
+    questionItem.addEventListener('dragstart', handleDragStart);
+    questionItem.addEventListener('dragend', handleDragEnd);
+    questionItem.addEventListener('dragover', handleDragOver);
+    questionItem.addEventListener('drop', handleDrop);
+    
+    // Configurar drag apenas pelo handle
+    const dragHandle = questionItem.querySelector('.drag-handle');
+    if (dragHandle) {
+        dragHandle.addEventListener('mousedown', function(e) {
+            questionItem.setAttribute('draggable', 'true');
+        });
+        
+        dragHandle.addEventListener('mouseup', function(e) {
+            setTimeout(() => {
+                if (!draggedElement) {
+                    questionItem.setAttribute('draggable', 'false');
+                }
+            }, 100);
+        });
+    }
+}
+
+function initializeReorderSystem() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach(question => {
+        setupDragAndDrop(question);
+    });
+    
+    const dropIndicators = document.querySelectorAll('.drop-indicator');
+    dropIndicators.forEach(indicator => {
+        // Remover listeners antigos
+        indicator.removeEventListener('dragover', handleDropIndicatorDragOver);
+        indicator.removeEventListener('drop', handleDropIndicatorDrop);
+        indicator.removeEventListener('dragleave', handleDropIndicatorDragLeave);
+        
+        // Adicionar novos listeners
+        indicator.addEventListener('dragover', handleDropIndicatorDragOver);
+        indicator.addEventListener('drop', handleDropIndicatorDrop);
+        indicator.addEventListener('dragleave', handleDropIndicatorDragLeave);
+    });
+}
+
+function handleDropIndicatorDragLeave(e) {
+    // Verificar se realmente saiu do indicador
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        e.currentTarget.classList.remove('active');
     }
 }
 
