@@ -1,8 +1,9 @@
+
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2>Editar Questionário</h2>
+                <h2>Editar QuestionÃ¡rio</h2>
                 <?php if ($questionnaire->project_id && $questionnaire->project_name): ?>
                     <small class="text-muted d-block">
                         <i class="fas fa-project-diagram me-1"></i>
@@ -27,17 +28,19 @@
 </div>
 
 <?php
-// Função helper para checkbox - garantir valores booleanos corretos
+// FunÃ§Ã£o helper para checkbox - garantir valores booleanos corretos
 function is_checkbox_checked($value) {
     return $value === true || $value === 1 || $value === '1' || $value === 'true';
 }
 ?>
 
-<!-- CSS para Lógica Condicional e Reordenação -->
+<!-- CSS para LÃ³gica Condicional e ReordenaÃ§Ã£o -->
 <style>
     .question-item {
         transition: all 0.3s ease;
         position: relative;
+        margin-left: 0;
+        border-left: 3px solid transparent;
     }
     
     .question-item.has-conditional {
@@ -130,67 +133,95 @@ function is_checkbox_checked($value) {
         margin-bottom: 20px;
     }
 
-    /* CSS para Reordenação */
+    /* CSS para ReordenaÃ§Ã£o */
     .reorder-controls {
         position: absolute;
-        left: -15px;
+        left: -55px;
         top: 50%;
         transform: translateY(-50%);
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 3px;
         background: white;
         border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 5px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        z-index: 10;
+        border-radius: 6px;
+        padding: 4px;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.15);
+        z-index: 50;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    
+    .question-item:hover .reorder-controls {
+        opacity: 1;
     }
     
     .reorder-controls button {
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         padding: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        border: none;
-        background: #f8f9fa;
-        color: #6c757d;
+        border: 1px solid #dee2e6;
+        background: #ffffff;
+        color: #495057;
         border-radius: 4px;
         transition: all 0.2s ease;
+        font-size: 12px;
+        cursor: pointer;
     }
     
     .reorder-controls button:hover:not(:disabled) {
         background: #007bff;
         color: white;
-        transform: scale(1.1);
+        border-color: #007bff;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,123,255,0.25);
+    }
+    
+    .reorder-controls button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0,123,255,0.25);
     }
     
     .reorder-controls button:disabled {
-        opacity: 0.3;
+        opacity: 0.4;
         cursor: not-allowed;
-        transform: none;
+        background: #f8f9fa;
+        color: #6c757d;
+        border-color: #e9ecef;
     }
     
     .reorder-controls button:disabled:hover {
-        background: #f8f9fa;
-        color: #6c757d;
+        transform: none;
+        box-shadow: none;
     }
     
     .drag-handle {
         cursor: grab;
         color: #6c757d;
-        padding: 5px;
-        transition: color 0.2s ease;
+        padding: 6px;
+        transition: all 0.2s ease;
+        border-radius: 4px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
     }
     
     .drag-handle:hover {
         color: #007bff;
+        background: #e7f3ff;
+        border-color: #007bff;
     }
     
     .drag-handle:active {
         cursor: grabbing;
+        background: #cce7ff;
     }
     
     .question-item.dragging {
@@ -230,8 +261,9 @@ function is_checkbox_checked($value) {
     }
     
     #questionsContainer {
-        padding-left: 25px;
+        padding-left: 75px;
         position: relative;
+        margin-top: 10px;
     }
     
     .readonly-question .reorder-controls {
@@ -242,21 +274,21 @@ function is_checkbox_checked($value) {
 <?= form_open('questionnaires/edit/' . $questionnaire->id) ?>
 <div class="row">
     <div class="col-lg-8">
-        <!-- Informações Básicas -->
+        <!-- InformaÃ§Ãµes BÃ¡sicas -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Informações Básicas</h5>
+                <h5 class="mb-0">InformaÃ§Ãµes BÃ¡sicas</h5>
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label for="title" class="form-label">Título *</label>
+                    <label for="title" class="form-label">TÃ­tulo *</label>
                     <input type="text" class="form-control" id="title" name="title" 
                            value="<?= set_value('title', $questionnaire->title) ?>" required maxlength="200">
                     <?= form_error('title', '<small class="text-danger">', '</small>') ?>
                 </div>
                 
                 <div class="mb-3">
-                    <label for="description" class="form-label">Descrição</label>
+                    <label for="description" class="form-label">DescriÃ§Ã£o</label>
                     <textarea class="form-control" id="description" name="description" 
                               rows="3" maxlength="1000"><?= set_value('description', $questionnaire->description) ?></textarea>
                     <?= form_error('description', '<small class="text-danger">', '</small>') ?>
@@ -299,14 +331,14 @@ function is_checkbox_checked($value) {
                     <label for="aplicadores" class="form-label">Aplicadores Permitidos *</label>
                     <select class="form-select" id="aplicadores" name="aplicadores[]" multiple size="6" required>
                         <?php 
-                        // Verificar se todos os aplicadores estão selecionados ou se campo está vazio
+                        // Verificar se todos os aplicadores estÃ£o selecionados ou se campo estÃ¡ vazio
                         $all_aplicadores_ids = array_column($aplicadores, 'id');
                         $todos_selecionados = empty($aplicadores_selecionados) || 
                                             (count(array_intersect($aplicadores_selecionados, $all_aplicadores_ids)) == count($all_aplicadores_ids));
                         ?>
                         
                         <option value="all" <?= $todos_selecionados ? 'selected' : '' ?>>
-                            🌟 Todos os Aplicadores
+                            ðŸŒŸ Todos os Aplicadores
                         </option>
                         
                         <?php foreach ($aplicadores as $aplicador): ?>
@@ -318,8 +350,8 @@ function is_checkbox_checked($value) {
                     </select>
                     <small class="form-text text-muted">
                         <i class="fas fa-info-circle me-1"></i>
-                        Segure Ctrl (Windows) ou Cmd (Mac) para selecionar múltiplos aplicadores. 
-                        Selecione "Todos os Aplicadores" para permitir que qualquer aplicador use este questionário.
+                        Segure Ctrl (Windows) ou Cmd (Mac) para selecionar mÃºltiplos aplicadores. 
+                        Selecione "Todos os Aplicadores" para permitir que qualquer aplicador use este questionÃ¡rio.
                     </small>
                     
                     <?php if (!empty($aplicadores_selecionados) && !$todos_selecionados): ?>
@@ -343,19 +375,19 @@ function is_checkbox_checked($value) {
             </div>
         </div>
         
-        <!-- Modo de Edição -->
+        <!-- Modo de EdiÃ§Ã£o -->
         <div class="edit-mode-toggle">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <strong>Modo de Edição:</strong>
+                    <strong>Modo de EdiÃ§Ã£o:</strong>
                     <p class="mb-0 small text-muted">
-                        Escolha como editar as perguntas. Editar perguntas pode afetar respostas já coletadas.
+                        Escolha como editar as perguntas. Editar perguntas pode afetar respostas jÃ¡ coletadas.
                     </p>
                 </div>
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="editModeToggle">
                     <label class="form-check-label" for="editModeToggle">
-                        Permitir Edição Completa
+                        Permitir EdiÃ§Ã£o Completa
                     </label>
                 </div>
             </div>
@@ -368,7 +400,7 @@ function is_checkbox_checked($value) {
                 <div>
                     <button type="button" class="btn btn-sm btn-outline-info me-2" onclick="previewLogic()">
                         <i class="fas fa-eye me-1"></i>
-                        Visualizar Lógica
+                        Visualizar LÃ³gica
                     </button>
                     <button type="button" class="btn btn-sm btn-primary" onclick="addQuestion()" id="addQuestionBtn" disabled>
                         <i class="fas fa-plus me-1"></i>
@@ -377,7 +409,7 @@ function is_checkbox_checked($value) {
                 </div>
             </div>
             <div class="card-body">
-                <!-- Validação Global -->
+                <!-- ValidaÃ§Ã£o Global -->
                 <div id="globalValidation" class="validation-errors" style="display: none;"></div>
                 
                 <div id="questionsContainer">
@@ -387,7 +419,7 @@ function is_checkbox_checked($value) {
                     <?php if (!empty($questions)): ?>
                         <?php foreach ($questions as $index => $question): ?>
                         <div class="question-item border rounded p-3 mb-3 readonly-question" data-index="<?= $index ?>" data-question-id="<?= $question->id ?>" draggable="false">
-                            <!-- Controles de reordenação -->
+                            <!-- Controles de reordenaÃ§Ã£o -->
                             <div class="reorder-controls" style="display: none;">
                                 <button type="button" class="btn-reorder-up" onclick="moveQuestionUp(<?= $index ?>)" title="Mover para cima">
                                     <i class="fas fa-chevron-up"></i>
@@ -404,7 +436,7 @@ function is_checkbox_checked($value) {
                                 <h6 class="mb-0"><span class="question-number">Pergunta <?= $index + 1 ?></span></h6>
                                 <div class="edit-controls" style="display: none;">
                                     <button type="button" class="btn btn-sm btn-outline-primary me-1" 
-                                            onclick="toggleConditionalLogic(<?= $index ?>)" title="Editar Lógica Condicional">
+                                            onclick="toggleConditionalLogic(<?= $index ?>)" title="Editar LÃ³gica Condicional">
                                         <i class="fas fa-project-diagram"></i>
                                     </button>
                                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeQuestion(<?= $index ?>)">
@@ -426,7 +458,7 @@ function is_checkbox_checked($value) {
                                     </div>
                                     <div class="col-md-6">
                                         <?php if ($question->is_required == 't'): ?>
-                                            <span class="badge bg-danger">Obrigatória</span>
+                                            <span class="badge bg-danger">ObrigatÃ³ria</span>
                                         <?php else: ?>
                                             <span class="badge bg-secondary">Opcional</span>
                                         <?php endif; ?>
@@ -435,10 +467,10 @@ function is_checkbox_checked($value) {
                                 
                                 <?php if (!empty($question->options)): ?>
                                     <div class="mb-3">
-                                        <strong>Opções:</strong>
+                                        <strong>OpÃ§Ãµes:</strong>
                                         <ul class="list-unstyled ms-3 mt-1">
                                             <?php foreach ($question->options as $option): ?>
-                                            <li><small>• <?= $option->option_text ?></small></li>
+                                            <li><small>â€¢ <?= $option->option_text ?></small></li>
                                             <?php endforeach; ?>
                                         </ul>
                                     </div>
@@ -446,7 +478,7 @@ function is_checkbox_checked($value) {
                                 
                                 <?php if (!empty($question->logic_summary)): ?>
                                     <div class="mb-3">
-                                        <strong>Lógica Condicional:</strong>
+                                        <strong>LÃ³gica Condicional:</strong>
                                         <div class="logic-preview">
                                             <?= $question->logic_summary ?>
                                         </div>
@@ -454,7 +486,7 @@ function is_checkbox_checked($value) {
                                 <?php endif; ?>
                             </div>
                             
-                            <!-- Modo de Edição -->
+                            <!-- Modo de EdiÃ§Ã£o -->
                             <div class="edit-content" style="display: none;">
                                 <input type="hidden" name="questions[<?= $index ?>][id]" value="<?= $question->id ?>">
                                 
@@ -472,12 +504,12 @@ function is_checkbox_checked($value) {
                                             <option value="">Selecione...</option>
                                             <option value="text" <?= $question->question_type == 'text' ? 'selected' : '' ?>>Texto Simples</option>
                                             <option value="textarea" <?= $question->question_type == 'textarea' ? 'selected' : '' ?>>Texto Longo</option>
-                                            <option value="number" <?= $question->question_type == 'number' ? 'selected' : '' ?>>Número</option>
+                                            <option value="number" <?= $question->question_type == 'number' ? 'selected' : '' ?>>NÃºmero</option>
                                             <option value="email" <?= $question->question_type == 'email' ? 'selected' : '' ?>>E-mail</option>
                                             <option value="date" <?= $question->question_type == 'date' ? 'selected' : '' ?>>Data</option>
                                             <option value="datetime" <?= $question->question_type == 'datetime' ? 'selected' : '' ?>>Data e Hora</option>
-                                            <option value="radio" <?= $question->question_type == 'radio' ? 'selected' : '' ?>>Múltipla Escolha (única)</option>
-                                            <option value="checkbox" <?= $question->question_type == 'checkbox' ? 'selected' : '' ?>>Múltipla Escolha (múltipla)</option>
+                                            <option value="radio" <?= $question->question_type == 'radio' ? 'selected' : '' ?>>MÃºltipla Escolha (Ãºnica)</option>
+                                            <option value="checkbox" <?= $question->question_type == 'checkbox' ? 'selected' : '' ?>>MÃºltipla Escolha (mÃºltipla)</option>
                                             <option value="select" <?= $question->question_type == 'select' ? 'selected' : '' ?>>Lista Suspensa</option>
                                         </select>
                                     </div>
@@ -488,22 +520,22 @@ function is_checkbox_checked($value) {
                                                    name="questions[<?= $index ?>][required]" value="1" 
                                                    <?= $question->is_required ? 'checked' : '' ?>>
                                             <label class="form-check-label">
-                                                Pergunta obrigatória
+                                                Pergunta obrigatÃ³ria
                                             </label>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Opções de Resposta -->
+                                <!-- OpÃ§Ãµes de Resposta -->
                                 <div id="options-<?= $index ?>" class="mt-3" style="display: <?= in_array($question->question_type, ['radio', 'checkbox', 'select']) ? 'block' : 'none' ?>;">
-                                    <label class="form-label">Opções de Resposta</label>
+                                    <label class="form-label">OpÃ§Ãµes de Resposta</label>
                                     <div id="optionsContainer-<?= $index ?>">
                                         <?php if (!empty($question->options)): ?>
                                             <?php foreach ($question->options as $opt_index => $option): ?>
                                             <div class="input-group mb-2">
                                                 <input type="text" class="form-control" 
                                                        name="questions[<?= $index ?>][options][<?= $opt_index ?>][text]" 
-                                                       value="<?= $option->option_text ?>" placeholder="Texto da opção" required onchange="updateLogicPreview()">
+                                                       value="<?= $option->option_text ?>" placeholder="Texto da opÃ§Ã£o" required onchange="updateLogicPreview()">
                                                 <input type="hidden" 
                                                        name="questions[<?= $index ?>][options][<?= $opt_index ?>][value]" 
                                                        value="<?= $option->option_value ?>">
@@ -518,18 +550,18 @@ function is_checkbox_checked($value) {
                                     <button type="button" class="btn btn-sm btn-outline-primary" 
                                             onclick="addOption(<?= $index ?>)">
                                         <i class="fas fa-plus me-1"></i>
-                                        Adicionar Opção
+                                        Adicionar OpÃ§Ã£o
                                     </button>
                                 </div>
                                 
-                                <!-- Lógica Condicional -->
+                                <!-- LÃ³gica Condicional -->
                                 <div id="conditionalLogic-<?= $index ?>" class="conditional-rules" style="display: none;">
                                     <h6 class="mb-3">
                                         <i class="fas fa-project-diagram me-2"></i>
-                                        Lógica Condicional
+                                        LÃ³gica Condicional
                                     </h6>
                                     
-                                    <!-- Seletor de Tipo de Lógica -->
+                                    <!-- Seletor de Tipo de LÃ³gica -->
                                     <div class="logic-type-selector">
                                         <div class="logic-type-btn" onclick="selectLogicType(<?= $index ?>, 'visibility')">
                                             <i class="fas fa-eye me-1"></i>
@@ -539,7 +571,7 @@ function is_checkbox_checked($value) {
                                         <div class="logic-type-btn" onclick="selectLogicType(<?= $index ?>, 'required')">
                                             <i class="fas fa-asterisk me-1"></i>
                                             <strong>Obrigatoriedade</strong>
-                                            <small class="d-block text-muted">Tornar obrigatória</small>
+                                            <small class="d-block text-muted">Tornar obrigatÃ³ria</small>
                                         </div>
                                     </div>
                                     
@@ -549,60 +581,60 @@ function is_checkbox_checked($value) {
                                             <strong>Mostrar esta pergunta quando:</strong>
                                             <button type="button" class="btn btn-xs btn-outline-primary" 
                                                     onclick="addCondition(<?= $index ?>, 'visibility')">
-                                                <i class="fas fa-plus"></i> Condição
+                                                <i class="fas fa-plus"></i> CondiÃ§Ã£o
                                             </button>
                                         </div>
                                         
                                         <div class="operator-selector mb-2">
                                             <select class="form-select form-select-sm" name="questions[<?= $index ?>][logic][visibility][operator]">
-                                                <option value="AND">Todas as condições (E)</option>
-                                                <option value="OR">Qualquer condição (OU)</option>
+                                                <option value="AND">Todas as condiÃ§Ãµes (E)</option>
+                                                <option value="OR">Qualquer condiÃ§Ã£o (OU)</option>
                                             </select>
                                         </div>
                                         
                                         <div id="visibilityConditions-<?= $index ?>">
-                                            <!-- Condições serão carregadas aqui -->
+                                            <!-- CondiÃ§Ãµes serÃ£o carregadas aqui -->
                                         </div>
                                     </div>
                                     
                                     <!-- Regras de Obrigatoriedade -->
                                     <div id="requiredRules-<?= $index ?>" class="logic-rules" style="display: none;">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <strong>Tornar obrigatória quando:</strong>
+                                            <strong>Tornar obrigatÃ³ria quando:</strong>
                                             <button type="button" class="btn btn-xs btn-outline-primary" 
                                                     onclick="addCondition(<?= $index ?>, 'required')">
-                                                <i class="fas fa-plus"></i> Condição
+                                                <i class="fas fa-plus"></i> CondiÃ§Ã£o
                                             </button>
                                         </div>
                                         
                                         <div class="operator-selector mb-2">
                                             <select class="form-select form-select-sm" name="questions[<?= $index ?>][logic][required][operator]">
-                                                <option value="AND">Todas as condições (E)</option>
-                                                <option value="OR">Qualquer condição (OU)</option>
+                                                <option value="AND">Todas as condiÃ§Ãµes (E)</option>
+                                                <option value="OR">Qualquer condiÃ§Ã£o (OU)</option>
                                             </select>
                                         </div>
                                         
                                         <div id="requiredConditions-<?= $index ?>">
-                                            <!-- Condições serão carregadas aqui -->
+                                            <!-- CondiÃ§Ãµes serÃ£o adicionadas aqui -->
                                         </div>
                                     </div>
                                     
-                                    <!-- Preview da Lógica -->
+                                    <!-- Preview da LÃ³gica -->
                                     <div id="logicPreview-<?= $index ?>" class="logic-preview" style="display: none;">
-                                        <!-- Preview será gerado aqui -->
+                                        <!-- Preview serÃ¡ gerado aqui -->
                                     </div>
                                     
                                     <div class="text-end mt-3">
                                         <button type="button" class="btn btn-sm btn-outline-secondary" 
                                                 onclick="clearConditionalLogic(<?= $index ?>)">
-                                            Limpar Lógica
+                                            Limpar LÃ³gica
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Indicador de drop após cada pergunta -->
+                        <!-- Indicador de drop apÃ³s cada pergunta -->
                         <div class="drop-indicator" data-position="<?= $index + 1 ?>"></div>
                         <?php endforeach; ?>
                     <?php else: ?>
@@ -625,7 +657,7 @@ function is_checkbox_checked($value) {
     </div>
     
     <div class="col-lg-4">
-        <!-- Informações do Projeto -->
+        <!-- InformaÃ§Ãµes do Projeto -->
         <?php if ($questionnaire->project_id): ?>
         <div class="card mb-4">
             <div class="card-header">
@@ -648,10 +680,10 @@ function is_checkbox_checked($value) {
         </div>
         <?php endif; ?>
         
-        <!-- Configurações -->
+        <!-- ConfiguraÃ§Ãµes -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Configurações</h5>
+                <h5 class="mb-0">ConfiguraÃ§Ãµes</h5>
             </div>
             <div class="card-body">
                 <!-- Checkbox: Requer Consentimento -->
@@ -666,11 +698,11 @@ function is_checkbox_checked($value) {
                            name="requires_consent" value="1" <?= $consent_checked ?>>
                     <label class="form-check-label" for="requires_consent">
                         <strong>Requer Consentimento</strong>
-                        <br><small class="text-muted">Exibir termo de consentimento antes do questionário</small>
+                        <br><small class="text-muted">Exibir termo de consentimento antes do questionÃ¡rio</small>
                     </label>
                 </div>
                 
-                <!-- Checkbox: Capturar Localização -->
+                <!-- Checkbox: Capturar LocalizaÃ§Ã£o -->
                 <div class="form-check mb-3">
                     <?php 
                     $location_checked = set_checkbox('requires_location', '1', is_checkbox_checked($questionnaire->requires_location));
@@ -681,7 +713,7 @@ function is_checkbox_checked($value) {
                     <input class="form-check-input" type="checkbox" id="requires_location" 
                            name="requires_location" value="1" <?= $location_checked ?>>
                     <label class="form-check-label" for="requires_location">
-                        <strong>Capturar Localização</strong>
+                        <strong>Capturar LocalizaÃ§Ã£o</strong>
                         <br><small class="text-muted">Registrar coordenadas GPS automaticamente</small>
                     </label>
                 </div>
@@ -698,16 +730,16 @@ function is_checkbox_checked($value) {
                            name="requires_photo" value="1" <?= $photo_checked ?>>
                     <label class="form-check-label" for="requires_photo">
                         <strong>Requer Foto</strong>
-                        <br><small class="text-muted">Solicitar foto como evidência</small>
+                        <br><small class="text-muted">Solicitar foto como evidÃªncia</small>
                     </label>
                 </div>
             </div>
         </div>
         
-        <!-- Estatísticas -->
+        <!-- EstatÃ­sticas -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Estatísticas</h5>
+                <h5 class="mb-0">EstatÃ­sticas</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
@@ -723,7 +755,7 @@ function is_checkbox_checked($value) {
                 <hr>
                 <div class="text-center">
                     <small class="text-muted">
-                        <strong>Versão:</strong> <?= $questionnaire->version ?><br>
+                        <strong>VersÃ£o:</strong> <?= $questionnaire->version ?><br>
                         <strong>Criado:</strong> <?= date('d/m/Y', strtotime($questionnaire->created_at)) ?>
                         <br>por <?= $questionnaire->created_by_name ?>
                     </small>
@@ -731,17 +763,17 @@ function is_checkbox_checked($value) {
             </div>
         </div>
         
-        <!-- Ações -->
+        <!-- AÃ§Ãµes -->
         <div class="card">
             <div class="card-body">
                 <button type="submit" class="btn btn-primary w-100 mb-2">
                     <i class="fas fa-save me-2"></i>
-                    Salvar Alterações
+                    Salvar AlteraÃ§Ãµes
                 </button>
                 <a href="<?= base_url('questionnaires/duplicate/' . $questionnaire->id) ?>" 
                    class="btn btn-outline-secondary w-100 mb-2">
                     <i class="fas fa-copy me-2"></i>
-                    Duplicar Questionário
+                    Duplicar QuestionÃ¡rio
                 </a>
                 <?php if ($questionnaire->project_id): ?>
                     <a href="<?= base_url('projects/view/' . $questionnaire->project_id) ?>" 
@@ -759,20 +791,20 @@ function is_checkbox_checked($value) {
 </div>
 <?= form_close() ?>
 
-<!-- Modal para Visualização da Lógica -->
+<!-- Modal para VisualizaÃ§Ã£o da LÃ³gica -->
 <div class="modal fade" id="logicPreviewModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-sitemap me-2"></i>
-                    Visualização da Lógica Condicional
+                    VisualizaÃ§Ã£o da LÃ³gica Condicional
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="logicPreviewContent">
-                    <!-- Conteúdo será gerado dinamicamente -->
+                    <!-- ConteÃºdo serÃ¡ gerado dinamicamente -->
                 </div>
             </div>
         </div>
@@ -786,20 +818,20 @@ const existingQuestions = <?= json_encode($questions) ?>;
 // Dados dos projetos para JavaScript
 const projectsData = <?= json_encode($projects) ?>;
 
-// Variáveis globais para reordenação
+// VariÃ¡veis globais para reordenaÃ§Ã£o
 let draggedElement = null;
 let draggedIndex = null;
 
-// Tipos de operadores para lógica condicional
+// Tipos de operadores para lÃ³gica condicional
 const logicOperators = {
     'equals': 'Igual a',
     'not_equals': 'Diferente de',
-    'contains': 'Contém',
-    'not_contains': 'Não contém',
+    'contains': 'ContÃ©m',
+    'not_contains': 'NÃ£o contÃ©m',
     'greater_than': 'Maior que',
     'less_than': 'Menor que',
-    'is_empty': 'Está vazio',
-    'is_not_empty': 'Não está vazio'
+    'is_empty': 'EstÃ¡ vazio',
+    'is_not_empty': 'NÃ£o estÃ¡ vazio'
 };
 
 // Gerenciamento inicial
@@ -837,27 +869,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 const project = projectsData.find(p => p.id == newProject);
                 const projectName = project ? project.name : 'projeto selecionado';
                 
-                if (!confirm(`Tem certeza que deseja mover este questionário para o projeto "${projectName}"?`)) {
+                if (!confirm(`Tem certeza que deseja mover este questionÃ¡rio para o projeto "${projectName}"?`)) {
                     this.value = currentProject;
                 }
             } else {
-                if (!confirm('Tem certeza que deseja remover este questionário do projeto atual?')) {
+                if (!confirm('Tem certeza que deseja remover este questionÃ¡rio do projeto atual?')) {
                     this.value = currentProject;
                 }
             }
         }
     });
 
-    // Gerenciamento do modo de edição
+    // Gerenciamento do modo de ediÃ§Ã£o
     editModeToggle.addEventListener('change', function() {
         toggleEditMode(this.checked);
     });
 
-    // Carregar lógica condicional existente
+    // Carregar lÃ³gica condicional existente
     loadExistingConditionalLogic();
 });
 
-// Função para alternar modo de edição (atualizada com reordenação)
+// FunÃ§Ã£o para alternar modo de ediÃ§Ã£o (atualizada com reordenaÃ§Ã£o)
 function toggleEditMode(enableEdit) {
     const questionItems = document.querySelectorAll('.question-item');
     const addQuestionBtn = document.getElementById('addQuestionBtn');
@@ -883,7 +915,7 @@ function toggleEditMode(enableEdit) {
             editControls.style.display = 'none';
             reorderControls.style.display = 'none';
             
-            // Esconder lógica condicional se aberta
+            // Esconder lÃ³gica condicional se aberta
             const conditionalLogic = question.querySelector('.conditional-rules');
             if (conditionalLogic) {
                 conditionalLogic.style.display = 'none';
@@ -893,18 +925,27 @@ function toggleEditMode(enableEdit) {
     
     addQuestionBtn.disabled = !enableEdit;
     
-    // Configurar sistema de reordenação
+    // Configurar sistema de reordenaÃ§Ã£o
     if (enableEdit) {
         initializeReorderSystem();
         updateAllReorderButtons();
     }
 }
 
-// Funções de reordenação
+// FunÃ§Ãµes de reordenaÃ§Ã£o (melhoradas)
 function moveQuestionUp(index) {
     if (index > 0) {
         moveQuestion(index, index - 1);
         animateQuestionReorder(index - 1);
+        
+        // Focar no botão correto após o movimento
+        setTimeout(() => {
+            const movedQuestion = document.querySelector(`[data-index="${index - 1}"]`);
+            const upBtn = movedQuestion?.querySelector('.btn-reorder-up');
+            if (upBtn && !upBtn.disabled) {
+                upBtn.focus();
+            }
+        }, 100);
     }
 }
 
@@ -913,6 +954,15 @@ function moveQuestionDown(index) {
     if (index < questions.length - 1) {
         moveQuestion(index, index + 1);
         animateQuestionReorder(index + 1);
+        
+        // Focar no botão correto após o movimento
+        setTimeout(() => {
+            const movedQuestion = document.querySelector(`[data-index="${index + 1}"]`);
+            const downBtn = movedQuestion?.querySelector('.btn-reorder-down');
+            if (downBtn && !downBtn.disabled) {
+                downBtn.focus();
+            }
+        }, 100);
     }
 }
 
@@ -924,22 +974,59 @@ function moveQuestion(fromIndex, toIndex) {
     if (fromIndex < 0 || fromIndex >= questions.length || 
         toIndex < 0 || toIndex >= questions.length || 
         fromIndex === toIndex) {
-        return;
+        console.warn('Índices inválidos para movimento:', fromIndex, toIndex);
+        return false;
     }
     
     const questionToMove = questions[fromIndex];
+    const nextIndicator = dropIndicators[fromIndex + 1]; // Indicador após a pergunta
     
-    // Remover a pergunta do DOM
+    // Remover a pergunta e seu indicador do DOM
     questionToMove.remove();
-    
-    // Inserir na nova posição
-    if (toIndex === 0) {
-        container.insertBefore(questionToMove, dropIndicators[1]);
-    } else {
-        const targetIndicator = dropIndicators[toIndex + 1];
-        container.insertBefore(questionToMove, targetIndicator);
+    if (nextIndicator) {
+        nextIndicator.remove();
     }
     
+    // Recalcular as referências após remoção
+    const remainingQuestions = Array.from(container.querySelectorAll('.question-item'));
+    const remainingIndicators = Array.from(container.querySelectorAll('.drop-indicator'));
+    
+    // Determinar onde inserir
+    let insertionPoint;
+    if (toIndex === 0) {
+        // Inserir no início
+        insertionPoint = remainingIndicators[0];
+    } else if (toIndex >= remainingQuestions.length) {
+        // Inserir no final
+        insertionPoint = null; // appendChild
+    } else {
+        // Inserir antes da pergunta na posição de destino
+        insertionPoint = remainingQuestions[toIndex];
+    }
+    
+    // Inserir pergunta na nova posição
+    if (insertionPoint) {
+        container.insertBefore(questionToMove, insertionPoint);
+    } else {
+        container.appendChild(questionToMove);
+    }
+    
+    // Recriar o indicador após a pergunta movida
+    const newIndicator = document.createElement('div');
+    newIndicator.className = 'drop-indicator';
+    newIndicator.setAttribute('data-position', (toIndex + 1).toString());
+    newIndicator.addEventListener('dragover', handleDropIndicatorDragOver);
+    newIndicator.addEventListener('drop', handleDropIndicatorDrop);
+    newIndicator.addEventListener('dragleave', handleDropIndicatorDragLeave);
+    
+    // Inserir indicador após a pergunta
+    if (questionToMove.nextSibling) {
+        container.insertBefore(newIndicator, questionToMove.nextSibling);
+    } else {
+        container.appendChild(newIndicator);
+    }
+    
+    // Atualizar tudo
     updateQuestionIndicesAndNumbers();
     updateAllReorderButtons();
     
@@ -948,6 +1035,7 @@ function moveQuestion(fromIndex, toIndex) {
     }
     
     console.log(`Pergunta movida da posição ${fromIndex + 1} para ${toIndex + 1}`);
+    return true;
 }
 
 function updateQuestionIndicesAndNumbers() {
@@ -961,7 +1049,7 @@ function updateQuestionIndicesAndNumbers() {
             questionNumber.textContent = `Pergunta ${index + 1}`;
         }
         
-        // Atualizar nomes dos campos do formulário
+        // Atualizar nomes dos campos do formulÃ¡rio
         updateFormFieldNames(question, index);
         
         const upBtn = question.querySelector('.btn-reorder-up');
@@ -1031,135 +1119,16 @@ function initializeReorderSystem() {
     
     const dropIndicators = document.querySelectorAll('.drop-indicator');
     dropIndicators.forEach(indicator => {
+        // Remover listeners antigos
+        indicator.removeEventListener('dragover', handleDropIndicatorDragOver);
+        indicator.removeEventListener('drop', handleDropIndicatorDrop);
+        indicator.removeEventListener('dragleave', handleDropIndicatorDragLeave);
+        
+        // Adicionar novos listeners
         indicator.addEventListener('dragover', handleDropIndicatorDragOver);
         indicator.addEventListener('drop', handleDropIndicatorDrop);
+        indicator.addEventListener('dragleave', handleDropIndicatorDragLeave);
     });
-}
-
-function setupDragAndDrop(questionItem) {
-    questionItem.addEventListener('dragstart', handleDragStart);
-    questionItem.addEventListener('dragend', handleDragEnd);
-    questionItem.addEventListener('dragover', handleDragOver);
-    questionItem.addEventListener('drop', handleDrop);
-}
-
-// Handlers de drag and drop (melhorados)
-function handleDragStart(e) {
-    draggedElement = e.currentTarget;
-    draggedIndex = parseInt(draggedElement.getAttribute('data-index'));
-    
-    e.currentTarget.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', ''); // Necessário para alguns browsers
-    
-    showDropIndicators();
-    
-    // Adicionar delay para melhor visual
-    setTimeout(() => {
-        if (draggedElement) {
-            draggedElement.style.opacity = '0.7';
-        }
-    }, 50);
-}
-
-function handleDragEnd(e) {
-    e.currentTarget.classList.remove('dragging');
-    e.currentTarget.style.opacity = '';
-    
-    // Limpar todos os estados de drag
-    document.querySelectorAll('.question-item').forEach(item => {
-        item.classList.remove('drag-over');
-    });
-    
-    hideDropIndicators();
-    
-    draggedElement = null;
-    draggedIndex = null;
-}
-
-function handleDragOver(e) {
-    if (!draggedElement) return;
-    
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    const currentElement = e.currentTarget;
-    const currentIndex = parseInt(currentElement.getAttribute('data-index'));
-    
-    // Remover classe de outros elementos
-    document.querySelectorAll('.question-item').forEach(item => {
-        if (item !== currentElement) {
-            item.classList.remove('drag-over');
-        }
-    });
-    
-    if (currentIndex !== draggedIndex) {
-        currentElement.classList.add('drag-over');
-    }
-}
-
-function handleDrop(e) {
-    if (!draggedElement) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const targetElement = e.currentTarget;
-    const targetIndex = parseInt(targetElement.getAttribute('data-index'));
-    
-    targetElement.classList.remove('drag-over');
-    
-    if (targetIndex !== draggedIndex && targetIndex >= 0) {
-        moveQuestion(draggedIndex, targetIndex);
-        animateQuestionReorder(targetIndex);
-    }
-}
-
-function handleDropIndicatorDragOver(e) {
-    if (!draggedElement) return;
-    
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    // Remover active de outros indicadores
-    document.querySelectorAll('.drop-indicator').forEach(indicator => {
-        if (indicator !== e.currentTarget) {
-            indicator.classList.remove('active');
-        }
-    });
-    
-    e.currentTarget.classList.add('active');
-}
-
-function handleDropIndicatorDrop(e) {
-    if (!draggedElement) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const indicator = e.currentTarget;
-    const targetPosition = parseInt(indicator.getAttribute('data-position'));
-    
-    indicator.classList.remove('active');
-    
-    // Calcular nova posição mais precisamente
-    let newIndex;
-    
-    if (targetPosition === 0) {
-        // Mover para o início
-        newIndex = 0;
-    } else if (targetPosition > draggedIndex) {
-        // Movendo para baixo
-        newIndex = targetPosition - 1;
-    } else {
-        // Movendo para cima
-        newIndex = targetPosition;
-    }
-    
-    if (newIndex !== draggedIndex && newIndex >= 0) {
-        moveQuestion(draggedIndex, newIndex);
-        animateQuestionReorder(newIndex);
-    }
 }
 
 function setupDragAndDrop(questionItem) {
@@ -1192,25 +1161,135 @@ function setupDragAndDrop(questionItem) {
     }
 }
 
-function initializeReorderSystem() {
-    const questions = document.querySelectorAll('.question-item');
+// Handlers de drag and drop (melhorados e mais precisos)
+function handleDragStart(e) {
+    draggedElement = e.currentTarget;
+    draggedIndex = parseInt(draggedElement.getAttribute('data-index'));
     
-    questions.forEach(question => {
-        setupDragAndDrop(question);
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', '');
+    
+    // Melhorar feedback visual
+    setTimeout(() => {
+        if (draggedElement) {
+            draggedElement.style.opacity = '0.6';
+            draggedElement.style.transform = 'rotate(1deg)';
+        }
+        showDropIndicators();
+    }, 10);
+    
+    // Evitar interferência com outros elementos
+    document.body.style.userSelect = 'none';
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    e.currentTarget.style.opacity = '';
+    e.currentTarget.style.transform = '';
+    
+    // Limpar todos os estados
+    document.querySelectorAll('.question-item').forEach(item => {
+        item.classList.remove('drag-over');
     });
     
-    const dropIndicators = document.querySelectorAll('.drop-indicator');
-    dropIndicators.forEach(indicator => {
-        // Remover listeners antigos
-        indicator.removeEventListener('dragover', handleDropIndicatorDragOver);
-        indicator.removeEventListener('drop', handleDropIndicatorDrop);
-        indicator.removeEventListener('dragleave', handleDropIndicatorDragLeave);
-        
-        // Adicionar novos listeners
-        indicator.addEventListener('dragover', handleDropIndicatorDragOver);
-        indicator.addEventListener('drop', handleDropIndicatorDrop);
-        indicator.addEventListener('dragleave', handleDropIndicatorDragLeave);
+    hideDropIndicators();
+    
+    // Restaurar seleção
+    document.body.style.userSelect = '';
+    
+    draggedElement = null;
+    draggedIndex = null;
+}
+
+function handleDragOver(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const currentElement = e.currentTarget;
+    const currentIndex = parseInt(currentElement.getAttribute('data-index'));
+    
+    // Evitar auto-drop
+    if (currentIndex === draggedIndex) return;
+    
+    // Limpar outros elementos
+    document.querySelectorAll('.question-item').forEach(item => {
+        if (item !== currentElement) {
+            item.classList.remove('drag-over');
+        }
     });
+    
+    currentElement.classList.add('drag-over');
+}
+
+function handleDrop(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const targetElement = e.currentTarget;
+    const targetIndex = parseInt(targetElement.getAttribute('data-index'));
+    
+    targetElement.classList.remove('drag-over');
+    
+    if (targetIndex !== draggedIndex && targetIndex >= 0) {
+        const success = moveQuestion(draggedIndex, targetIndex);
+        if (success) {
+            animateQuestionReorder(targetIndex);
+        }
+    }
+}
+
+function handleDropIndicatorDragOver(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    // Remover active de outros indicadores
+    document.querySelectorAll('.drop-indicator').forEach(indicator => {
+        if (indicator !== e.currentTarget) {
+            indicator.classList.remove('active');
+        }
+    });
+    
+    e.currentTarget.classList.add('active');
+}
+
+function handleDropIndicatorDrop(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const indicator = e.currentTarget;
+    const targetPosition = parseInt(indicator.getAttribute('data-position'));
+    
+    indicator.classList.remove('active');
+    
+    // Calcular nova posiÃ§Ã£o mais precisamente
+    let newIndex;
+    
+    if (targetPosition === 0) {
+        // Mover para o inÃ­cio
+        newIndex = 0;
+    } else if (targetPosition > draggedIndex) {
+        // Movendo para baixo
+        newIndex = targetPosition - 1;
+    } else {
+        // Movendo para cima
+        newIndex = targetPosition;
+    }
+    
+    if (newIndex !== draggedIndex && newIndex >= 0) {
+        const success = moveQuestion(draggedIndex, newIndex);
+        if (success) {
+            animateQuestionReorder(newIndex);
+        }
+    }
 }
 
 function handleDropIndicatorDragLeave(e) {
@@ -1239,7 +1318,7 @@ function hideDropIndicators() {
     });
 }
 
-// Função para carregar lógica condicional existente
+// FunÃ§Ã£o para carregar lÃ³gica condicional existente
 function loadExistingConditionalLogic() {
     existingQuestions.forEach((question, index) => {
         if (question.conditional_logic) {
@@ -1247,28 +1326,28 @@ function loadExistingConditionalLogic() {
                 const logic = JSON.parse(question.conditional_logic);
                 loadConditionalLogicForQuestion(index, logic);
             } catch (e) {
-                console.error('Erro ao carregar lógica condicional da pergunta ' + (index + 1), e);
+                console.error('Erro ao carregar lÃ³gica condicional da pergunta ' + (index + 1), e);
             }
         }
     });
 }
 
-// Função para carregar lógica condicional de uma pergunta
+// FunÃ§Ã£o para carregar lÃ³gica condicional de uma pergunta
 function loadConditionalLogicForQuestion(questionIndex, logic) {
     if (logic.visibility) {
-        // Ativar seção de visibilidade
+        // Ativar seÃ§Ã£o de visibilidade
         selectLogicType(questionIndex, 'visibility');
         loadConditionsForRule(questionIndex, 'visibility', logic.visibility);
     }
     
     if (logic.required) {
-        // Ativar seção de obrigatoriedade
+        // Ativar seÃ§Ã£o de obrigatoriedade
         selectLogicType(questionIndex, 'required');
         loadConditionsForRule(questionIndex, 'required', logic.required);
     }
 }
 
-// Função para carregar condições de uma regra
+// FunÃ§Ã£o para carregar condiÃ§Ãµes de uma regra
 function loadConditionsForRule(questionIndex, ruleType, ruleData) {
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][operator]"]`);
     if (operatorSelect) {
@@ -1277,7 +1356,7 @@ function loadConditionsForRule(questionIndex, ruleType, ruleData) {
     
     if (ruleData.conditions && ruleData.conditions.length > 0) {
         ruleData.conditions.forEach((conditionData, condIndex) => {
-            // Adicionar nova condição
+            // Adicionar nova condiÃ§Ã£o
             addCondition(questionIndex, ruleType);
             
             // Aguardar um pouco para que o DOM seja atualizado
@@ -1325,7 +1404,7 @@ function addQuestion() {
     
     const questionHtml = `
         <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}">
-            <!-- Controles de reordenação -->
+            <!-- Controles de reordenaÃ§Ã£o -->
             <div class="reorder-controls" style="display: flex;">
                 <button type="button" class="btn-reorder-up" onclick="moveQuestionUp(${questionIndex})" title="Mover para cima">
                     <i class="fas fa-chevron-up"></i>
@@ -1342,7 +1421,7 @@ function addQuestion() {
                 <h6 class="mb-0"><span class="question-number">Pergunta ${questionIndex + 1}</span></h6>
                 <div class="edit-controls">
                     <button type="button" class="btn btn-sm btn-outline-primary me-1" 
-                            onclick="toggleConditionalLogic(${questionIndex})" title="Adicionar Lógica Condicional">
+                            onclick="toggleConditionalLogic(${questionIndex})" title="Adicionar LÃ³gica Condicional">
                         <i class="fas fa-project-diagram"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeQuestion(${questionIndex})">
@@ -1366,12 +1445,12 @@ function addQuestion() {
                             <option value="">Selecione...</option>
                             <option value="text">Texto Simples</option>
                             <option value="textarea">Texto Longo</option>
-                            <option value="number">Número</option>
+                            <option value="number">NÃºmero</option>
                             <option value="email">E-mail</option>
                             <option value="date">Data</option>
                             <option value="datetime">Data e Hora</option>
-                            <option value="radio">Múltipla Escolha (única)</option>
-                            <option value="checkbox">Múltipla Escolha (múltipla)</option>
+                            <option value="radio">MÃºltipla Escolha (Ãºnica)</option>
+                            <option value="checkbox">MÃºltipla Escolha (mÃºltipla)</option>
                             <option value="select">Lista Suspensa</option>
                         </select>
                     </div>
@@ -1381,33 +1460,33 @@ function addQuestion() {
                             <input class="form-check-input" type="checkbox" 
                                    name="questions[${questionIndex}][required]" value="1">
                             <label class="form-check-label">
-                                Pergunta obrigatória
+                                Pergunta obrigatÃ³ria
                             </label>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Opções de Resposta -->
+                <!-- OpÃ§Ãµes de Resposta -->
                 <div id="options-${questionIndex}" class="mt-3" style="display: none;">
-                    <label class="form-label">Opções de Resposta</label>
+                    <label class="form-label">OpÃ§Ãµes de Resposta</label>
                     <div id="optionsContainer-${questionIndex}">
-                        <!-- Opções serão adicionadas aqui -->
+                        <!-- OpÃ§Ãµes serÃ£o adicionadas aqui -->
                     </div>
                     <button type="button" class="btn btn-sm btn-outline-primary" 
                             onclick="addOption(${questionIndex})">
                         <i class="fas fa-plus me-1"></i>
-                        Adicionar Opção
+                        Adicionar OpÃ§Ã£o
                     </button>
                 </div>
                 
-                <!-- Lógica Condicional -->
+                <!-- LÃ³gica Condicional -->
                 <div id="conditionalLogic-${questionIndex}" class="conditional-rules" style="display: none;">
                     <h6 class="mb-3">
                         <i class="fas fa-project-diagram me-2"></i>
-                        Lógica Condicional
+                        LÃ³gica Condicional
                     </h6>
                     
-                    <!-- Seletor de Tipo de Lógica -->
+                    <!-- Seletor de Tipo de LÃ³gica -->
                     <div class="logic-type-selector">
                         <div class="logic-type-btn" onclick="selectLogicType(${questionIndex}, 'visibility')">
                             <i class="fas fa-eye me-1"></i>
@@ -1417,7 +1496,7 @@ function addQuestion() {
                         <div class="logic-type-btn" onclick="selectLogicType(${questionIndex}, 'required')">
                             <i class="fas fa-asterisk me-1"></i>
                             <strong>Obrigatoriedade</strong>
-                            <small class="d-block text-muted">Tornar obrigatória</small>
+                            <small class="d-block text-muted">Tornar obrigatÃ³ria</small>
                         </div>
                     </div>
                     
@@ -1427,53 +1506,53 @@ function addQuestion() {
                             <strong>Mostrar esta pergunta quando:</strong>
                             <button type="button" class="btn btn-xs btn-outline-primary" 
                                     onclick="addCondition(${questionIndex}, 'visibility')">
-                                <i class="fas fa-plus"></i> Condição
+                                <i class="fas fa-plus"></i> CondiÃ§Ã£o
                             </button>
                         </div>
                         
                         <div class="operator-selector mb-2">
                             <select class="form-select form-select-sm" name="questions[${questionIndex}][logic][visibility][operator]">
-                                <option value="AND">Todas as condições (E)</option>
-                                <option value="OR">Qualquer condição (OU)</option>
+                                <option value="AND">Todas as condiÃ§Ãµes (E)</option>
+                                <option value="OR">Qualquer condiÃ§Ã£o (OU)</option>
                             </select>
                         </div>
                         
                         <div id="visibilityConditions-${questionIndex}">
-                            <!-- Condições serão adicionadas aqui -->
+                            <!-- CondiÃ§Ãµes serÃ£o adicionadas aqui -->
                         </div>
                     </div>
                     
                     <!-- Regras de Obrigatoriedade -->
                     <div id="requiredRules-${questionIndex}" class="logic-rules" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <strong>Tornar obrigatória quando:</strong>
+                            <strong>Tornar obrigatÃ³ria quando:</strong>
                             <button type="button" class="btn btn-xs btn-outline-primary" 
                                     onclick="addCondition(${questionIndex}, 'required')">
-                                <i class="fas fa-plus"></i> Condição
+                                <i class="fas fa-plus"></i> CondiÃ§Ã£o
                             </button>
                         </div>
                         
                         <div class="operator-selector mb-2">
                             <select class="form-select form-select-sm" name="questions[${questionIndex}][logic][required][operator]">
-                                <option value="AND">Todas as condições (E)</option>
-                                <option value="OR">Qualquer condição (OU)</option>
+                                <option value="AND">Todas as condiÃ§Ãµes (E)</option>
+                                <option value="OR">Qualquer condiÃ§Ã£o (OU)</option>
                             </select>
                         </div>
                         
                         <div id="requiredConditions-${questionIndex}">
-                            <!-- Condições serão adicionadas aqui -->
+                            <!-- CondiÃ§Ãµes serÃ£o adicionadas aqui -->
                         </div>
                     </div>
                     
-                    <!-- Preview da Lógica -->
+                    <!-- Preview da LÃ³gica -->
                     <div id="logicPreview-${questionIndex}" class="logic-preview" style="display: none;">
-                        <!-- Preview será gerado aqui -->
+                        <!-- Preview serÃ¡ gerado aqui -->
                     </div>
                     
                     <div class="text-end mt-3">
                         <button type="button" class="btn btn-sm btn-outline-secondary" 
                                 onclick="clearConditionalLogic(${questionIndex})">
-                            Limpar Lógica
+                            Limpar LÃ³gica
                         </button>
                     </div>
                 </div>
@@ -1484,7 +1563,7 @@ function addQuestion() {
         <div class="drop-indicator" data-position="${questionIndex + 1}"></div>
     `;
     
-    // Inserir antes do último indicador
+    // Inserir antes do Ãºltimo indicador
     const lastIndicator = container.querySelector('.drop-indicator:last-child');
     lastIndicator.insertAdjacentHTML('beforebegin', questionHtml);
     
@@ -1497,7 +1576,7 @@ function addQuestion() {
     updateAllReorderButtons();
 }
 
-// Função para remover pergunta
+// FunÃ§Ã£o para remover pergunta
 function removeQuestion(index) {
     if (confirm('Tem certeza que deseja remover esta pergunta? Isso pode afetar as regras condicionais de outras perguntas.')) {
         const questionItem = document.querySelector(`[data-index="${index}"]`);
@@ -1513,7 +1592,7 @@ function removeQuestion(index) {
     }
 }
 
-// Função para lidar com mudança de tipo de pergunta
+// FunÃ§Ã£o para lidar com mudanÃ§a de tipo de pergunta
 function handleQuestionTypeChange(questionIndex, type) {
     const optionsDiv = document.getElementById(`options-${questionIndex}`);
     
@@ -1531,7 +1610,7 @@ function handleQuestionTypeChange(questionIndex, type) {
     updateLogicPreview();
 }
 
-// Função para adicionar opção
+// FunÃ§Ã£o para adicionar opÃ§Ã£o
 function addOption(questionIndex) {
     const container = document.getElementById(`optionsContainer-${questionIndex}`);
     const optionIndex = container.children.length;
@@ -1540,7 +1619,7 @@ function addOption(questionIndex) {
         <div class="input-group mb-2">
             <input type="text" class="form-control" 
                    name="questions[${questionIndex}][options][${optionIndex}][text]" 
-                   placeholder="Texto da opção" required onchange="updateLogicPreview()">
+                   placeholder="Texto da opÃ§Ã£o" required onchange="updateLogicPreview()">
             <input type="hidden" 
                    name="questions[${questionIndex}][options][${optionIndex}][value]" 
                    value="">
@@ -1554,14 +1633,14 @@ function addOption(questionIndex) {
     container.insertAdjacentHTML('beforeend', optionHtml);
 }
 
-// Função para atualizar numeração das perguntas
+// FunÃ§Ã£o para atualizar numeraÃ§Ã£o das perguntas
 function updateQuestionNumbers() {
     const questions = document.querySelectorAll('.question-item');
     questions.forEach((question, index) => {
         const title = question.querySelector('h6');
         title.textContent = `Pergunta ${index + 1}`;
         
-        // Atualizar referências nos selects de condições
+        // Atualizar referÃªncias nos selects de condiÃ§Ãµes
         updateConditionQuestionOptions(question, index);
     });
 }
@@ -1609,7 +1688,7 @@ function addCondition(questionIndex, ruleType) {
     const availableQuestions = getAvailableQuestionsForCondition(questionIndex);
     
     if (availableQuestions.length === 0) {
-        alert('Não há perguntas anteriores disponíveis para criar condições.');
+        alert('NÃ£o hÃ¡ perguntas anteriores disponÃ­veis para criar condiÃ§Ãµes.');
         return;
     }
     
@@ -1740,7 +1819,7 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
     
     if (!selectedQuestionIndex || !selectedOperator) return;
     
-    // Se operador é "is_empty" ou "is_not_empty", esconder campo de valor
+    // Se operador Ã© "is_empty" ou "is_not_empty", esconder campo de valor
     if (['is_empty', 'is_not_empty'].includes(selectedOperator)) {
         valueInput.style.display = 'none';
         valueInput.value = '';
@@ -1754,14 +1833,14 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
         targetQuestion = existingQuestions[selectedQuestionIndex];
     }
     
-    // Se é pergunta de múltipla escolha, converter para select
+    // Se Ã© pergunta de mÃºltipla escolha, converter para select
     if (targetQuestion && ['radio', 'checkbox', 'select'].includes(targetQuestion.question_type)) {
         let options = [];
         
         if (targetQuestion.options && targetQuestion.options.length > 0) {
             options = targetQuestion.options;
         } else {
-            // Tentar buscar opções do DOM
+            // Tentar buscar opÃ§Ãµes do DOM
             const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
             if (targetQuestionElement) {
                 const optionInputs = targetQuestionElement.querySelectorAll('input[name*="[options]"][name*="[text]"]');
@@ -1774,7 +1853,7 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
         }
         
         if (options.length > 0) {
-            // Criar select com as opções
+            // Criar select com as opÃ§Ãµes
             const select = document.createElement('select');
             select.className = 'form-select form-select-sm';
             select.name = valueInput.name;
@@ -1806,7 +1885,7 @@ function updateConditionQuestionOptions(questionElement, newIndex) {
     const conditionSelects = questionElement.querySelectorAll('select[name*="[question]"]');
     
     conditionSelects.forEach(select => {
-        // Remover opções que referenciam perguntas posteriores ou a própria pergunta
+        // Remover opÃ§Ãµes que referenciam perguntas posteriores ou a prÃ³pria pergunta
         Array.from(select.options).forEach(option => {
             if (option.value && parseInt(option.value) >= newIndex) {
                 option.remove();
@@ -1816,7 +1895,7 @@ function updateConditionQuestionOptions(questionElement, newIndex) {
 }
 
 function clearConditionalLogic(questionIndex) {
-    if (confirm('Tem certeza que deseja limpar toda a lógica condicional desta pergunta?')) {
+    if (confirm('Tem certeza que deseja limpar toda a lÃ³gica condicional desta pergunta?')) {
         const visibilityConditions = document.getElementById(`visibilityConditions-${questionIndex}`);
         const requiredConditions = document.getElementById(`requiredConditions-${questionIndex}`);
         const logicDiv = document.getElementById(`conditionalLogic-${questionIndex}`);
@@ -1897,47 +1976,6 @@ function generateConditionsPreview(conditions, questionIndex, ruleType) {
     return conditionTexts.join(operatorText);
 }
 
-function validateAllConditionalLogic() {
-    const questions = document.querySelectorAll('.question-item');
-    const errors = [];
-    const warnings = [];
-    
-    questions.forEach((question, index) => {
-        const validation = validateQuestionConditionalLogic(question, index);
-        errors.push(...validation.errors);
-        warnings.push(...validation.warnings);
-    });
-    
-    // Mostrar erros globais
-    const globalValidation = document.getElementById('globalValidation');
-    if (errors.length > 0 || warnings.length > 0) {
-        let content = '';
-        
-        if (errors.length > 0) {
-            content += '<strong>Erros:</strong><ul>';
-            errors.forEach(error => {
-                content += `<li>${error}</li>`;
-            });
-            content += '</ul>';
-        }
-        
-        if (warnings.length > 0) {
-            content += '<strong>Avisos:</strong><ul>';
-            warnings.forEach(warning => {
-                content += `<li>${warning}</li>`;
-            });
-            content += '</ul>';
-        }
-        
-        globalValidation.innerHTML = content;
-        globalValidation.style.display = 'block';
-    } else {
-        globalValidation.style.display = 'none';
-    }
-    
-    return { valid: errors.length === 0, errors, warnings };
-}
-
 function validateQuestionConditionalLogic(question, questionIndex) {
     const errors = [];
     const warnings = [];
@@ -1951,19 +1989,19 @@ function validateQuestionConditionalLogic(question, questionIndex) {
         const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
         
         if (!questionSelect.value) {
-            errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem pergunta selecionada`);
+            errors.push(`Pergunta ${questionIndex + 1}: CondiÃ§Ã£o ${condIndex + 1} sem pergunta selecionada`);
         }
         
         if (!operatorSelect.value) {
-            errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem operador selecionado`);
+            errors.push(`Pergunta ${questionIndex + 1}: CondiÃ§Ã£o ${condIndex + 1} sem operador selecionado`);
         }
         
         if (questionSelect.value && parseInt(questionSelect.value) >= questionIndex) {
-            errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+            errors.push(`Pergunta ${questionIndex + 1}: NÃ£o pode referenciar pergunta posterior ou a si mesma`);
         }
         
         if (operatorSelect.value && !['is_empty', 'is_not_empty'].includes(operatorSelect.value) && (!valueField || !valueField.value.trim())) {
-            warnings.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem valor definido`);
+            warnings.push(`Pergunta ${questionIndex + 1}: CondiÃ§Ã£o ${condIndex + 1} sem valor definido`);
         }
     });
     
@@ -2011,14 +2049,14 @@ function previewLogic() {
                         <div class="card-body">
                             <h6 class="card-title">
                                 Pergunta ${index + 1}
-                                ${isRequired ? '<i class="fas fa-asterisk text-danger ms-1" title="Obrigatória"></i>' : ''}
+                                ${isRequired ? '<i class="fas fa-asterisk text-danger ms-1" title="ObrigatÃ³ria"></i>' : ''}
                             </h6>
-                            <p class="card-text">${questionText || 'Texto não definido'}</p>
-                            <small class="text-muted">Tipo: ${questionType || 'Não definido'}</small>
+                            <p class="card-text">${questionText || 'Texto nÃ£o definido'}</p>
+                            <small class="text-muted">Tipo: ${questionType || 'NÃ£o definido'}</small>
                             
                             ${visibilityConditions.length > 0 ? `
                                 <div class="mt-2">
-                                    <span class="badge bg-info">Lógica de Visibilidade</span>
+                                    <span class="badge bg-info">LÃ³gica de Visibilidade</span>
                                     <div class="mt-1 small">
                                         ${generateConditionsPreview(visibilityConditions, index, 'visibility')}
                                     </div>
@@ -2027,7 +2065,7 @@ function previewLogic() {
                             
                             ${requiredConditions.length > 0 ? `
                                 <div class="mt-2">
-                                    <span class="badge bg-primary">Lógica de Obrigatoriedade</span>
+                                    <span class="badge bg-primary">LÃ³gica de Obrigatoriedade</span>
                                     <div class="mt-1 small">
                                         ${generateConditionsPreview(requiredConditions, index, 'required')}
                                     </div>
@@ -2051,9 +2089,9 @@ function previewLogic() {
         if (totalWithLogic > 0) {
             previewHtml = `
                 <div class="alert alert-info mb-3">
-                    <h6><i class="fas fa-info-circle me-2"></i>Resumo da Lógica Condicional</h6>
+                    <h6><i class="fas fa-info-circle me-2"></i>Resumo da LÃ³gica Condicional</h6>
                     <p class="mb-0">
-                        <strong>${totalWithLogic}</strong> de <strong>${questions.length}</strong> perguntas possuem lógica condicional definida.
+                        <strong>${totalWithLogic}</strong> de <strong>${questions.length}</strong> perguntas possuem lÃ³gica condicional definida.
                     </p>
                 </div>
                 ${previewHtml}
@@ -2074,7 +2112,7 @@ function serializeConditionalLogic() {
             required: null
         };
         
-        // Serializar condições de visibilidade
+        // Serializar condiÃ§Ãµes de visibilidade
         const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
         if (visibilityConditions.length > 0) {
             const visibilityOperator = question.querySelector(`select[name="questions[${index}][logic][visibility][operator]"]`);
@@ -2099,7 +2137,7 @@ function serializeConditionalLogic() {
             });
         }
         
-        // Serializar condições de obrigatoriedade
+        // Serializar condiÃ§Ãµes de obrigatoriedade
         const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
         if (requiredConditions.length > 0) {
             const requiredOperator = question.querySelector(`select[name="questions[${index}][logic][required][operator]"]`);
@@ -2124,7 +2162,7 @@ function serializeConditionalLogic() {
             });
         }
         
-        // Adicionar campo hidden com a lógica serializada
+        // Adicionar campo hidden com a lÃ³gica serializada
         if (logicData.visibility || logicData.required) {
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
@@ -2135,27 +2173,27 @@ function serializeConditionalLogic() {
     });
 }
 
-// Validação do formulário
+// ValidaÃ§Ã£o do formulÃ¡rio
 document.querySelector('form').addEventListener('submit', function(e) {
     // Validar se pelo menos um aplicador foi selecionado
     const aplicadoresSelect = document.getElementById('aplicadores');
     if (!aplicadoresSelect.selectedOptions.length) {
         e.preventDefault();
-        alert('Selecione pelo menos um aplicador para este questionário.');
+        alert('Selecione pelo menos um aplicador para este questionÃ¡rio.');
         return false;
     }
     
-    // Validar lógica condicional se estiver em modo de edição
+    // Validar lÃ³gica condicional se estiver em modo de ediÃ§Ã£o
     const editModeToggle = document.getElementById('editModeToggle');
     if (editModeToggle.checked) {
         const logicValidation = validateAllConditionalLogic();
         if (!logicValidation.valid) {
             e.preventDefault();
-            alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
+            alert('Existem erros na lÃ³gica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
             return false;
         }
         
-        // Serializar lógica condicional para envio
+        // Serializar lÃ³gica condicional para envio
         serializeConditionalLogic();
     }
 });
