@@ -988,8 +988,17 @@ function updateAllReorderButtons() {
         const upBtn = question.querySelector('.btn-reorder-up');
         const downBtn = question.querySelector('.btn-reorder-down');
         
-        if (upBtn) upBtn.disabled = index === 0;
-        if (downBtn) downBtn.disabled = index === questions.length - 1;
+        if (upBtn) {
+            upBtn.disabled = index === 0;
+            upBtn.setAttribute('onclick', `moveQuestionUp(${index})`);
+            upBtn.setAttribute('title', index === 0 ? 'Já está no topo' : 'Mover para cima');
+        }
+        
+        if (downBtn) {
+            downBtn.disabled = index === questions.length - 1;
+            downBtn.setAttribute('onclick', `moveQuestionDown(${index})`);
+            downBtn.setAttribute('title', index === questions.length - 1 ? 'Já está no final' : 'Mover para baixo');
+        }
     });
 }
 
@@ -999,6 +1008,14 @@ function animateQuestionReorder(index) {
     
     if (question) {
         question.classList.add('reordered');
+        
+        // Scroll suave para a pergunta movida
+        question.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+        });
+        
         setTimeout(() => {
             question.classList.remove('reordered');
         }, 500);
