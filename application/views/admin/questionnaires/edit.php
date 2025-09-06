@@ -33,10 +33,11 @@ function is_checkbox_checked($value) {
 }
 ?>
 
-<!-- CSS para Lógica Condicional -->
+<!-- CSS para Lógica Condicional e Reordenação -->
 <style>
     .question-item {
         transition: all 0.3s ease;
+        position: relative;
     }
     
     .question-item.has-conditional {
@@ -127,6 +128,114 @@ function is_checkbox_checked($value) {
         border-radius: 6px;
         padding: 10px;
         margin-bottom: 20px;
+    }
+
+    /* CSS para Reordenação */
+    .reorder-controls {
+        position: absolute;
+        left: -15px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 10;
+    }
+    
+    .reorder-controls button {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: #f8f9fa;
+        color: #6c757d;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+    
+    .reorder-controls button:hover:not(:disabled) {
+        background: #007bff;
+        color: white;
+        transform: scale(1.1);
+    }
+    
+    .reorder-controls button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .reorder-controls button:disabled:hover {
+        background: #f8f9fa;
+        color: #6c757d;
+    }
+    
+    .drag-handle {
+        cursor: grab;
+        color: #6c757d;
+        padding: 5px;
+        transition: color 0.2s ease;
+    }
+    
+    .drag-handle:hover {
+        color: #007bff;
+    }
+    
+    .drag-handle:active {
+        cursor: grabbing;
+    }
+    
+    .question-item.dragging {
+        opacity: 0.6;
+        transform: rotate(2deg);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        z-index: 1000;
+    }
+    
+    .question-item.drag-over {
+        border-top: 3px solid #007bff;
+        margin-top: 10px;
+    }
+    
+    .drop-indicator {
+        height: 3px;
+        background: #007bff;
+        margin: 10px 0;
+        border-radius: 2px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    
+    .drop-indicator.active {
+        opacity: 1;
+        height: 20px;
+    }
+    
+    @keyframes questionReorder {
+        0% { transform: translateX(-10px); opacity: 0.8; }
+        50% { transform: translateX(5px); opacity: 1; }
+        100% { transform: translateX(0); opacity: 1; }
+    }
+    
+    .question-item.reordered {
+        animation: questionReorder 0.5s ease;
+    }
+    
+    #questionsContainer {
+        padding-left: 25px;
+        position: relative;
+    }
+    
+    .readonly-question .reorder-controls {
+        display: none;
     }
 </style>
 
@@ -272,11 +381,27 @@ function is_checkbox_checked($value) {
                 <div id="globalValidation" class="validation-errors" style="display: none;"></div>
                 
                 <div id="questionsContainer">
+                    <!-- Indicador de drop inicial -->
+                    <div class="drop-indicator" data-position="0"></div>
+                    
                     <?php if (!empty($questions)): ?>
                         <?php foreach ($questions as $index => $question): ?>
-                        <div class="question-item border rounded p-3 mb-3 readonly-question" data-index="<?= $index ?>" data-question-id="<?= $question->id ?>">
+                        <div class="question-item border rounded p-3 mb-3 readonly-question" data-index="<?= $index ?>" data-question-id="<?= $question->id ?>" draggable="false">
+                            <!-- Controles de reordenação -->
+                            <div class="reorder-controls" style="display: none;">
+                                <button type="button" class="btn-reorder-up" onclick="moveQuestionUp(<?= $index ?>)" title="Mover para cima">
+                                    <i class="fas fa-chevron-up"></i>
+                                </button>
+                                <button type="button" class="btn-reorder-down" onclick="moveQuestionDown(<?= $index ?>)" title="Mover para baixo">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div class="drag-handle" title="Arrastar para reordenar">
+                                    <i class="fas fa-grip-vertical"></i>
+                                </div>
+                            </div>
+                            
                             <div class="d-flex justify-content-between align-items-start mb-3">
-                                <h6 class="mb-0">Pergunta <?= $index + 1 ?></h6>
+                                <h6 class="mb-0"><span class="question-number">Pergunta <?= $index + 1 ?></span></h6>
                                 <div class="edit-controls" style="display: none;">
                                     <button type="button" class="btn btn-sm btn-outline-primary me-1" 
                                             onclick="toggleConditionalLogic(<?= $index ?>)" title="Editar Lógica Condicional">
@@ -476,6 +601,9 @@ function is_checkbox_checked($value) {
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Indicador de drop após cada pergunta -->
+                        <div class="drop-indicator" data-position="<?= $index + 1 ?>"></div>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <div class="text-center py-4">
@@ -658,6 +786,10 @@ const existingQuestions = <?= json_encode($questions) ?>;
 // Dados dos projetos para JavaScript
 const projectsData = <?= json_encode($projects) ?>;
 
+// Variáveis globais para reordenação
+let draggedElement = null;
+let draggedIndex = null;
+
 // Tipos de operadores para lógica condicional
 const logicOperators = {
     'equals': 'Igual a',
@@ -725,7 +857,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadExistingConditionalLogic();
 });
 
-// Função para alternar modo de edição
+// Função para alternar modo de edição (atualizada com reordenação)
 function toggleEditMode(enableEdit) {
     const questionItems = document.querySelectorAll('.question-item');
     const addQuestionBtn = document.getElementById('addQuestionBtn');
@@ -734,17 +866,22 @@ function toggleEditMode(enableEdit) {
         const readonlyContent = question.querySelector('.readonly-content');
         const editContent = question.querySelector('.edit-content');
         const editControls = question.querySelector('.edit-controls');
+        const reorderControls = question.querySelector('.reorder-controls');
         
         if (enableEdit) {
             question.classList.remove('readonly-question');
+            question.setAttribute('draggable', 'true');
             readonlyContent.style.display = 'none';
             editContent.style.display = 'block';
             editControls.style.display = 'block';
+            reorderControls.style.display = 'flex';
         } else {
             question.classList.add('readonly-question');
+            question.setAttribute('draggable', 'false');
             readonlyContent.style.display = 'block';
             editContent.style.display = 'none';
             editControls.style.display = 'none';
+            reorderControls.style.display = 'none';
             
             // Esconder lógica condicional se aberta
             const conditionalLogic = question.querySelector('.conditional-rules');
@@ -755,6 +892,233 @@ function toggleEditMode(enableEdit) {
     });
     
     addQuestionBtn.disabled = !enableEdit;
+    
+    // Configurar sistema de reordenação
+    if (enableEdit) {
+        initializeReorderSystem();
+        updateAllReorderButtons();
+    }
+}
+
+// Funções de reordenação
+function moveQuestionUp(index) {
+    if (index > 0) {
+        moveQuestion(index, index - 1);
+        animateQuestionReorder(index - 1);
+    }
+}
+
+function moveQuestionDown(index) {
+    const questions = document.querySelectorAll('.question-item');
+    if (index < questions.length - 1) {
+        moveQuestion(index, index + 1);
+        animateQuestionReorder(index + 1);
+    }
+}
+
+function moveQuestion(fromIndex, toIndex) {
+    const container = document.getElementById('questionsContainer');
+    const questions = Array.from(container.querySelectorAll('.question-item'));
+    const dropIndicators = Array.from(container.querySelectorAll('.drop-indicator'));
+    
+    if (fromIndex < 0 || fromIndex >= questions.length || 
+        toIndex < 0 || toIndex >= questions.length || 
+        fromIndex === toIndex) {
+        return;
+    }
+    
+    const questionToMove = questions[fromIndex];
+    
+    // Remover a pergunta do DOM
+    questionToMove.remove();
+    
+    // Inserir na nova posição
+    if (toIndex === 0) {
+        container.insertBefore(questionToMove, dropIndicators[1]);
+    } else {
+        const targetIndicator = dropIndicators[toIndex + 1];
+        container.insertBefore(questionToMove, targetIndicator);
+    }
+    
+    updateQuestionIndicesAndNumbers();
+    updateAllReorderButtons();
+    
+    if (typeof validateAllConditionalLogic === 'function') {
+        validateAllConditionalLogic();
+    }
+    
+    console.log(`Pergunta movida da posição ${fromIndex + 1} para ${toIndex + 1}`);
+}
+
+function updateQuestionIndicesAndNumbers() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        question.setAttribute('data-index', index);
+        
+        const questionNumber = question.querySelector('.question-number');
+        if (questionNumber) {
+            questionNumber.textContent = `Pergunta ${index + 1}`;
+        }
+        
+        // Atualizar nomes dos campos do formulário
+        updateFormFieldNames(question, index);
+        
+        const upBtn = question.querySelector('.btn-reorder-up');
+        const downBtn = question.querySelector('.btn-reorder-down');
+        
+        if (upBtn) upBtn.setAttribute('onclick', `moveQuestionUp(${index})`);
+        if (downBtn) downBtn.setAttribute('onclick', `moveQuestionDown(${index})`);
+    });
+}
+
+function updateFormFieldNames(question, newIndex) {
+    const inputs = question.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        if (input.name) {
+            input.name = input.name.replace(/questions\[\d+\]/, `questions[${newIndex}]`);
+        }
+    });
+}
+
+function updateAllReorderButtons() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        const upBtn = question.querySelector('.btn-reorder-up');
+        const downBtn = question.querySelector('.btn-reorder-down');
+        
+        if (upBtn) upBtn.disabled = index === 0;
+        if (downBtn) downBtn.disabled = index === questions.length - 1;
+    });
+}
+
+function animateQuestionReorder(index) {
+    const questions = document.querySelectorAll('.question-item');
+    const question = questions[index];
+    
+    if (question) {
+        question.classList.add('reordered');
+        setTimeout(() => {
+            question.classList.remove('reordered');
+        }, 500);
+    }
+}
+
+function initializeReorderSystem() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach(question => {
+        setupDragAndDrop(question);
+    });
+    
+    const dropIndicators = document.querySelectorAll('.drop-indicator');
+    dropIndicators.forEach(indicator => {
+        indicator.addEventListener('dragover', handleDropIndicatorDragOver);
+        indicator.addEventListener('drop', handleDropIndicatorDrop);
+    });
+}
+
+function setupDragAndDrop(questionItem) {
+    questionItem.addEventListener('dragstart', handleDragStart);
+    questionItem.addEventListener('dragend', handleDragEnd);
+    questionItem.addEventListener('dragover', handleDragOver);
+    questionItem.addEventListener('drop', handleDrop);
+}
+
+// Handlers de drag and drop
+function handleDragStart(e) {
+    draggedElement = e.currentTarget;
+    draggedIndex = parseInt(draggedElement.getAttribute('data-index'));
+    
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    
+    showDropIndicators();
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    hideDropIndicators();
+    
+    draggedElement = null;
+    draggedIndex = null;
+}
+
+function handleDragOver(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const currentElement = e.currentTarget;
+    const currentIndex = parseInt(currentElement.getAttribute('data-index'));
+    
+    if (currentIndex !== draggedIndex) {
+        currentElement.classList.add('drag-over');
+    }
+}
+
+function handleDrop(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const targetElement = e.currentTarget;
+    const targetIndex = parseInt(targetElement.getAttribute('data-index'));
+    
+    targetElement.classList.remove('drag-over');
+    
+    if (targetIndex !== draggedIndex) {
+        moveQuestion(draggedIndex, targetIndex);
+        animateQuestionReorder(targetIndex);
+    }
+}
+
+function handleDropIndicatorDragOver(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('active');
+}
+
+function handleDropIndicatorDrop(e) {
+    if (!draggedElement) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const indicator = e.currentTarget;
+    const targetPosition = parseInt(indicator.getAttribute('data-position'));
+    
+    indicator.classList.remove('active');
+    
+    let newIndex = targetPosition;
+    if (draggedIndex < targetPosition) {
+        newIndex = targetPosition - 1;
+    }
+    
+    if (newIndex !== draggedIndex && newIndex >= 0) {
+        moveQuestion(draggedIndex, newIndex);
+        animateQuestionReorder(newIndex);
+    }
+}
+
+function showDropIndicators() {
+    const indicators = document.querySelectorAll('.drop-indicator');
+    indicators.forEach(indicator => {
+        indicator.style.opacity = '0.3';
+    });
+}
+
+function hideDropIndicators() {
+    const indicators = document.querySelectorAll('.drop-indicator');
+    indicators.forEach(indicator => {
+        indicator.classList.remove('active');
+        indicator.style.opacity = '0';
+    });
 }
 
 // Função para carregar lógica condicional existente
@@ -843,8 +1207,21 @@ function addQuestion() {
     
     const questionHtml = `
         <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}">
+            <!-- Controles de reordenação -->
+            <div class="reorder-controls" style="display: flex;">
+                <button type="button" class="btn-reorder-up" onclick="moveQuestionUp(${questionIndex})" title="Mover para cima">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+                <button type="button" class="btn-reorder-down" onclick="moveQuestionDown(${questionIndex})" title="Mover para baixo">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="drag-handle" title="Arrastar para reordenar">
+                    <i class="fas fa-grip-vertical"></i>
+                </div>
+            </div>
+            
             <div class="d-flex justify-content-between align-items-start mb-3">
-                <h6 class="mb-0">Pergunta ${questionIndex + 1}</h6>
+                <h6 class="mb-0"><span class="question-number">Pergunta ${questionIndex + 1}</span></h6>
                 <div class="edit-controls">
                     <button type="button" class="btn btn-sm btn-outline-primary me-1" 
                             onclick="toggleConditionalLogic(${questionIndex})" title="Adicionar Lógica Condicional">
@@ -984,12 +1361,22 @@ function addQuestion() {
                 </div>
             </div>
         </div>
+        
+        <!-- Indicador de drop -->
+        <div class="drop-indicator" data-position="${questionIndex + 1}"></div>
     `;
     
-    container.insertAdjacentHTML('beforeend', questionHtml);
+    // Inserir antes do último indicador
+    const lastIndicator = container.querySelector('.drop-indicator:last-child');
+    lastIndicator.insertAdjacentHTML('beforebegin', questionHtml);
+    
+    const newQuestion = container.querySelector(`[data-index="${questionIndex}"]`);
+    setupDragAndDrop(newQuestion);
+    
     noQuestions.style.display = 'none';
     questionIndex++;
     updateQuestionNumbers();
+    updateAllReorderButtons();
 }
 
 // Função para remover pergunta
@@ -1003,6 +1390,7 @@ function removeQuestion(index) {
             document.getElementById('noQuestions').style.display = 'block';
         }
         updateQuestionNumbers();
+        updateAllReorderButtons();
         validateAllConditionalLogic();
     }
 }
