@@ -2143,7 +2143,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
     }
 });
 
-// Incluir Bootstrap JS para modals
+// Incluir Bootstrap JS pamodals
 if (typeof bootstrap === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
