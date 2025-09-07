@@ -92,7 +92,7 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * NOVO: Exportar dados brutos conforme modelo fornecido (Versão Nativa)
+     * NOVO: Exportar dados brutos conforme modelo fornecido (Versão Nativa CORRIGIDA)
      */
     public function export_raw_data() {
         // Verificar autenticação
@@ -178,7 +178,13 @@ class Responses extends CI_Controller {
             ini_set('memory_limit', '2024M');
             ini_set('max_execution_time', 600);
             
-            // Gerar arquivo Excel com dados brutos (versão nativa)
+            // IMPORTANTE: Limpar qualquer output anterior e iniciar buffer
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            ob_start();
+            
+            // Gerar arquivo Excel com dados brutos (versão nativa CORRIGIDA)
             $this->_generate_raw_data_excel_native($filters, $questionnaire_id);
             
             // Log sucesso da exportação
@@ -191,6 +197,11 @@ class Responses extends CI_Controller {
             );
             
         } catch (Exception $e) {
+            // Limpar buffer em caso de erro
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             // Log erro da exportação
             $this->Response_model->log_export_activity(
                 $user_id, 
@@ -208,7 +219,7 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * Método nativo para gerar arquivo Excel usando XML (sem bibliotecas externas)
+     * Método nativo CORRIGIDO para gerar arquivo Excel usando XML
      */
     private function _generate_raw_data_excel_native($filters, $questionnaire_id) {
         // Obter dados das respostas
@@ -234,15 +245,24 @@ class Responses extends CI_Controller {
                 }
             }
             
+            // Gerar conteúdo Excel XML
+            $excel_content = $this->_generate_excel_xml($raw_data);
+            
+            // Limpar buffer anterior
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             // Configurar headers para download
             header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
             header('Content-Disposition: attachment;filename="' . $filename . '"');
             header('Cache-Control: max-age=0');
             header('Cache-Control: no-cache, must-revalidate');
             header('Pragma: no-cache');
+            header('Content-Length: ' . strlen($excel_content));
             
-            // Gerar conteúdo Excel XML
-            echo $this->_generate_excel_xml($raw_data);
+            // Enviar conteúdo
+            echo $excel_content;
             
             // Log do arquivo gerado
             log_message('info', 'Arquivo Excel gerado: ' . $filename . ' com ' . count($raw_data) . ' registros');
@@ -256,7 +276,7 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * Gerar XML compatível com Excel
+     * Gerar XML compatível com Excel (VERSÃO CORRIGIDA)
      */
     private function _generate_excel_xml($raw_data) {
         $headers = $this->_get_export_headers();
@@ -286,7 +306,7 @@ class Responses extends CI_Controller {
         // Headers
         $xml .= '<Row ss:StyleID="HeaderStyle">' . "\n";
         foreach ($headers as $header) {
-            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($header, ENT_XML1) . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . $this->_escape_xml($header) . '</Data></Cell>' . "\n";
         }
         $xml .= '</Row>' . "\n";
         
@@ -296,11 +316,12 @@ class Responses extends CI_Controller {
             
             $xml .= '<Row>' . "\n";
             foreach ($mapped_data as $value) {
-                $cell_value = is_null($value) ? 'N/A' : $value;
-                $cell_type = is_numeric($cell_value) && !is_string($cell_value) ? 'Number' : 'String';
+                // Sanitizar e validar valor
+                $cell_value = $this->_sanitize_cell_value($value);
+                $cell_type = $this->_get_cell_type($cell_value);
                 
                 $xml .= '<Cell><Data ss:Type="' . $cell_type . '">' . 
-                        htmlspecialchars($cell_value, ENT_XML1) . '</Data></Cell>' . "\n";
+                        $this->_escape_xml($cell_value) . '</Data></Cell>' . "\n";
             }
             $xml .= '</Row>' . "\n";
         }
@@ -314,6 +335,69 @@ class Responses extends CI_Controller {
         $xml .= '</Workbook>';
         
         return $xml;
+    }
+    
+    /**
+     * NOVO: Sanitizar valor da célula (resolve problemas de conversão)
+     */
+    private function _sanitize_cell_value($value) {
+        // Tratar null
+        if (is_null($value)) {
+            return 'N/A';
+        }
+        
+        // Tratar arrays
+        if (is_array($value)) {
+            return implode(', ', array_map('strval', $value));
+        }
+        
+        // Tratar objetos
+        if (is_object($value)) {
+            return 'Objeto não convertível';
+        }
+        
+        // Tratar booleanos
+        if (is_bool($value)) {
+            return $value ? 'SIM' : 'NÃO';
+        }
+        
+        // Converter para string
+        $str_value = strval($value);
+        
+        // Limitar tamanho (Excel tem limite de ~32000 caracteres por célula)
+        if (strlen($str_value) > 32000) {
+            $str_value = substr($str_value, 0, 31997) . '...';
+        }
+        
+        return $str_value;
+    }
+    
+    /**
+     * NOVO: Determinar tipo da célula
+     */
+    private function _get_cell_type($value) {
+        // Se é número (mas não string que parece número como CPF)
+        if (is_numeric($value) && !preg_match('/^0/', $value) && strlen($value) < 15) {
+            return 'Number';
+        }
+        
+        return 'String';
+    }
+    
+    /**
+     * NOVO: Escape seguro para XML
+     */
+    private function _escape_xml($value) {
+        // Converter para string primeiro
+        $str_value = $this->_sanitize_cell_value($value);
+        
+        // Escape básico XML
+        $escaped = htmlspecialchars($str_value, ENT_XML1 | ENT_COMPAT, 'UTF-8', false);
+        
+        // Remover caracteres de controle que podem quebrar o XML
+        $escaped = preg_replace('/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/', '', $escaped);
+        
+        return $escaped;
     }
     
     /**
@@ -373,7 +457,7 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * Gerar planilha de estatísticas
+     * Gerar planilha de estatísticas (VERSÃO CORRIGIDA)
      */
     private function _generate_statistics_worksheet($raw_data) {
         // Calcular estatísticas
@@ -417,7 +501,7 @@ class Responses extends CI_Controller {
         
         foreach ($stats as $label => $value) {
             $xml .= '<Row>' . "\n";
-            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($label, ENT_XML1) . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . $this->_escape_xml($label) . '</Data></Cell>' . "\n";
             $xml .= '<Cell><Data ss:Type="Number">' . $value . '</Data></Cell>' . "\n";
             $xml .= '</Row>' . "\n";
         }
@@ -433,7 +517,7 @@ class Responses extends CI_Controller {
         
         foreach ($applicators as $applicator => $count) {
             $xml .= '<Row>' . "\n";
-            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($applicator, ENT_XML1) . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . $this->_escape_xml($applicator) . '</Data></Cell>' . "\n";
             $xml .= '<Cell><Data ss:Type="Number">' . $count . '</Data></Cell>' . "\n";
             $xml .= '</Row>' . "\n";
         }
@@ -472,26 +556,26 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * Mapear dados da resposta para formato Excel
+     * Mapear dados da resposta para formato Excel (VERSÃO CORRIGIDA)
      */
     private function _map_response_to_excel_format($response_data) {
         return [
-            $response_data->applied_by_name ?? 'N/A',
-            $response_data->completed_at ? date('d/m/Y', strtotime($response_data->completed_at)) : 'N/A',
-            $response_data->respondent_name ?? 'N/A',
-            $response_data->location_name ?? 'N/A',
-            $response_data->respondent_cpf ?? 'N/A',
-            $response_data->respondent_email ?? 'N/A',
-            $response_data->respondent_age ?? 'N/A',
-            $response_data->respondent_gender ?? 'N/A',
-            $response_data->latitude ?? 'N/A',
-            $response_data->longitude ?? 'N/A',
-            $response_data->location_name ?? 'N/A',
-            $response_data->questionnaire_title ?? 'N/A',
+            $this->_get_safe_value($response_data, 'applied_by_name'),
+            $this->_format_date($response_data->completed_at),
+            $this->_get_safe_value($response_data, 'respondent_name'),
+            $this->_get_safe_value($response_data, 'location_name'),
+            $this->_get_safe_value($response_data, 'respondent_cpf'),
+            $this->_get_safe_value($response_data, 'respondent_email'),
+            $this->_get_safe_value($response_data, 'respondent_age'),
+            $this->_get_safe_value($response_data, 'respondent_gender'),
+            $this->_get_safe_value($response_data, 'latitude'),
+            $this->_get_safe_value($response_data, 'longitude'),
+            $this->_get_safe_value($response_data, 'location_name'),
+            $this->_get_safe_value($response_data, 'questionnaire_title'),
             $response_data->consent_given ? 'SIM' : 'NÃO',
-            strtoupper($response_data->sync_status ?? 'UNKNOWN'),
-            $response_data->started_at ? date('d/m/Y H:i', strtotime($response_data->started_at)) : 'N/A',
-            $response_data->completed_at ? date('d/m/Y H:i', strtotime($response_data->completed_at)) : 'N/A',
+            strtoupper($this->_get_safe_value($response_data, 'sync_status', 'UNKNOWN')),
+            $this->_format_datetime($response_data->started_at),
+            $this->_format_datetime($response_data->completed_at),
             !empty($response_data->photo_path) ? 'SIM' : 'NÃO',
             $this->_sanitize_json_for_excel($response_data->answers_json ?? '{}'),
             $response_data->id . '-' . uniqid()
@@ -499,23 +583,127 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * Sanitizar JSON para Excel (remover caracteres problemáticos)
+     * NOVO: Obter valor seguro de propriedade
      */
-    private function _sanitize_json_for_excel($json_string) {
-        // Decodificar e recodificar para limpar caracteres especiais
-        $data = json_decode($json_string, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-            // Simplificar JSON para Excel
-            $simplified = array();
-            foreach ($data as $item) {
-                if (isset($item['question_text']) && isset($item['response_value'])) {
-                    $simplified[] = $item['question_text'] . ': ' . $item['response_value'];
-                }
+    private function _get_safe_value($object, $property, $default = 'N/A') {
+        if (isset($object->$property) && !is_null($object->$property)) {
+            $value = $object->$property;
+            
+            // Se for array, converter para string
+            if (is_array($value)) {
+                return implode(', ', $value);
             }
-            return implode(' | ', $simplified);
+            
+            // Se for objeto, tentar converter
+            if (is_object($value)) {
+                return method_exists($value, '__toString') ? strval($value) : $default;
+            }
+            
+            return strval($value);
         }
         
-        return 'Dados não disponíveis';
+        return $default;
+    }
+    
+    /**
+     * NOVO: Formatar data segura
+     */
+    private function _format_date($date_string) {
+        if (empty($date_string)) {
+            return 'N/A';
+        }
+        
+        try {
+            return date('d/m/Y', strtotime($date_string));
+        } catch (Exception $e) {
+            return 'Data inválida';
+        }
+    }
+    
+    /**
+     * NOVO: Formatar data e hora segura
+     */
+    private function _format_datetime($datetime_string) {
+        if (empty($datetime_string)) {
+            return 'N/A';
+        }
+        
+        try {
+            return date('d/m/Y H:i', strtotime($datetime_string));
+        } catch (Exception $e) {
+            return 'Data inválida';
+        }
+    }
+    
+    /**
+     * Sanitizar JSON para Excel CORRIGIDO (resolve erro de Array to string conversion)
+     */
+    private function _sanitize_json_for_excel($json_string) {
+        // Verificar se é null ou vazio
+        if (empty($json_string)) {
+            return 'Sem dados';
+        }
+        
+        // Se já é uma string simples, retornar
+        if (!is_string($json_string)) {
+            // Se é array, converter para string
+            if (is_array($json_string)) {
+                return 'Array: ' . implode(', ', array_map('strval', $json_string));
+            }
+            
+            // Se é objeto, tentar converter
+            if (is_object($json_string)) {
+                $json_string = json_encode($json_string);
+            } else {
+                // Converter qualquer outro tipo para string
+                $json_string = strval($json_string);
+            }
+        }
+        
+        // Tentar decodificar JSON
+        $data = json_decode($json_string, true);
+        
+        // Se não conseguiu decodificar, retornar string truncada
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $clean_string = preg_replace('/[^\x20-\x7E\x{00A0}-\x{FFFF}]/u', '', $json_string);
+            return strlen($clean_string) > 100 ? substr($clean_string, 0, 97) . '...' : $clean_string;
+        }
+        
+        // Se decodificou com sucesso e é array
+        if (is_array($data)) {
+            $simplified = array();
+            
+            foreach ($data as $item) {
+                if (is_array($item)) {
+                    // Tratar item como array
+                    $question = isset($item['question_text']) ? $item['question_text'] : 'Pergunta';
+                    $answer = 'Sem resposta';
+                    
+                    if (isset($item['response_value'])) {
+                        $response_value = $item['response_value'];
+                        
+                        // Se response_value é array
+                        if (is_array($response_value)) {
+                            $answer = implode(', ', array_map('strval', $response_value));
+                        } else {
+                            $answer = strval($response_value);
+                        }
+                    }
+                    
+                    $simplified[] = $question . ': ' . $answer;
+                } else {
+                    // Item não é array, converter para string
+                    $simplified[] = strval($item);
+                }
+            }
+            
+            $result = implode(' | ', $simplified);
+            
+            // Limitar tamanho para Excel
+            return strlen($result) > 500 ? substr($result, 0, 497) . '...' : $result;
+        }
+        
+        return 'Dados não interpretáveis';
     }
 
     /**
