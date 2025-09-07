@@ -324,6 +324,7 @@ class Responses extends CI_Controller {
     private function _generate_dynamic_headers($all_questions) {
         // Headers fixos (sem RESPOSTAS_JSON)
         $fixed_headers = [
+            'QUESTIONÁRIO',
             'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO',
             'DATA',
             'NOME',
@@ -335,7 +336,6 @@ class Responses extends CI_Controller {
             'LATITUDE',
             'LONGITUDE',
             'LOCALIZAÇÃO',
-            'QUESTIONÁRIO',
             'CONSENTIMENTO DADO',
             'STATUS SINCRONIZAÇÃO',
             'DATA INÍCIO',
@@ -545,6 +545,7 @@ class Responses extends CI_Controller {
     private function _get_dynamic_column_width($header) {
         // Larguras dos headers fixos
         $fixed_widths = array(
+            'QUESTIONÁRIO' => 180,
             'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO' => 200,
             'DATA' => 80,
             'NOME' => 150,
@@ -555,8 +556,7 @@ class Responses extends CI_Controller {
             'SEXO' => 80,
             'LATITUDE' => 100,
             'LONGITUDE' => 100,
-            'LOCALIZAÇÃO' => 200,
-            'QUESTIONÁRIO' => 180,
+            'LOCALIZAÇÃO' => 200,            
             'CONSENTIMENTO DADO' => 120,
             'STATUS SINCRONIZAÇÃO' => 120,
             'DATA INÍCIO' => 120,
