@@ -203,7 +203,7 @@ class Responses extends CI_Controller {
             );
             
             log_message('error', 'Erro na exportação de dados brutos: ' . $e->getMessage());
-            $this->session->set_flashdata('error', 'Erro ao gerar exportação. Contate o administrador se o problema persistir.');
+            $this->session->set_flashdata('error', 'Erro ao gerar exportação. Contate o adminitrador se o problema persistir.');
             redirect('responses');
         }
     }
