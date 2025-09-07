@@ -53,7 +53,9 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
         $this->db->where('fr.id', $id);
-        return $this->db->get()->row();
+      //  return $this->db->get()->row();
+        $this->db->get()->row();
+         $this->db->last_query();exit;
     }
 
     public function get_answers($form_response_id) {
