@@ -570,7 +570,7 @@ function handleQuestionTypeChange(questionIndex, type) {
             addOption(questionIndex);
         }
         
-        // CORREÇÃO: Adicionar required aos campos de opção quando visíveis
+        // Adicionar required aos campos de opção quando visíveis
         const optionInputs = optionsContainer.querySelectorAll('input[name*="[text]"]');
         optionInputs.forEach(input => {
             input.setAttribute('required', 'required');
@@ -578,7 +578,7 @@ function handleQuestionTypeChange(questionIndex, type) {
     } else {
         optionsDiv.style.display = 'none';
         
-        // CORREÇÃO: Remover required dos campos de opção quando ocultos
+        // Remover required dos campos de opção quando ocultos
         const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
         optionInputs.forEach(input => {
             input.removeAttribute('required');
@@ -597,7 +597,7 @@ function addOption(questionIndex) {
         <div class="input-group mb-2">
             <input type="text" class="form-control" 
                    name="questions[${questionIndex}][options][${optionIndex}][text]" 
-                   placeholder="Texto da opção" required onchange="updateLogicPreview()">
+                   placeholder="Texto da opção" onchange="updateLogicPreview()">
             <input type="hidden" 
                    name="questions[${questionIndex}][options][${optionIndex}][value]" 
                    value="">
@@ -611,6 +611,7 @@ function addOption(questionIndex) {
     container.insertAdjacentHTML('beforeend', optionHtml);
 }
 
+// Função para remover opção
 function removeOption(button, questionIndex) {
     const optionDiv = button.parentElement;
     const container = optionDiv.parentElement;
@@ -755,7 +756,7 @@ function getAvailableQuestionsForCondition(currentQuestionIndex) {
     return available;
 }
 
-// Função para atualizar operadores da condição
+// Função para atualizar operadores da condição (CORRIGIDA)
 function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     const questionSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"]`);
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
@@ -766,20 +767,19 @@ function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     
     let targetQuestion = null;
     
-    // Tentar encontrar a pergunta alvo
-    if (existingQuestions[selectedQuestionIndex]) {
-        targetQuestion = existingQuestions[selectedQuestionIndex];
-    } else {
-        const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
-        if (targetQuestionElement) {
-            const typeSelect = targetQuestionElement.querySelector('select[name*="[type]"]');
-            targetQuestion = {
-                question_type: typeSelect ? typeSelect.value : 'text'
-            };
-        }
+    // CORREÇÃO: Buscar pergunta alvo sem depender de existingQuestions
+    const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+    if (targetQuestionElement) {
+        const typeSelect = targetQuestionElement.querySelector('select[name*="[type]"]');
+        targetQuestion = {
+            question_type: typeSelect ? typeSelect.value : 'text'
+        };
     }
     
-    if (!targetQuestion) return;
+    // Se não encontrou a pergunta, usar tipo padrão
+    if (!targetQuestion) {
+        targetQuestion = { question_type: 'text' };
+    }
     
     // Limpar operadores atuais
     operatorSelect.innerHTML = '<option value="">Operador...</option>';
@@ -812,7 +812,7 @@ function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     updateConditionValue(questionIndex, ruleType, conditionIndex);
 }
 
-// Função para atualizar campo de valor da condição
+// Função para atualizar campo de valor da condição (CORRIGIDA)
 function updateConditionValue(questionIndex, ruleType, conditionIndex) {
     const questionSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"]`);
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
@@ -832,7 +832,10 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
         valueInput.style.display = 'block';
     }
     
+    // CORREÇÃO: Buscar pergunta alvo sem depender de existingQuestions
     const targetQuestion = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+    if (!targetQuestion) return;
+    
     const questionType = targetQuestion.querySelector('select[name*="[type]"]').value;
     
     // Se é pergunta de múltipla escolha, converter para select
@@ -1137,94 +1140,50 @@ function previewLogic() {
     modal.show();
 }
 
-// Validação do formulário
-document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
+// Função para limpar campos vazios antes do envio
+function cleanEmptyFields() {
     const questions = document.querySelectorAll('.question-item');
-    if (questions.length === 0) {
-        e.preventDefault();
-        alert('Adicione pelo menos uma pergunta ao questionário.');
-        return false;
-    }
     
-    // Validar aplicadores
-    const aplicadoresSelect = document.getElementById('aplicadores');
-    if (!aplicadoresSelect.selectedOptions.length) {
-        e.preventDefault();
-        alert('Selecione pelo menos um aplicador para este questionário.');
-        return false;
-    }
-    
-    // CORREÇÃO: Validar perguntas e remover required de campos ocultos
-    let valid = true;
-    questions.forEach((question, index) => {
+    questions.forEach((question, questionIndex) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
         const type = typeSelect.value;
-        const textArea = question.querySelector('textarea[name*="[text]"]');
         
-        // Validar se pergunta tem texto
-        if (!textArea.value.trim()) {
-            alert(`A pergunta ${index + 1} deve ter um texto.`);
-            valid = false;
-            return;
-        }
-        
-        // Validar tipo de pergunta
-        if (!type) {
-            alert(`Selecione um tipo para a pergunta ${index + 1}.`);
-            valid = false;
-            return;
-        }
-        
-        if (['radio', 'checkbox', 'select'].includes(type)) {
-            const optionsDiv = question.querySelector(`#options-${index}`);
-            const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
-            const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
-            
-            if (validOptions.length < 2) {
-                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
-                valid = false;
-                return;
-            }
-            
-            // Garantir que campos de opção visíveis tenham required
-            optionInputs.forEach(input => {
-                if (input.value.trim()) {
-                    input.setAttribute('required', 'required');
-                } else {
-                    input.removeAttribute('required');
-                }
-            });
-        } else {
-            // CORREÇÃO: Remover required de campos de opção para tipos que não precisam
-            const optionsDiv = question.querySelector(`#options-${index}`);
+        // Se não é tipo de múltipla escolha, remover todos os campos de opção
+        if (!['radio', 'checkbox', 'select'].includes(type)) {
+            const optionsDiv = question.querySelector(`#options-${questionIndex}`);
             if (optionsDiv) {
-                const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+                const optionInputs = optionsDiv.querySelectorAll('input');
                 optionInputs.forEach(input => {
+                    input.removeAttribute('name'); // Remove do envio
                     input.removeAttribute('required');
+                });
+            }
+        } else {
+            // Para tipos de múltipla escolha, remover opções vazias
+            const optionsContainer = question.querySelector(`#optionsContainer-${questionIndex}`);
+            if (optionsContainer) {
+                const optionDivs = optionsContainer.querySelectorAll('.input-group');
+                optionDivs.forEach(optionDiv => {
+                    const textInput = optionDiv.querySelector('input[name*="[text]"]');
+                    if (!textInput.value.trim()) {
+                        // Remove opção vazia do envio
+                        const inputs = optionDiv.querySelectorAll('input');
+                        inputs.forEach(input => {
+                            input.removeAttribute('name');
+                            input.removeAttribute('required');
+                        });
+                    } else {
+                        // Garantir que opções válidas tenham o value correto
+                        const valueInput = optionDiv.querySelector('input[name*="[value]"]');
+                        if (valueInput && !valueInput.value) {
+                            valueInput.value = textInput.value.toLowerCase().replace(/\s+/g, '_');
+                        }
+                    }
                 });
             }
         }
     });
-    
-    if (!valid) {
-        e.preventDefault();
-        return false;
-    }
-    
-    // Validar lógica condicional
-    const logicValidation = validateAllConditionalLogic();
-    if (!logicValidation.valid) {
-        e.preventDefault();
-        alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
-        return false;
-    }
-    
-    // CORREÇÃO: Limpar campos vazios antes do envio
-    cleanEmptyFields();
-    
-    // Serializar lógica condicional para envio
-    serializeConditionalLogic();
-});
+}
 
 // Função para serializar lógica condicional
 function serializeConditionalLogic() {
@@ -1297,56 +1256,92 @@ function serializeConditionalLogic() {
     });
 }
 
-// Incluir Bootstrap JS para modals
-if (typeof bootstrap === 'undefined') {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
-    document.head.appendChild(script);
-}
-
-function cleanEmptyFields() {
+// Validação do formulário
+document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
     const questions = document.querySelectorAll('.question-item');
+    if (questions.length === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos uma pergunta ao questionário.');
+        return false;
+    }
     
-    questions.forEach((question, questionIndex) => {
+    // Validar aplicadores
+    const aplicadoresSelect = document.getElementById('aplicadores');
+    if (!aplicadoresSelect.selectedOptions.length) {
+        e.preventDefault();
+        alert('Selecione pelo menos um aplicador para este questionário.');
+        return false;
+    }
+    
+    // Validar perguntas e remover required de campos ocultos
+    let valid = true;
+    questions.forEach((question, index) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
         const type = typeSelect.value;
+        const textArea = question.querySelector('textarea[name*="[text]"]');
         
-        // Se não é tipo de múltipla escolha, remover todos os campos de opção
-        if (!['radio', 'checkbox', 'select'].includes(type)) {
-            const optionsDiv = question.querySelector(`#options-${questionIndex}`);
-            if (optionsDiv) {
-                const optionInputs = optionsDiv.querySelectorAll('input');
-                optionInputs.forEach(input => {
-                    input.removeAttribute('name'); // Remove do envio
-                    input.removeAttribute('required');
-                });
+        // Validar se pergunta tem texto
+        if (!textArea.value.trim()) {
+            alert(`A pergunta ${index + 1} deve ter um texto.`);
+            valid = false;
+            return;
+        }
+        
+        // Validar tipo de pergunta
+        if (!type) {
+            alert(`Selecione um tipo para a pergunta ${index + 1}.`);
+            valid = false;
+            return;
+        }
+        
+        if (['radio', 'checkbox', 'select'].includes(type)) {
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+            const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
+            
+            if (validOptions.length < 2) {
+                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
+                valid = false;
+                return;
             }
+            
+            // Garantir que campos de opção visíveis tenham required
+            optionInputs.forEach(input => {
+                if (input.value.trim()) {
+                    input.setAttribute('required', 'required');
+                } else {
+                    input.removeAttribute('required');
+                }
+            });
         } else {
-            // Para tipos de múltipla escolha, remover opções vazias
-            const optionsContainer = question.querySelector(`#optionsContainer-${questionIndex}`);
-            if (optionsContainer) {
-                const optionDivs = optionsContainer.querySelectorAll('.input-group');
-                optionDivs.forEach(optionDiv => {
-                    const textInput = optionDiv.querySelector('input[name*="[text]"]');
-                    if (!textInput.value.trim()) {
-                        // Remove opção vazia do envio
-                        const inputs = optionDiv.querySelectorAll('input');
-                        inputs.forEach(input => {
-                            input.removeAttribute('name');
-                            input.removeAttribute('required');
-                        });
-                    } else {
-                        // Garantir que opções válidas tenham o value correto
-                        const valueInput = optionDiv.querySelector('input[name*="[value]"]');
-                        if (valueInput && !valueInput.value) {
-                            valueInput.value = textInput.value.toLowerCase().replace(/\s+/g, '_');
-                        }
-                    }
+            // Remover required de campos de opção para tipos que não precisam
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            if (optionsDiv) {
+                const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+                optionInputs.forEach(input => {
+                    input.removeAttribute('required');
                 });
             }
         }
     });
-}
-
-
+    
+    if (!valid) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // Validar lógica condicional
+    const logicValidation = validateAllConditionalLogic();
+    if (!logicValidation.valid) {
+        e.preventDefault();
+        alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
+        return false;
+    }
+    
+    // Limpar campos vazios antes do envio
+    cleanEmptyFields();
+    
+    // Serializar lógica condicional para envio
+    serializeConditionalLogic();
+});
 </script>
