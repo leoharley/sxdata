@@ -1832,4 +1832,298 @@ public function get_top_answered_questions($filters = array(), $limit = 5) {
     return $this->db->get()->result();
 }
 
+<?php
+// Adicionar no Response_model.php
+
+/**
+ * Registrar atividade de exportação para auditoria
+ */
+public function log_export_activity($user_id, $export_type, $filters, $record_count, $status = 'success', $error_message = null) {
+    $log_data = array(
+        'user_id' => $user_id,
+        'action' => 'export_raw_data',
+        'resource_type' => 'responses',
+        'details' => json_encode(array(
+            'export_type' => $export_type,
+            'filters' => $filters,
+            'record_count' => $record_count,
+            'status' => $status,
+            'error_message' => $error_message,
+            'timestamp' => date('Y-m-d H:i:s'),
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
+        )),
+        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+        'created_at' => date('Y-m-d H:i:s')
+    );
+    
+    // Inserir no log de atividades
+    $this->db->insert('activity_logs', $log_data);
+    
+    // Log também no arquivo do sistema
+    $log_message = "Export Raw Data - User: {$user_id}, Type: {$export_type}, Records: {$record_count}, Status: {$status}";
+    if ($error_message) {
+        $log_message .= ", Error: {$error_message}";
+    }
+    
+    log_message($status === 'success' ? 'info' : 'error', $log_message);
+}
+
+/**
+ * Obter histórico de exportações do usuário
+ */
+public function get_user_export_history($user_id, $limit = 10) {
+    $this->db->select('
+        al.*,
+        u.full_name,
+        u.username
+    ');
+    $this->db->from('activity_logs al');
+    $this->db->join('users u', 'al.user_id = u.id', 'left');
+    $this->db->where('al.user_id', $user_id);
+    $this->db->where('al.action', 'export_raw_data');
+    $this->db->order_by('al.created_at', 'DESC');
+    $this->db->limit($limit);
+    
+    $results = $this->db->get()->result();
+    
+    // Decodificar details JSON
+    foreach ($results as &$result) {
+        if ($result->details) {
+            $result->details = json_decode($result->details, true);
+        }
+    }
+    
+    return $results;
+}
+
+/**
+ * Verificar limites de exportação por usuário (prevenção de abuso)
+ */
+public function check_export_limits($user_id) {
+    // Verificar quantas exportações nas últimas 24 horas
+    $this->db->where('user_id', $user_id);
+    $this->db->where('action', 'export_raw_data');
+    $this->db->where('created_at >=', date('Y-m-d H:i:s', strtotime('-24 hours')));
+    $count_24h = $this->db->count_all_results('activity_logs');
+    
+    // Verificar quantas exportações na última hora
+    $this->db->where('user_id', $user_id);
+    $this->db->where('action', 'export_raw_data');
+    $this->db->where('created_at >=', date('Y-m-d H:i:s', strtotime('-1 hour')));
+    $count_1h = $this->db->count_all_results('activity_logs');
+    
+    $limits = array(
+        'max_per_hour' => 5,      // Máximo 5 exportações por hora
+        'max_per_day' => 20,      // Máximo 20 exportações por dia
+        'current_hour' => $count_1h,
+        'current_day' => $count_24h,
+        'hour_exceeded' => $count_1h >= 5,
+        'day_exceeded' => $count_24h >= 20
+    );
+    
+    return $limits;
+}
+
+/**
+ * Obter estatísticas de uso do sistema de exportação
+ */
+public function get_export_usage_statistics($days = 30) {
+    // Exportações por dia
+    $this->db->select('
+        DATE(created_at) as date,
+        COUNT(*) as export_count,
+        COUNT(DISTINCT user_id) as unique_users
+    ');
+    $this->db->from('activity_logs');
+    $this->db->where('action', 'export_raw_data');
+    $this->db->where('created_at >=', date('Y-m-d', strtotime("-{$days} days")));
+    $this->db->group_by('DATE(created_at)');
+    $this->db->order_by('date', 'ASC');
+    $daily_stats = $this->db->get()->result();
+    
+    // Usuários mais ativos
+    $this->db->select('
+        u.full_name,
+        u.username,
+        COUNT(al.id) as export_count
+    ');
+    $this->db->from('activity_logs al');
+    $this->db->join('users u', 'al.user_id = u.id', 'left');
+    $this->db->where('al.action', 'export_raw_data');
+    $this->db->where('al.created_at >=', date('Y-m-d', strtotime("-{$days} days")));
+    $this->db->group_by('u.id, u.full_name, u.username');
+    $this->db->order_by('export_count', 'DESC');
+    $this->db->limit(10);
+    $top_users = $this->db->get()->result();
+    
+    // Tipos de exportação mais utilizados
+    $this->db->select('
+        JSON_UNQUOTE(JSON_EXTRACT(details, "$.export_type")) as export_type,
+        COUNT(*) as count
+    ');
+    $this->db->from('activity_logs');
+    $this->db->where('action', 'export_raw_data');
+    $this->db->where('created_at >=', date('Y-m-d', strtotime("-{$days} days")));
+    $this->db->group_by('export_type');
+    $this->db->order_by('count', 'DESC');
+    $export_types = $this->db->get()->result();
+    
+    return array(
+        'daily_statistics' => $daily_stats,
+        'top_users' => $top_users,
+        'export_types' => $export_types,
+        'period_days' => $days
+    );
+}
+
+// Adicionar no Controller Responses.php
+
+/**
+ * Método melhorado de export_raw_data com logging
+ */
+public function export_raw_data() {
+    // Verificar autenticação
+    if (!$this->session->userdata('admin_logged_in')) {
+        show_404();
+        return;
+    }
+    
+    $user_id = $this->session->userdata('user_id');
+    
+    // Verificar limites de exportação
+    $limits = $this->Response_model->check_export_limits($user_id);
+    if ($limits['hour_exceeded']) {
+        $this->session->set_flashdata('error', 'Limite de exportações por hora excedido. Tente novamente em alguns minutos.');
+        redirect('responses');
+        return;
+    }
+    
+    if ($limits['day_exceeded']) {
+        $this->session->set_flashdata('error', 'Limite de exportações diárias excedido. Tente novamente amanhã.');
+        redirect('responses');
+        return;
+    }
+    
+    // Verificar se é uma requisição POST
+    if ($this->input->method() !== 'post') {
+        $this->session->set_flashdata('error', 'Método de requisição inválido.');
+        redirect('responses');
+        return;
+    }
+    
+    // Obter filtros do formulário
+    $filters = array();
+    $questionnaire_id = $this->input->post('questionnaire_id');
+    
+    if (empty($questionnaire_id)) {
+        $this->session->set_flashdata('error', 'Por favor, selecione um questionário.');
+        redirect('responses');
+        return;
+    }
+    
+    if ($questionnaire_id && $questionnaire_id !== 'all') {
+        $filters['questionnaire_id'] = $questionnaire_id;
+    }
+    
+    if ($this->input->post('date_from')) {
+        $filters['date_from'] = $this->input->post('date_from');
+    }
+    
+    if ($this->input->post('date_to')) {
+        $filters['date_to'] = $this->input->post('date_to');
+    }
+    
+    if ($this->input->post('applied_by')) {
+        $filters['applied_by'] = $this->input->post('applied_by');
+    }
+    
+    // Validar filtros
+    $validation_errors = $this->Response_model->validate_export_filters($filters);
+    if (!empty($validation_errors)) {
+        $this->Response_model->log_export_activity(
+            $user_id, 
+            'raw_data', 
+            $filters, 
+            0, 
+            'validation_error', 
+            implode('; ', $validation_errors)
+        );
+        
+        $this->session->set_flashdata('error', implode('<br>', $validation_errors));
+        redirect('responses');
+        return;
+    }
+    
+    try {
+        // Contar registros antes da exportação
+        $record_count = $this->Response_model->count_by_filters($filters);
+        
+        // Log início da exportação
+        $this->Response_model->log_export_activity(
+            $user_id, 
+            'raw_data', 
+            $filters, 
+            $record_count, 
+            'started'
+        );
+        
+        // Aumentar limites para exportação
+        ini_set('memory_limit', '1024M');
+        ini_set('max_execution_time', 600);
+        
+        // Gerar arquivo Excel com dados brutos
+        $this->_generate_raw_data_excel($filters, $questionnaire_id);
+        
+        // Log sucesso da exportação
+        $this->Response_model->log_export_activity(
+            $user_id, 
+            'raw_data', 
+            $filters, 
+            $record_count, 
+            'success'
+        );
+        
+    } catch (Exception $e) {
+        // Log erro da exportação
+        $this->Response_model->log_export_activity(
+            $user_id, 
+            'raw_data', 
+            $filters, 
+            0, 
+            'error', 
+            $e->getMessage()
+        );
+        
+        log_message('error', 'Erro na exportação de dados brutos: ' . $e->getMessage());
+        $this->session->set_flashdata('error', 'Erro ao gerar exportação. Contate o administrador se o problema persistir.');
+        redirect('responses');
+    }
+}
+
+/**
+ * Visualizar histórico de exportações (nova página)
+ */
+public function export_history() {
+    $data['title'] = 'Histórico de Exportações - SXData';
+    
+    $user_id = $this->session->userdata('user_id');
+    $is_admin = $this->session->userdata('user_role') === 'administrador';
+    
+    if ($is_admin) {
+        // Administradores podem ver todo o histórico
+        $data['export_history'] = $this->Response_model->get_export_usage_statistics(30);
+    } else {
+        // Usuários normais veem apenas seu histórico
+        $data['export_history'] = $this->Response_model->get_user_export_history($user_id, 20);
+    }
+    
+    $data['export_limits'] = $this->Response_model->check_export_limits($user_id);
+    
+    $this->load->view('admin/header', $data);
+    $this->load->view('admin/responses/export_history', $data);
+    $this->load->view('admin/footer');
+}
+
 }

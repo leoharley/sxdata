@@ -126,10 +126,15 @@ function get_location_name_cached($latitude, $longitude)
                     <i class="fas fa-filter me-2"></i>
                     Filtros
                 </button>
-                <a href="<?= base_url('responses/export?' . http_build_query($filters)) ?>" class="btn btn-success">
+                <a href="<?= base_url('responses/export?' . http_build_query($filters)) ?>" class="btn btn-success me-2">
                     <i class="fas fa-download me-2"></i>
                     Exportar
                 </a>
+                <!-- NOVO BOTÃO: Exportar Dados Brutos -->
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exportRawDataModal">
+                    <i class="fas fa-file-excel me-2"></i>
+                    Exportar Dados Brutos
+                </button>
             </div>
         </div>
     </div>
@@ -208,7 +213,94 @@ function get_location_name_cached($latitude, $longitude)
     </div>
 </div>
 
-<!-- Tabela de Respostas -->
+<!-- NOVO MODAL: Exportação de Dados Brutos -->
+<div class="modal fade" id="exportRawDataModal" tabindex="-1" aria-labelledby="exportRawDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exportRawDataModalLabel">
+                    <i class="fas fa-file-excel me-2"></i>
+                    Exportar Dados Brutos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Container para alertas dinâmicos -->
+                <div id="export-alert-container"></div>
+                
+                <form id="exportRawDataForm" action="<?= base_url('responses/export_raw_data') ?>" method="POST">
+                    <div class="mb-3">
+                        <label for="export_questionnaire_id" class="form-label">
+                            <i class="fas fa-list me-2"></i>
+                            Selecionar Questionário
+                        </label>
+                        <select class="form-select" id="export_questionnaire_id" name="questionnaire_id" required>
+                            <option value="">Selecione um questionário...</option>
+                            <option value="all">Todos os Questionários</option>
+                            <?php foreach ($questionnaires as $questionnaire): ?>
+                            <option value="<?= $questionnaire->id ?>">
+                                <?= $questionnaire->title ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">
+                            Selecione "Todos os Questionários" para exportar dados de todos os formulários ou escolha um questionário específico.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-calendar me-2"></i>
+                            Filtros Adicionais (Opcional)
+                        </label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="export_date_from" class="form-label small">Data Início</label>
+                                <input type="date" class="form-control" id="export_date_from" name="date_from">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="export_date_to" class="form-label small">Data Fim</label>
+                                <input type="date" class="form-control" id="export_date_to" name="date_to">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="export_applied_by" class="form-label">
+                            <i class="fas fa-user me-2"></i>
+                            Aplicador (Opcional)
+                        </label>
+                        <select class="form-select" id="export_applied_by" name="applied_by">
+                            <option value="">Todos os aplicadores</option>
+                            <?php foreach ($users as $user): ?>
+                            <option value="<?= $user->id ?>">
+                                <?= $user->full_name ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Formato de Exportação:</strong> Os dados serão exportados em formato Excel (.xlsx) seguindo o modelo de estrutura fornecido, com todas as respostas organizadas em colunas correspondentes às perguntas dos questionários.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>
+                    Cancelar
+                </button>
+                <button type="submit" form="exportRawDataForm" class="btn btn-primary">
+                    <i class="fas fa-download me-2"></i>
+                    Exportar Dados
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de Respostas (mantém o código original) -->
 <div class="card">
     <div class="card-body">
         <?php if (!empty($responses)): ?>
@@ -417,10 +509,26 @@ function get_location_name_cached($latitude, $longitude)
     margin-bottom: 1rem;
     border-left: 4px solid #0d6efd;
 }
+
+/* Estilos para o modal de exportação */
+#exportRawDataModal .modal-dialog {
+    max-width: 600px;
+}
+
+#exportRawDataModal .form-text {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+#exportRawDataModal .alert-info {
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+    color: #0c5460;
+}
 </style>
 
 <script>
-// Função para buscar localização via PHP (backend)
+// Função para buscar localização via PHP (backend) - mantém o código original
 async function fetchLocationName(latitude, longitude) {
     try {
         // Criar URL para chamar uma função PHP via AJAX
@@ -447,7 +555,7 @@ async function fetchLocationName(latitude, longitude) {
     }
 }
 
-// Função alternativa usando Nominatim diretamente (fallback)
+// Função alternativa usando Nominatim diretamente (fallback) - mantém o código original
 async function fetchLocationNameDirect(latitude, longitude) {
     try {
         // Usar JSONP ou proxy para contornar CORS
@@ -477,7 +585,7 @@ async function fetchLocationNameDirect(latitude, longitude) {
     }
 }
 
-// Função para formatar nome da localização
+// Mantém todas as outras funções originais...
 function formatLocationName(data) {
     if (!data || !data.address) {
         return data && data.display_name ? data.display_name.substring(0, 60) : 'N/A';
@@ -608,6 +716,19 @@ function showPhoto(photoUrl) {
     new bootstrap.Modal(document.getElementById('photoModal')).show();
 }
 
+// NOVA FUNÇÃO: Validação do formulário de exportação
+function validateExportForm() {
+    const questionnaireSelect = document.getElementById('export_questionnaire_id');
+    
+    if (!questionnaireSelect.value) {
+        alert('Por favor, selecione um questionário para exportar.');
+        questionnaireSelect.focus();
+        return false;
+    }
+    
+    return true;
+}
+
 // Inicializar quando DOM estiver pronto
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM carregado, iniciando carregamento de localizações...');
@@ -632,5 +753,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }, 1000);
+    
+    // NOVO: Adicionar validação ao formulário de exportação
+    const exportForm = document.getElementById('exportRawDataForm');
+    if (exportForm) {
+        exportForm.addEventListener('submit', function(e) {
+            if (!validateExportForm()) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Mostrar loading no botão
+            const submitBtn = exportForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Exportando...';
+            submitBtn.disabled = true;
+            
+            // Restaurar botão após alguns segundos (caso não haja redirect)
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }, 5000);
+        });
+    }
 });
 </script>

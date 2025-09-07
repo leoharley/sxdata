@@ -46,3 +46,14 @@ $route['api/stats/questionnaires-analysis'] = 'api/stats/questionnaires_analysis
 $route['api/stats/questionnaire-analysis/(:num)'] = 'api/stats/questionnaire_analysis/$1';
 $route['api/stats/questions-analysis'] = 'api/stats/questions_analysis';
 $route['api/stats/applicators_app'] = 'api/stats/applicators_app';
+
+$route['responses/export_raw_data'] = 'responses/export_raw_data';
+
+// Rotas adicionais úteis para a funcionalidade
+$route['responses/preview_export'] = 'responses/preview_export';
+$route['responses/validate_export'] = 'responses/validate_export';
+$route['responses/export_status/(:num)'] = 'responses/export_status/$1';
+
+// Rotas para AJAX calls
+$route['api/responses/count'] = 'responses/ajax_count_responses';
+$route['api/responses/preview'] = 'responses/ajax_preview_export';

@@ -244,4 +244,148 @@ private function get_location_name_api($latitude, $longitude)
         return 'N/A';
     }
 
+
+    /**
+     * AJAX: Contar respostas baseado nos filtros selecionados
+     */
+    public function ajax_count_responses() {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+            return;
+        }
+        
+        $filters = array();
+        
+        if ($this->input->post('questionnaire_id') && $this->input->post('questionnaire_id') !== 'all') {
+            $filters['questionnaire_id'] = $this->input->post('questionnaire_id');
+        }
+        
+        if ($this->input->post('date_from')) {
+            $filters['date_from'] = $this->input->post('date_from');
+        }
+        
+        if ($this->input->post('date_to')) {
+            $filters['date_to'] = $this->input->post('date_to');
+        }
+        
+        if ($this->input->post('applied_by')) {
+            $filters['applied_by'] = $this->input->post('applied_by');
+        }
+        
+        $count = $this->Response_model->count_by_filters($filters);
+        $statistics = $this->Response_model->get_export_statistics($filters);
+        
+        $response = array(
+            'success' => true,
+            'total_responses' => $count,
+            'statistics' => $statistics
+        );
+        
+        $this->output
+            ->set_content_type('application/json')
+            ->set_output(json_encode($response));
+    }
+    
+    /**
+     * AJAX: Preview dos dados que serão exportados
+     */
+    public function ajax_preview_export() {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+            return;
+        }
+        
+        $filters = array();
+        
+        if ($this->input->post('questionnaire_id') && $this->input->post('questionnaire_id') !== 'all') {
+            $filters['questionnaire_id'] = $this->input->post('questionnaire_id');
+        }
+        
+        if ($this->input->post('date_from')) {
+            $filters['date_from'] = $this->input->post('date_from');
+        }
+        
+        if ($this->input->post('date_to')) {
+            $filters['date_to'] = $this->input->post('date_to');
+        }
+        
+        if ($this->input->post('applied_by')) {
+            $filters['applied_by'] = $this->input->post('applied_by');
+        }
+        
+        try {
+            $preview_data = $this->Response_model->get_export_preview($filters, 5);
+            $count = $this->Response_model->count_by_filters($filters);
+            
+            $response = array(
+                'success' => true,
+                'preview_data' => $preview_data,
+                'total_count' => $count,
+                'message' => "Prévia de {$count} registros encontrados"
+            );
+            
+        } catch (Exception $e) {
+            $response = array(
+                'success' => false,
+                'message' => 'Erro ao gerar prévia: ' . $e->getMessage()
+            );
+        }
+        
+        $this->output
+            ->set_content_type('application/json')
+            ->set_output(json_encode($response));
+    }
+    
+    /**
+     * AJAX: Validar filtros antes da exportação
+     */
+    public function ajax_validate_export() {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+            return;
+        }
+        
+        $filters = array();
+        
+        if ($this->input->post('questionnaire_id') && $this->input->post('questionnaire_id') !== 'all') {
+            $filters['questionnaire_id'] = $this->input->post('questionnaire_id');
+        }
+        
+        if ($this->input->post('date_from')) {
+            $filters['date_from'] = $this->input->post('date_from');
+        }
+        
+        if ($this->input->post('date_to')) {
+            $filters['date_to'] = $this->input->post('date_to');
+        }
+        
+        if ($this->input->post('applied_by')) {
+            $filters['applied_by'] = $this->input->post('applied_by');
+        }
+        
+        $validation_errors = $this->Response_model->validate_export_filters($filters);
+        
+        if (empty($validation_errors)) {
+            $count = $this->Response_model->count_by_filters($filters);
+            $statistics = $this->Response_model->get_export_statistics($filters);
+            
+            $response = array(
+                'success' => true,
+                'message' => "Validação concluída. {$count} registros serão exportados.",
+                'count' => $count,
+                'statistics' => $statistics
+            );
+        } else {
+            $response = array(
+                'success' => false,
+                'errors' => $validation_errors,
+                'message' => implode(' ', $validation_errors)
+            );
+        }
+        
+        $this->output
+            ->set_content_type('application/json')
+            ->set_output(json_encode($response));
+    }
+
 }
