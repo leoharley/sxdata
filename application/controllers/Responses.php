@@ -164,7 +164,7 @@ class Responses extends CI_Controller {
         
         try {
             // Contar registros antes da exportação
-         /*   $record_count = $this->Response_model->count_by_filters($filters);
+        /*    $record_count = $this->Response_model->count_by_filters($filters);
             
             // Log início da exportação
             $this->Response_model->log_export_activity(
@@ -173,7 +173,7 @@ class Responses extends CI_Controller {
                 $filters, 
                 $record_count, 
                 'started'
-            ); */
+            );
             
             // Aumentar limites para exportação
             ini_set('memory_limit', '2024M');
@@ -189,7 +189,7 @@ class Responses extends CI_Controller {
                 $filters, 
                 $record_count, 
                 'success'
-            );
+            ); */.....
             
         } catch (Exception $e) {
             // Log erro da exportação
