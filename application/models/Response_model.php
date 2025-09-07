@@ -2041,4 +2041,234 @@ public function validate_export_filters($filters) {
         return $this->db->get()->result();
     }
 
+    public function get_raw_data_for_export($filters = array()) {
+        // Query base com todos os dados necessários
+        $this->db->select('
+            fr.id,
+            fr.questionnaire_id,
+            fr.respondent_name,
+            fr.respondent_email,
+            fr.applied_by,
+            fr.latitude,
+            fr.longitude,
+            fr.location_name,
+            fr.photo_path,
+            fr.consent_given,
+            fr.sync_status,
+            fr.started_at,
+            fr.completed_at,
+            fr.created_at,
+            q.title as questionnaire_title,
+            u.full_name as applied_by_name,
+            u.username as applied_by_username
+        ');
+        $this->db->from('form_responses fr');
+        $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
+        $this->db->join('users u', 'fr.applied_by = u.id', 'left');
+        
+        // Aplicar filtros
+        if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        }
+        
+        if (isset($filters['applied_by']) && $filters['applied_by']) {
+            $this->db->where('fr.applied_by', $filters['applied_by']);
+        }
+        
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        
+        if (isset($filters['sync_status']) && $filters['sync_status']) {
+            $this->db->where('fr.sync_status', $filters['sync_status']);
+        }
+        
+        // Apenas respostas concluídas
+        $this->db->where('fr.completed_at IS NOT NULL');
+        
+        $this->db->order_by('fr.completed_at', 'DESC');
+        $responses = $this->db->get()->result();
+        
+        // Para cada resposta, buscar todas as respostas das questões
+        foreach ($responses as &$response) {
+            $response->answers_json = $this->_get_response_answers_json($response->id);
+            
+            // Adicionar campos extras que podem estar nas respostas individuais
+            $individual_data = $this->_extract_individual_response_data($response->id);
+            $response = (object) array_merge((array) $response, $individual_data);
+        }
+        
+        return $responses;
+    }
+    
+    /**
+     * Obter todas as respostas de uma form_response em formato JSON estruturado
+     */
+    private function _get_response_answers_json($form_response_id) {
+        $this->db->select('
+            qr.id,
+            qr.question_id,
+            qr.response_text,
+            qr.response_number,
+            qr.response_date,
+            qr.response_datetime,
+            qr.selected_options,
+            q.question_text,
+            q.question_type,
+            q.order_index
+        ');
+        $this->db->from('question_responses qr');
+        $this->db->join('questions q', 'qr.question_id = q.id', 'left');
+        $this->db->where('qr.form_response_id', $form_response_id);
+        $this->db->order_by('q.order_index', 'ASC');
+        
+        $answers = $this->db->get()->result();
+        
+        $structured_answers = array();
+        
+        foreach ($answers as $answer) {
+            // Determinar o valor da resposta baseado no tipo
+            $response_value = null;
+            
+            switch ($answer->question_type) {
+                case 'text':
+                case 'textarea':
+                    $response_value = $answer->response_text;
+                    break;
+                    
+                case 'number':
+                    $response_value = $answer->response_number;
+                    break;
+                    
+                case 'date':
+                    $response_value = $answer->response_date;
+                    break;
+                    
+                case 'datetime':
+                    $response_value = $answer->response_datetime;
+                    break;
+                    
+                case 'radio':
+                case 'checkbox':
+                    $response_value = $answer->selected_options;
+                    // Tentar decodificar JSON se possível
+                    if (!empty($answer->selected_options)) {
+                        $decoded = json_decode($answer->selected_options, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $response_value = $decoded;
+                        }
+                    }
+                    break;
+                    
+                default:
+                    $response_value = $answer->response_text ?: $answer->selected_options;
+            }
+            
+            $structured_answers[] = array(
+                'question_id' => $answer->question_id,
+                'question_text' => $answer->question_text,
+                'question_type' => $answer->question_type,
+                'order_index' => $answer->order_index,
+                'response_value' => $response_value
+            );
+        }
+        
+        return json_encode($structured_answers, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function _extract_individual_response_data($form_response_id) {
+        $additional_data = array();
+        
+        // Buscar algumas respostas específicas que podem conter dados importantes
+        // como CPF, idade, sexo, etc. baseado no padrão do modelo
+        $this->db->select('
+            qr.response_text,
+            qr.response_number,
+            qr.selected_options,
+            q.question_text,
+            q.question_type
+        ');
+        $this->db->from('question_responses qr');
+        $this->db->join('questions q', 'qr.question_id = q.id', 'left');
+        $this->db->where('qr.form_response_id', $form_response_id);
+        
+        $responses = $this->db->get()->result();
+        
+        foreach ($responses as $resp) {
+            $question_lower = strtolower($resp->question_text);
+            
+            // Mapear campos comuns baseado no texto da pergunta
+            if (strpos($question_lower, 'cpf') !== false) {
+                $additional_data['respondent_cpf'] = $resp->response_text;
+            } elseif (strpos($question_lower, 'idade') !== false) {
+                $additional_data['respondent_age'] = $resp->response_number ?: $resp->response_text;
+            } elseif (strpos($question_lower, 'sexo') !== false || strpos($question_lower, 'gênero') !== false) {
+                $additional_data['respondent_gender'] = $resp->response_text ?: $resp->selected_options;
+            } elseif (strpos($question_lower, 'comunidade') !== false || strpos($question_lower, 'localidade') !== false) {
+                $additional_data['respondent_community'] = $resp->response_text;
+            }
+        }
+        
+        return $additional_data;
+    }
+
+    public function get_export_statistics($filters = array()) {
+        // Total de respostas
+        $total = $this->count_by_filters($filters);
+        
+        // Respostas com fotos
+        $with_photos = $this->count_photos($filters);
+        
+        // Respostas com localização
+        $with_location = $this->count_locations($filters);
+        
+        // Respostas com consentimento
+        $this->db->from('form_responses fr');
+        if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        }
+        if (isset($filters['applied_by']) && $filters['applied_by']) {
+            $this->db->where('fr.applied_by', $filters['applied_by']);
+        }
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        $this->db->where('fr.consent_given', TRUE);
+        $with_consent = $this->db->count_all_results();
+        
+        // Aplicadores únicos
+        $this->db->select('COUNT(DISTINCT fr.applied_by) as unique_applicators');
+        $this->db->from('form_responses fr');
+        if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+            $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
+        }
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+        }
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+        }
+        $unique_result = $this->db->get()->row();
+        $unique_applicators = $unique_result ? $unique_result->unique_applicators : 0;
+        
+        return array(
+            'total_responses' => (int)$total,
+            'with_photos' => (int)$with_photos,
+            'with_location' => (int)$with_location,
+            'with_consent' => (int)$with_consent,
+            'unique_applicators' => (int)$unique_applicators,
+            'consent_rate' => $total > 0 ? round(($with_consent / $total) * 100, 1) : 0,
+            'photo_rate' => $total > 0 ? round(($with_photos / $total) * 100, 1) : 0,
+            'location_rate' => $total > 0 ? round(($with_location / $total) * 100, 1) : 0
+        );
+    }
+
+
 }
