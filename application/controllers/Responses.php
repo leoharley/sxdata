@@ -180,7 +180,7 @@ class Responses extends CI_Controller {
             ini_set('max_execution_time', 600);
             
             // Gerar arquivo Excel com dados brutos
-            $this->_generate_raw_data_excel($filters, $questionnaire_id);
+          //  $this->_generate_raw_data_excel($filters, $questionnaire_id);
             
             // Log sucesso da exportação
             $this->Response_model->log_export_activity(
@@ -203,7 +203,7 @@ class Responses extends CI_Controller {
             );
             
             log_message('error', 'Erro na exportação de dados brutos: ' . $e->getMessage());
-            $this->session->set_flashdata('error', 'Erro ao gerar exportação. Contate o adminitrador se o problema persistir.');
+            $this->session->set_flashdata('error', 'Erro ao gerar exportação. Contate o administrador se o problema persistir.');
             redirect('responses');
         }
     }
