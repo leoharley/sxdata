@@ -433,6 +433,7 @@ class Responses extends CI_Controller {
     private function _map_response_to_dynamic_format($response_data, $all_questions) {
         // Dados fixos (sem RESPOSTAS_JSON)
         $fixed_data = [
+            $this->_get_safe_value($response_data, 'questionnaire_title'),
             $this->_get_safe_value($response_data, 'applied_by_name'),
             $this->_format_date($response_data->completed_at),
             $this->_get_safe_value($response_data, 'respondent_name'),
@@ -443,8 +444,7 @@ class Responses extends CI_Controller {
             $this->_get_safe_value($response_data, 'respondent_gender'),
             $this->_get_safe_value($response_data, 'latitude'),
             $this->_get_safe_value($response_data, 'longitude'),
-            $this->_get_safe_value($response_data, 'location_name'),
-            $this->_get_safe_value($response_data, 'questionnaire_title'),
+            $this->_get_safe_value($response_data, 'location_name'),            
             $response_data->consent_given ? 'SIM' : 'NÃO',
             strtoupper($this->_get_safe_value($response_data, 'sync_status', 'UNKNOWN')),
             $this->_format_datetime($response_data->started_at),
@@ -556,7 +556,7 @@ class Responses extends CI_Controller {
             'SEXO' => 80,
             'LATITUDE' => 100,
             'LONGITUDE' => 100,
-            'LOCALIZAÇÃO' => 200,            
+            'LOCALIZAÇÃO' => 200,
             'CONSENTIMENTO DADO' => 120,
             'STATUS SINCRONIZAÇÃO' => 120,
             'DATA INÍCIO' => 120,
