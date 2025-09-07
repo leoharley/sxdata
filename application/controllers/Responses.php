@@ -189,7 +189,7 @@ class Responses extends CI_Controller {
                 $filters, 
                 $record_count, 
                 'success'
-            ); */.....
+            ); */
             
         } catch (Exception $e) {
             // Log erro da exportação
