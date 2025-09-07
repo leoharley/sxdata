@@ -59,35 +59,47 @@ class Questionnaires extends CI_Controller {
                 $questionnaire_id = $this->Questionnaire_model->create($questionnaire_data);
 
                 if ($questionnaire_id) {
-                    // Processar perguntas com lógica condicional
+                    // CORREÇÃO: Processar perguntas com validação rigorosa
                     $questions = $this->input->post('questions');
-                    if ($questions) {
-                        $processed_questions = $this->process_conditional_logic($questions);
+                    if ($questions && is_array($questions)) {
+                        // Filtrar e validar perguntas antes do processamento
+                        $valid_questions = $this->filter_and_validate_questions($questions);
+                        $processed_questions = $this->process_conditional_logic($valid_questions);
                         
                         foreach ($processed_questions as $index => $question) {
+                            // VALIDAÇÃO ADICIONAL: Verificar se todos os campos obrigatórios estão presentes
+                            if (empty(trim($question['text'])) || empty($question['type'])) {
+                                continue; // Pular pergunta inválida
+                            }
+                            
+                            // CORREÇÃO: Validar tipo de pergunta antes da inserção
+                            $valid_types = ['text', 'textarea', 'number', 'email', 'date', 'datetime', 'radio', 'checkbox', 'select'];
+                            if (!in_array($question['type'], $valid_types)) {
+                                log_message('error', "Tipo de pergunta inválido: {$question['type']}");
+                                continue; // Pular pergunta com tipo inválido
+                            }
+                            
                             $question_data = array(
                                 'questionnaire_id' => $questionnaire_id,
-                                'question_text' => $question['text'],
+                                'question_text' => trim($question['text']),
                                 'question_type' => $question['type'],
                                 'is_required' => isset($question['required']) ? TRUE : FALSE,
                                 'order_index' => $index + 1,
                                 'conditional_logic' => $question['conditional_logic']
                             );
 
-                            $question_id = $this->Question_model->create($question_data);
+                            try {
+                                $question_id = $this->Question_model->create($question_data);
 
-                            // Salvar opções se for múltipla escolha
-                            if (in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {
-                                foreach ($question['options'] as $opt_index => $option) {
-                                    if (!empty(trim($option['text']))) {
-                                        $this->Question_model->create_option(array(
-                                            'question_id' => $question_id,
-                                            'option_text' => trim($option['text']),
-                                            'option_value' => !empty($option['value']) ? $option['value'] : strtolower(str_replace(' ', '_', trim($option['text']))),
-                                            'order_index' => $opt_index + 1
-                                        ));
-                                    }
+                                // CORREÇÃO: Salvar opções apenas para tipos que suportam
+                                if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {
+                                    $this->save_question_options($question_id, $question['options']);
                                 }
+                            } catch (Exception $e) {
+                                log_message('error', "Erro ao criar pergunta: " . $e->getMessage());
+                                log_message('error', "Dados da pergunta: " . json_encode($question_data));
+                                // Continuar com as outras perguntas
+                                continue;
                             }
                         }
                     }
@@ -113,6 +125,82 @@ class Questionnaires extends CI_Controller {
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/create', $data);
         $this->load->view('admin/footer');
+    }
+
+    private function filter_and_validate_questions($questions) {
+        $valid_questions = array();
+        
+        foreach ($questions as $index => $question) {
+            // Verificar se a pergunta tem dados básicos
+            if (empty($question['text']) || empty($question['type'])) {
+                continue;
+            }
+            
+            // Limpar e validar dados da pergunta
+            $clean_question = array(
+                'text' => trim($question['text']),
+                'type' => trim($question['type']),
+                'required' => isset($question['required']) ? $question['required'] : false,
+                'conditional_logic' => isset($question['conditional_logic']) ? $question['conditional_logic'] : null
+            );
+            
+            // Validar e limpar opções para tipos de múltipla escolha
+            if (in_array($clean_question['type'], ['radio', 'checkbox', 'select'])) {
+                $clean_options = array();
+                
+                if (isset($question['options']) && is_array($question['options'])) {
+                    foreach ($question['options'] as $opt_index => $option) {
+                        if (isset($option['text']) && !empty(trim($option['text']))) {
+                            $clean_options[] = array(
+                                'text' => trim($option['text']),
+                                'value' => isset($option['value']) && !empty($option['value']) 
+                                        ? trim($option['value']) 
+                                        : strtolower(str_replace(' ', '_', trim($option['text'])))
+                            );
+                        }
+                    }
+                }
+                
+                // Só adicionar pergunta se tiver pelo menos 2 opções válidas
+                if (count($clean_options) >= 2) {
+                    $clean_question['options'] = $clean_options;
+                    $valid_questions[] = $clean_question;
+                }
+            } else {
+                // Para outros tipos, adicionar sem opções
+                $valid_questions[] = $clean_question;
+            }
+        }
+        
+        return $valid_questions;
+    }
+
+    private function save_question_options($question_id, $options) {
+        if (!is_array($options)) {
+            return false;
+        }
+        
+        foreach ($options as $opt_index => $option) {
+            if (isset($option['text']) && !empty(trim($option['text']))) {
+                $option_data = array(
+                    'question_id' => $question_id,
+                    'option_text' => trim($option['text']),
+                    'option_value' => isset($option['value']) && !empty($option['value']) 
+                                ? trim($option['value']) 
+                                : strtolower(str_replace(' ', '_', trim($option['text']))),
+                    'order_index' => $opt_index + 1
+                );
+                
+                try {
+                    $this->Question_model->create_option($option_data);
+                } catch (Exception $e) {
+                    log_message('error', "Erro ao criar opção: " . $e->getMessage());
+                    log_message('error', "Dados da opção: " . json_encode($option_data));
+                }
+            }
+        }
+        
+        return true;
     }
 
      public function edit($id) {

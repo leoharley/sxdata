@@ -569,8 +569,20 @@ function handleQuestionTypeChange(questionIndex, type) {
             addOption(questionIndex);
             addOption(questionIndex);
         }
+        
+        // CORREÇÃO: Adicionar required aos campos de opção quando visíveis
+        const optionInputs = optionsContainer.querySelectorAll('input[name*="[text]"]');
+        optionInputs.forEach(input => {
+            input.setAttribute('required', 'required');
+        });
     } else {
         optionsDiv.style.display = 'none';
+        
+        // CORREÇÃO: Remover required dos campos de opção quando ocultos
+        const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+        optionInputs.forEach(input => {
+            input.removeAttribute('required');
+        });
     }
     
     updateLogicPreview();
@@ -590,13 +602,32 @@ function addOption(questionIndex) {
                    name="questions[${questionIndex}][options][${optionIndex}][value]" 
                    value="">
             <button type="button" class="btn btn-outline-danger" 
-                    onclick="this.parentElement.remove(); updateLogicPreview();">
+                    onclick="removeOption(this, ${questionIndex})">
                 <i class="fas fa-times"></i>
             </button>
         </div>
     `;
     
     container.insertAdjacentHTML('beforeend', optionHtml);
+}
+
+function removeOption(button, questionIndex) {
+    const optionDiv = button.parentElement;
+    const container = optionDiv.parentElement;
+    
+    optionDiv.remove();
+    
+    // Verificar se ainda há opções suficientes
+    const remainingOptions = container.children.length;
+    const questionItem = document.querySelector(`[data-index="${questionIndex}"]`);
+    const typeSelect = questionItem.querySelector('select[name*="[type]"]');
+    
+    if (remainingOptions < 2 && ['radio', 'checkbox', 'select'].includes(typeSelect.value)) {
+        // Se tem menos de 2 opções, adicionar uma nova
+        addOption(questionIndex);
+    }
+    
+    updateLogicPreview();
 }
 
 // Função para atualizar numeração das perguntas
@@ -1123,18 +1154,54 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Validar perguntas de múltipla escolha
+    // CORREÇÃO: Validar perguntas e remover required de campos ocultos
     let valid = true;
     questions.forEach((question, index) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
         const type = typeSelect.value;
+        const textArea = question.querySelector('textarea[name*="[text]"]');
+        
+        // Validar se pergunta tem texto
+        if (!textArea.value.trim()) {
+            alert(`A pergunta ${index + 1} deve ter um texto.`);
+            valid = false;
+            return;
+        }
+        
+        // Validar tipo de pergunta
+        if (!type) {
+            alert(`Selecione um tipo para a pergunta ${index + 1}.`);
+            valid = false;
+            return;
+        }
         
         if (['radio', 'checkbox', 'select'].includes(type)) {
-            const options = question.querySelectorAll('input[name*="[options]"][name*="[text]"]');
-            if (options.length < 2) {
-                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções.`);
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+            const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
+            
+            if (validOptions.length < 2) {
+                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
                 valid = false;
                 return;
+            }
+            
+            // Garantir que campos de opção visíveis tenham required
+            optionInputs.forEach(input => {
+                if (input.value.trim()) {
+                    input.setAttribute('required', 'required');
+                } else {
+                    input.removeAttribute('required');
+                }
+            });
+        } else {
+            // CORREÇÃO: Remover required de campos de opção para tipos que não precisam
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            if (optionsDiv) {
+                const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+                optionInputs.forEach(input => {
+                    input.removeAttribute('required');
+                });
             }
         }
     });
@@ -1151,6 +1218,9 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
         return false;
     }
+    
+    // CORREÇÃO: Limpar campos vazios antes do envio
+    cleanEmptyFields();
     
     // Serializar lógica condicional para envio
     serializeConditionalLogic();
@@ -1233,4 +1303,50 @@ if (typeof bootstrap === 'undefined') {
     script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
     document.head.appendChild(script);
 }
+
+function cleanEmptyFields() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, questionIndex) => {
+        const typeSelect = question.querySelector('select[name*="[type]"]');
+        const type = typeSelect.value;
+        
+        // Se não é tipo de múltipla escolha, remover todos os campos de opção
+        if (!['radio', 'checkbox', 'select'].includes(type)) {
+            const optionsDiv = question.querySelector(`#options-${questionIndex}`);
+            if (optionsDiv) {
+                const optionInputs = optionsDiv.querySelectorAll('input');
+                optionInputs.forEach(input => {
+                    input.removeAttribute('name'); // Remove do envio
+                    input.removeAttribute('required');
+                });
+            }
+        } else {
+            // Para tipos de múltipla escolha, remover opções vazias
+            const optionsContainer = question.querySelector(`#optionsContainer-${questionIndex}`);
+            if (optionsContainer) {
+                const optionDivs = optionsContainer.querySelectorAll('.input-group');
+                optionDivs.forEach(optionDiv => {
+                    const textInput = optionDiv.querySelector('input[name*="[text]"]');
+                    if (!textInput.value.trim()) {
+                        // Remove opção vazia do envio
+                        const inputs = optionDiv.querySelectorAll('input');
+                        inputs.forEach(input => {
+                            input.removeAttribute('name');
+                            input.removeAttribute('required');
+                        });
+                    } else {
+                        // Garantir que opções válidas tenham o value correto
+                        const valueInput = optionDiv.querySelector('input[name*="[value]"]');
+                        if (valueInput && !valueInput.value) {
+                            valueInput.value = textInput.value.toLowerCase().replace(/\s+/g, '_');
+                        }
+                    }
+                });
+            }
+        }
+    });
+}
+
+
 </script>
