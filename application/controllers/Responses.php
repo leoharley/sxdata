@@ -164,7 +164,7 @@ class Responses extends CI_Controller {
         
         try {
             // Contar registros antes da exportação
-            $record_count = $this->Response_model->count_by_filters($filters);
+         /*   $record_count = $this->Response_model->count_by_filters($filters);
             
             // Log início da exportação
             $this->Response_model->log_export_activity(
@@ -173,14 +173,14 @@ class Responses extends CI_Controller {
                 $filters, 
                 $record_count, 
                 'started'
-            );
+            ); */
             
             // Aumentar limites para exportação
             ini_set('memory_limit', '2024M');
             ini_set('max_execution_time', 600);
             
             // Gerar arquivo Excel com dados brutos
-          //  $this->_generate_raw_data_excel($filters, $questionnaire_id);
+            $this->_generate_raw_data_excel($filters, $questionnaire_id);
             
             // Log sucesso da exportação
             $this->Response_model->log_export_activity(
