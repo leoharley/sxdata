@@ -92,7 +92,7 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * NOVO: Exportar dados brutos conforme modelo fornecido (Versão Nativa CORRIGIDA)
+     * NOVO: Exportar dados brutos com colunas dinâmicas das perguntas
      */
     public function export_raw_data() {
         // Verificar autenticação
@@ -184,8 +184,8 @@ class Responses extends CI_Controller {
             }
             ob_start();
             
-            // Gerar arquivo Excel com dados brutos (versão nativa CORRIGIDA)
-            $this->_generate_raw_data_excel_native($filters, $questionnaire_id);
+            // Gerar arquivo Excel com colunas dinâmicas
+            $this->_generate_raw_data_excel_dynamic($filters, $questionnaire_id);
             
             // Log sucesso da exportação
             $this->Response_model->log_export_activity(
@@ -219,9 +219,9 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * Método nativo CORRIGIDO para gerar arquivo Excel usando XML
+     * NOVO: Método para gerar Excel com colunas dinâmicas das perguntas
      */
-    private function _generate_raw_data_excel_native($filters, $questionnaire_id) {
+    private function _generate_raw_data_excel_dynamic($filters, $questionnaire_id) {
         // Obter dados das respostas
         $raw_data = $this->Response_model->get_raw_data_for_export($filters);
         
@@ -232,9 +232,15 @@ class Responses extends CI_Controller {
         }
         
         // Log do número de registros
-        log_message('info', 'Exportando ' . count($raw_data) . ' registros');
+        log_message('info', 'Exportando ' . count($raw_data) . ' registros com colunas dinâmicas');
         
         try {
+            // PASSO 1: Identificar todas as perguntas únicas presentes nos dados
+            $all_questions = $this->_extract_all_questions($raw_data);
+            
+            // PASSO 2: Gerar headers dinâmicos
+            $dynamic_headers = $this->_generate_dynamic_headers($all_questions);
+            
             // Definir nome do arquivo
             $filename = 'dados_brutos_' . date('Y-m-d_H-i-s') . '.xls';
             if ($questionnaire_id && $questionnaire_id !== 'all') {
@@ -245,8 +251,8 @@ class Responses extends CI_Controller {
                 }
             }
             
-            // Gerar conteúdo Excel XML
-            $excel_content = $this->_generate_excel_xml($raw_data);
+            // PASSO 3: Gerar conteúdo Excel XML com colunas dinâmicas
+            $excel_content = $this->_generate_excel_xml_dynamic($raw_data, $dynamic_headers, $all_questions);
             
             // Limpar buffer anterior
             if (ob_get_level()) {
@@ -265,22 +271,103 @@ class Responses extends CI_Controller {
             echo $excel_content;
             
             // Log do arquivo gerado
-            log_message('info', 'Arquivo Excel gerado: ' . $filename . ' com ' . count($raw_data) . ' registros');
+            log_message('info', 'Arquivo Excel gerado: ' . $filename . ' com ' . count($raw_data) . ' registros e ' . count($all_questions) . ' colunas de perguntas');
             
             exit;
             
         } catch (Exception $e) {
-            log_message('error', 'Erro ao criar arquivo Excel: ' . $e->getMessage());
+            log_message('error', 'Erro ao criar arquivo Excel dinâmico: ' . $e->getMessage());
             throw new Exception('Erro ao gerar arquivo Excel: ' . $e->getMessage());
         }
     }
     
     /**
-     * Gerar XML compatível com Excel (VERSÃO CORRIGIDA)
+     * NOVO: Extrair todas as perguntas únicas de todos os registros
      */
-    private function _generate_excel_xml($raw_data) {
-        $headers = $this->_get_export_headers();
+    private function _extract_all_questions($raw_data) {
+        $all_questions = array();
         
+        foreach ($raw_data as $response) {
+            if (!empty($response->answers_json)) {
+                $answers = json_decode($response->answers_json, true);
+                
+                if (is_array($answers)) {
+                    foreach ($answers as $answer) {
+                        if (isset($answer['question_id']) && isset($answer['question_text'])) {
+                            $question_id = $answer['question_id'];
+                            
+                            if (!isset($all_questions[$question_id])) {
+                                $all_questions[$question_id] = array(
+                                    'id' => $question_id,
+                                    'text' => $answer['question_text'],
+                                    'type' => $answer['question_type'] ?? 'text',
+                                    'order_index' => $answer['order_index'] ?? 999
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Ordenar por order_index
+        uasort($all_questions, function($a, $b) {
+            return $a['order_index'] <=> $b['order_index'];
+        });
+        
+        return $all_questions;
+    }
+    
+    /**
+     * NOVO: Gerar headers dinâmicos combinando fixos + perguntas
+     */
+    private function _generate_dynamic_headers($all_questions) {
+        // Headers fixos (sem RESPOSTAS_JSON)
+        $fixed_headers = [
+            'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO',
+            'DATA',
+            'NOME',
+            'COMUNIDADE',
+            'CPF',
+            'EMAIL',
+            'IDADE',
+            'SEXO',
+            'LATITUDE',
+            'LONGITUDE',
+            'LOCALIZAÇÃO',
+            'QUESTIONÁRIO',
+            'CONSENTIMENTO DADO',
+            'STATUS SINCRONIZAÇÃO',
+            'DATA INÍCIO',
+            'DATA CONCLUSÃO',
+            'FOTO CAPTURADA',
+            'GLOBALRECORDID'
+        ];
+        
+        // Headers das perguntas (limitado a 60 caracteres por header)
+        $question_headers = array();
+        foreach ($all_questions as $question) {
+            $header_text = $question['text'];
+            
+            // Limitar tamanho do header
+            if (strlen($header_text) > 60) {
+                $header_text = substr($header_text, 0, 57) . '...';
+            }
+            
+            // Limpar caracteres problemáticos
+            $header_text = preg_replace('/[^\p{L}\p{N}\s\-_\?\!\.\,\:]/u', '', $header_text);
+            
+            $question_headers[] = $header_text;
+        }
+        
+        // Combinar headers
+        return array_merge($fixed_headers, $question_headers);
+    }
+    
+    /**
+     * NOVO: Gerar XML Excel com colunas dinâmicas
+     */
+    private function _generate_excel_xml_dynamic($raw_data, $dynamic_headers, $all_questions) {
         // Início do XML Excel
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<?mso-application progid="Excel.Sheet"?>' . "\n";
@@ -297,22 +384,22 @@ class Responses extends CI_Controller {
         $xml .= '<Worksheet ss:Name="Resultados">' . "\n";
         $xml .= '<Table>' . "\n";
         
-        // Definir larguras das colunas
-        foreach ($headers as $header) {
-            $width = $this->_get_column_width($header);
+        // Definir larguras das colunas dinamicamente
+        foreach ($dynamic_headers as $header) {
+            $width = $this->_get_dynamic_column_width($header);
             $xml .= '<Column ss:Width="' . $width . '"/>' . "\n";
         }
         
         // Headers
         $xml .= '<Row ss:StyleID="HeaderStyle">' . "\n";
-        foreach ($headers as $header) {
+        foreach ($dynamic_headers as $header) {
             $xml .= '<Cell><Data ss:Type="String">' . $this->_escape_xml($header) . '</Data></Cell>' . "\n";
         }
         $xml .= '</Row>' . "\n";
         
         // Dados
         foreach ($raw_data as $response_data) {
-            $mapped_data = $this->_map_response_to_excel_format($response_data);
+            $mapped_data = $this->_map_response_to_dynamic_format($response_data, $all_questions);
             
             $xml .= '<Row>' . "\n";
             foreach ($mapped_data as $value) {
@@ -332,39 +419,228 @@ class Responses extends CI_Controller {
         // Planilha de Estatísticas
         $xml .= $this->_generate_statistics_worksheet($raw_data);
         
+        // Planilha de Perguntas (nova)
+        $xml .= $this->_generate_questions_worksheet($all_questions);
+        
         $xml .= '</Workbook>';
         
         return $xml;
     }
     
     /**
-     * NOVO: Sanitizar valor da célula (resolve problemas de conversão)
+     * NOVO: Mapear dados para formato dinâmico com colunas de perguntas
      */
-    private function _sanitize_cell_value($value) {
-        // Tratar null
-        if (is_null($value)) {
-            return 'N/A';
+    private function _map_response_to_dynamic_format($response_data, $all_questions) {
+        // Dados fixos (sem RESPOSTAS_JSON)
+        $fixed_data = [
+            $this->_get_safe_value($response_data, 'applied_by_name'),
+            $this->_format_date($response_data->completed_at),
+            $this->_get_safe_value($response_data, 'respondent_name'),
+            $this->_get_safe_value($response_data, 'location_name'),
+            $this->_get_safe_value($response_data, 'respondent_cpf'),
+            $this->_get_safe_value($response_data, 'respondent_email'),
+            $this->_get_safe_value($response_data, 'respondent_age'),
+            $this->_get_safe_value($response_data, 'respondent_gender'),
+            $this->_get_safe_value($response_data, 'latitude'),
+            $this->_get_safe_value($response_data, 'longitude'),
+            $this->_get_safe_value($response_data, 'location_name'),
+            $this->_get_safe_value($response_data, 'questionnaire_title'),
+            $response_data->consent_given ? 'SIM' : 'NÃO',
+            strtoupper($this->_get_safe_value($response_data, 'sync_status', 'UNKNOWN')),
+            $this->_format_datetime($response_data->started_at),
+            $this->_format_datetime($response_data->completed_at),
+            !empty($response_data->photo_path) ? 'SIM' : 'NÃO',
+            $response_data->id . '-' . uniqid()
+        ];
+        
+        // Criar mapa de respostas desta resposta específica
+        $answers_map = array();
+        if (!empty($response_data->answers_json)) {
+            $answers = json_decode($response_data->answers_json, true);
+            
+            if (is_array($answers)) {
+                foreach ($answers as $answer) {
+                    if (isset($answer['question_id'])) {
+                        $question_id = $answer['question_id'];
+                        $response_value = $answer['response_value'] ?? '';
+                        
+                        // Formatar valor da resposta baseado no tipo
+                        $answers_map[$question_id] = $this->_format_answer_value($response_value, $answer['question_type'] ?? 'text');
+                    }
+                }
+            }
         }
         
-        // Tratar arrays
+        // Dados dinâmicos das perguntas (em ordem)
+        $question_data = array();
+        foreach ($all_questions as $question) {
+            $question_id = $question['id'];
+            
+            if (isset($answers_map[$question_id])) {
+                $question_data[] = $answers_map[$question_id];
+            } else {
+                $question_data[] = ''; // Resposta vazia para esta pergunta
+            }
+        }
+        
+        // Combinar dados fixos + dados das perguntas
+        return array_merge($fixed_data, $question_data);
+    }
+    
+    /**
+     * NOVO: Formatar valor da resposta baseado no tipo da pergunta
+     */
+    private function _format_answer_value($value, $question_type) {
+        if (empty($value)) {
+            return '';
+        }
+        
+        switch ($question_type) {
+            case 'radio':
+            case 'checkbox':
+                // Se é array de opções selecionadas
+                if (is_array($value)) {
+                    return implode(', ', $value);
+                }
+                // Se é JSON string
+                if (is_string($value) && (strpos($value, '[') === 0 || strpos($value, '{') === 0)) {
+                    $decoded = json_decode($value, true);
+                    if (is_array($decoded)) {
+                        return implode(', ', $decoded);
+                    }
+                }
+                return strval($value);
+                
+            case 'date':
+                if (!empty($value)) {
+                    try {
+                        return date('d/m/Y', strtotime($value));
+                    } catch (Exception $e) {
+                        return strval($value);
+                    }
+                }
+                return '';
+                
+            case 'datetime':
+                if (!empty($value)) {
+                    try {
+                        return date('d/m/Y H:i', strtotime($value));
+                    } catch (Exception $e) {
+                        return strval($value);
+                    }
+                }
+                return '';
+                
+            case 'number':
+                return is_numeric($value) ? $value : strval($value);
+                
+            default:
+                return strval($value);
+        }
+    }
+    
+    /**
+     * NOVO: Determinar largura da coluna dinamicamente
+     */
+    private function _get_dynamic_column_width($header) {
+        // Larguras dos headers fixos
+        $fixed_widths = array(
+            'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO' => 200,
+            'DATA' => 80,
+            'NOME' => 150,
+            'COMUNIDADE' => 150,
+            'CPF' => 120,
+            'EMAIL' => 180,
+            'IDADE' => 60,
+            'SEXO' => 80,
+            'LATITUDE' => 100,
+            'LONGITUDE' => 100,
+            'LOCALIZAÇÃO' => 200,
+            'QUESTIONÁRIO' => 180,
+            'CONSENTIMENTO DADO' => 120,
+            'STATUS SINCRONIZAÇÃO' => 120,
+            'DATA INÍCIO' => 120,
+            'DATA CONCLUSÃO' => 120,
+            'FOTO CAPTURADA' => 100,
+            'GLOBALRECORDID' => 150
+        );
+        
+        // Se é header fixo, usar largura predefinida
+        if (isset($fixed_widths[$header])) {
+            return $fixed_widths[$header];
+        }
+        
+        // Para headers de perguntas, calcular baseado no tamanho do texto
+        $length = strlen($header);
+        
+        if ($length <= 20) {
+            return 120;
+        } elseif ($length <= 40) {
+            return 180;
+        } elseif ($length <= 60) {
+            return 250;
+        } else {
+            return 300;
+        }
+    }
+    
+    /**
+     * NOVO: Gerar planilha com lista de perguntas
+     */
+    private function _generate_questions_worksheet($all_questions) {
+        $xml = '<Worksheet ss:Name="Perguntas">' . "\n";
+        $xml .= '<Table>' . "\n";
+        
+        // Headers da planilha de perguntas
+        $xml .= '<Row ss:StyleID="HeaderStyle">' . "\n";
+        $xml .= '<Cell><Data ss:Type="String">ID</Data></Cell>' . "\n";
+        $xml .= '<Cell><Data ss:Type="String">Ordem</Data></Cell>' . "\n";
+        $xml .= '<Cell><Data ss:Type="String">Tipo</Data></Cell>' . "\n";
+        $xml .= '<Cell><Data ss:Type="String">Texto da Pergunta</Data></Cell>' . "\n";
+        $xml .= '</Row>' . "\n";
+        
+        // Dados das perguntas
+        foreach ($all_questions as $question) {
+            $xml .= '<Row>' . "\n";
+            $xml .= '<Cell><Data ss:Type="Number">' . $question['id'] . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="Number">' . $question['order_index'] . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . $this->_escape_xml($question['type']) . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . $this->_escape_xml($question['text']) . '</Data></Cell>' . "\n";
+            $xml .= '</Row>' . "\n";
+        }
+        
+        $xml .= '</Table>' . "\n";
+        $xml .= '</Worksheet>' . "\n";
+        
+        return $xml;
+    }
+
+    // =====================================
+    // MÉTODOS AUXILIARES MANTIDOS
+    // =====================================
+    
+    /**
+     * Sanitizar valor da célula
+     */
+    private function _sanitize_cell_value($value) {
+        if (is_null($value)) {
+            return '';
+        }
+        
         if (is_array($value)) {
             return implode(', ', array_map('strval', $value));
         }
         
-        // Tratar objetos
         if (is_object($value)) {
             return 'Objeto não convertível';
         }
         
-        // Tratar booleanos
         if (is_bool($value)) {
             return $value ? 'SIM' : 'NÃO';
         }
         
-        // Converter para string
         $str_value = strval($value);
         
-        // Limitar tamanho (Excel tem limite de ~32000 caracteres por célula)
         if (strlen($str_value) > 32000) {
             $str_value = substr($str_value, 0, 31997) . '...';
         }
@@ -373,10 +649,9 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * NOVO: Determinar tipo da célula
+     * Determinar tipo da célula
      */
     private function _get_cell_type($value) {
-        // Se é número (mas não string que parece número como CPF)
         if (is_numeric($value) && !preg_match('/^0/', $value) && strlen($value) < 15) {
             return 'Number';
         }
@@ -385,19 +660,12 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * NOVO: Escape seguro para XML
+     * Escape seguro para XML
      */
     private function _escape_xml($value) {
-        // Converter para string primeiro
         $str_value = $this->_sanitize_cell_value($value);
-        
-        // Escape básico XML
         $escaped = htmlspecialchars($str_value, ENT_XML1 | ENT_COMPAT, 'UTF-8', false);
-        
-        // Remover caracteres de controle que podem quebrar o XML
-        $escaped = preg_replace('/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/', '', $escaped);
-        
-        return $escaped;
+        return preg_replace('/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/', '', $escaped);
     }
     
     /**
@@ -428,39 +696,9 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * Determinar largura da coluna baseada no header
-     */
-    private function _get_column_width($header) {
-        $widths = array(
-            'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO' => 200,
-            'DATA' => 80,
-            'NOME' => 150,
-            'COMUNIDADE' => 150,
-            'CPF' => 120,
-            'EMAIL' => 180,
-            'IDADE' => 60,
-            'SEXO' => 80,
-            'LATITUDE' => 100,
-            'LONGITUDE' => 100,
-            'LOCALIZAÇÃO' => 200,
-            'QUESTIONÁRIO' => 180,
-            'CONSENTIMENTO DADO' => 120,
-            'STATUS SINCRONIZAÇÃO' => 120,
-            'DATA INÍCIO' => 120,
-            'DATA CONCLUSÃO' => 120,
-            'FOTO CAPTURADA' => 100,
-            'RESPOSTAS_JSON' => 300,
-            'GLOBALRECORDID' => 150
-        );
-        
-        return isset($widths[$header]) ? $widths[$header] : 100;
-    }
-    
-    /**
-     * Gerar planilha de estatísticas (VERSÃO CORRIGIDA)
+     * Gerar planilha de estatísticas
      */
     private function _generate_statistics_worksheet($raw_data) {
-        // Calcular estatísticas
         $total_responses = count($raw_data);
         $total_with_consent = 0;
         $total_with_location = 0;
@@ -479,16 +717,13 @@ class Responses extends CI_Controller {
         $xml = '<Worksheet ss:Name="Estatísticas">' . "\n";
         $xml .= '<Table>' . "\n";
         
-        // Título
         $xml .= '<Row>' . "\n";
         $xml .= '<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Estatísticas da Exportação</Data></Cell>' . "\n";
         $xml .= '<Cell></Cell>' . "\n";
         $xml .= '</Row>' . "\n";
         
-        // Linha em branco
         $xml .= '<Row><Cell></Cell></Row>' . "\n";
         
-        // Estatísticas gerais
         $stats = array(
             'Total de Respostas' => $total_responses,
             'Com Consentimento' => $total_with_consent,
@@ -506,10 +741,8 @@ class Responses extends CI_Controller {
             $xml .= '</Row>' . "\n";
         }
         
-        // Linha em branco
         $xml .= '<Row><Cell></Cell></Row>' . "\n";
         
-        // Aplicadores
         $xml .= '<Row>' . "\n";
         $xml .= '<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Respostas por Aplicador</Data></Cell>' . "\n";
         $xml .= '<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Quantidade</Data></Cell>' . "\n";
@@ -529,72 +762,16 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * Definir headers do arquivo Excel baseado no modelo
+     * Obter valor seguro de propriedade
      */
-    private function _get_export_headers() {
-        return [
-            'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO',
-            'DATA',
-            'NOME',
-            'COMUNIDADE',
-            'CPF',
-            'EMAIL',
-            'IDADE',
-            'SEXO',
-            'LATITUDE',
-            'LONGITUDE',
-            'LOCALIZAÇÃO',
-            'QUESTIONÁRIO',
-            'CONSENTIMENTO DADO',
-            'STATUS SINCRONIZAÇÃO',
-            'DATA INÍCIO',
-            'DATA CONCLUSÃO',
-            'FOTO CAPTURADA',
-            'RESPOSTAS_JSON',
-            'GLOBALRECORDID'
-        ];
-    }
-    
-    /**
-     * Mapear dados da resposta para formato Excel (VERSÃO CORRIGIDA)
-     */
-    private function _map_response_to_excel_format($response_data) {
-        return [
-            $this->_get_safe_value($response_data, 'applied_by_name'),
-            $this->_format_date($response_data->completed_at),
-            $this->_get_safe_value($response_data, 'respondent_name'),
-            $this->_get_safe_value($response_data, 'location_name'),
-            $this->_get_safe_value($response_data, 'respondent_cpf'),
-            $this->_get_safe_value($response_data, 'respondent_email'),
-            $this->_get_safe_value($response_data, 'respondent_age'),
-            $this->_get_safe_value($response_data, 'respondent_gender'),
-            $this->_get_safe_value($response_data, 'latitude'),
-            $this->_get_safe_value($response_data, 'longitude'),
-            $this->_get_safe_value($response_data, 'location_name'),
-            $this->_get_safe_value($response_data, 'questionnaire_title'),
-            $response_data->consent_given ? 'SIM' : 'NÃO',
-            strtoupper($this->_get_safe_value($response_data, 'sync_status', 'UNKNOWN')),
-            $this->_format_datetime($response_data->started_at),
-            $this->_format_datetime($response_data->completed_at),
-            !empty($response_data->photo_path) ? 'SIM' : 'NÃO',
-            $this->_sanitize_json_for_excel($response_data->answers_json ?? '{}'),
-            $response_data->id . '-' . uniqid()
-        ];
-    }
-    
-    /**
-     * NOVO: Obter valor seguro de propriedade
-     */
-    private function _get_safe_value($object, $property, $default = 'N/A') {
+    private function _get_safe_value($object, $property, $default = '') {
         if (isset($object->$property) && !is_null($object->$property)) {
             $value = $object->$property;
             
-            // Se for array, converter para string
             if (is_array($value)) {
                 return implode(', ', $value);
             }
             
-            // Se for objeto, tentar converter
             if (is_object($value)) {
                 return method_exists($value, '__toString') ? strval($value) : $default;
             }
@@ -606,11 +783,11 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * NOVO: Formatar data segura
+     * Formatar data segura
      */
     private function _format_date($date_string) {
         if (empty($date_string)) {
-            return 'N/A';
+            return '';
         }
         
         try {
@@ -621,11 +798,11 @@ class Responses extends CI_Controller {
     }
     
     /**
-     * NOVO: Formatar data e hora segura
+     * Formatar data e hora segura
      */
     private function _format_datetime($datetime_string) {
         if (empty($datetime_string)) {
-            return 'N/A';
+            return '';
         }
         
         try {
@@ -634,81 +811,11 @@ class Responses extends CI_Controller {
             return 'Data inválida';
         }
     }
-    
-    /**
-     * Sanitizar JSON para Excel CORRIGIDO (resolve erro de Array to string conversion)
-     */
-    private function _sanitize_json_for_excel($json_string) {
-        // Verificar se é null ou vazio
-        if (empty($json_string)) {
-            return 'Sem dados';
-        }
-        
-        // Se já é uma string simples, retornar
-        if (!is_string($json_string)) {
-            // Se é array, converter para string
-            if (is_array($json_string)) {
-                return 'Array: ' . implode(', ', array_map('strval', $json_string));
-            }
-            
-            // Se é objeto, tentar converter
-            if (is_object($json_string)) {
-                $json_string = json_encode($json_string);
-            } else {
-                // Converter qualquer outro tipo para string
-                $json_string = strval($json_string);
-            }
-        }
-        
-        // Tentar decodificar JSON
-        $data = json_decode($json_string, true);
-        
-        // Se não conseguiu decodificar, retornar string truncada
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $clean_string = preg_replace('/[^\x20-\x7E\x{00A0}-\x{FFFF}]/u', '', $json_string);
-            return strlen($clean_string) > 100 ? substr($clean_string, 0, 97) . '...' : $clean_string;
-        }
-        
-        // Se decodificou com sucesso e é array
-        if (is_array($data)) {
-            $simplified = array();
-            
-            foreach ($data as $item) {
-                if (is_array($item)) {
-                    // Tratar item como array
-                    $question = isset($item['question_text']) ? $item['question_text'] : 'Pergunta';
-                    $answer = 'Sem resposta';
-                    
-                    if (isset($item['response_value'])) {
-                        $response_value = $item['response_value'];
-                        
-                        // Se response_value é array
-                        if (is_array($response_value)) {
-                            $answer = implode(', ', array_map('strval', $response_value));
-                        } else {
-                            $answer = strval($response_value);
-                        }
-                    }
-                    
-                    $simplified[] = $question . ': ' . $answer;
-                } else {
-                    // Item não é array, converter para string
-                    $simplified[] = strval($item);
-                }
-            }
-            
-            $result = implode(' | ', $simplified);
-            
-            // Limitar tamanho para Excel
-            return strlen($result) > 500 ? substr($result, 0, 497) . '...' : $result;
-        }
-        
-        return 'Dados não interpretáveis';
-    }
 
-    /**
-     * AJAX: Contar respostas baseado nos filtros selecionados
-     */
+    // =====================================
+    // MÉTODOS AJAX MANTIDOS
+    // =====================================
+    
     public function ajax_count_responses() {
         if (!$this->input->is_ajax_request()) {
             show_404();
@@ -747,9 +854,6 @@ class Responses extends CI_Controller {
             ->set_output(json_encode($response));
     }
     
-    /**
-     * AJAX: Preview dos dados que serão exportados
-     */
     public function ajax_preview_export() {
         if (!$this->input->is_ajax_request()) {
             show_404();
@@ -797,9 +901,6 @@ class Responses extends CI_Controller {
             ->set_output(json_encode($response));
     }
     
-    /**
-     * AJAX: Validar filtros antes da exportação
-     */
     public function ajax_validate_export() {
         if (!$this->input->is_ajax_request()) {
             show_404();
@@ -849,9 +950,6 @@ class Responses extends CI_Controller {
             ->set_output(json_encode($response));
     }
 
-    /**
-     * Visualizar histórico de exportações
-     */
     public function export_history() {
         $data['title'] = 'Histórico de Exportações - SXData';
         
@@ -859,10 +957,8 @@ class Responses extends CI_Controller {
         $is_admin = $this->session->userdata('user_role') === 'administrador';
         
         if ($is_admin) {
-            // Administradores podem ver todo o histórico
             $data['export_history'] = $this->Response_model->get_export_usage_statistics(30);
         } else {
-            // Usuários normais veem apenas seu histórico
             $data['export_history'] = $this->Response_model->get_user_export_history($user_id, 20);
         }
         
@@ -873,12 +969,7 @@ class Responses extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
-    /**
-     * Obter localização via coordenadas (geocodificação reversa)
-     */
-    public function get_location()
-    {
-        // Verificar se é uma requisição POST
+    public function get_location() {
         if ($this->input->method() !== 'post') {
             show_404();
             return;
@@ -887,14 +978,12 @@ class Responses extends CI_Controller {
         $latitude = $this->input->post('latitude');
         $longitude = $this->input->post('longitude');
         
-        // Validar entrada
         if (empty($latitude) || empty($longitude) || 
             !is_numeric($latitude) || !is_numeric($longitude)) {
             echo 'N/A';
             return;
         }
         
-        // Validar range das coordenadas
         if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
             echo 'N/A';
             return;
@@ -909,12 +998,7 @@ class Responses extends CI_Controller {
         }
     }
 
-    /**
-     * Método privado para geocodificação usando API Nominatim
-     */
-    private function get_location_name_api($latitude, $longitude)
-    {
-        // Verificar cache primeiro (usando cache do CodeIgniter se disponível)
+    private function get_location_name_api($latitude, $longitude) {
         $cache_key = 'location_' . round($latitude, 3) . '_' . round($longitude, 3);
         
         if ($this->cache) {
@@ -925,10 +1009,8 @@ class Responses extends CI_Controller {
         }
         
         try {
-            // URL da API Nominatim
             $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=16&addressdetails=1&accept-language=pt-BR,pt,en";
             
-            // Configurar contexto da requisição
             $context = stream_context_create([
                 'http' => [
                     'method' => 'GET',
@@ -952,7 +1034,6 @@ class Responses extends CI_Controller {
             if (isset($data['display_name'])) {
                 $formatted_name = $this->format_location_name_api($data);
                 
-                // Salvar no cache por 1 hora se o resultado for válido
                 if ($this->cache && $formatted_name !== 'N/A') {
                     $this->cache->save($cache_key, $formatted_name, 3600);
                 }
@@ -967,11 +1048,7 @@ class Responses extends CI_Controller {
         return 'N/A';
     }
 
-    /**
-     * Formatar nome da localização retornado pela API
-     */
-    private function format_location_name_api($data)
-    {
+    private function format_location_name_api($data) {
         if (!isset($data['address'])) {
             return isset($data['display_name']) ? substr($data['display_name'], 0, 50) . '...' : 'N/A';
         }
@@ -979,7 +1056,6 @@ class Responses extends CI_Controller {
         $address = $data['address'];
         $location_parts = [];
 
-        // Priorizar informações mais específicas para o contexto brasileiro
         if (!empty($address['road'])) {
             $location_parts[] = $address['road'];
         }
@@ -998,7 +1074,6 @@ class Responses extends CI_Controller {
 
         $result = !empty($location_parts) ? implode(', ', $location_parts) : $data['display_name'];
         
-        // Limitar o tamanho da string retornada
         if (strlen($result) > 50) {
             $result = substr($result, 0, 47) . '...';
         }
@@ -1006,43 +1081,6 @@ class Responses extends CI_Controller {
         return $result;
     }
 
-    /**
-     * Método alternativo usando cURL (mais robusto)
-     */
-    private function get_location_name_curl($latitude, $longitude)
-    {
-        $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=16&addressdetails=1&accept-language=pt-BR";
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'SXData-App/1.0 (contact@sxdata.com)');
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Accept: application/json',
-            'Accept-Language: pt-BR,pt;q=0.9,en;q=0.8'
-        ]);
-        
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($response === FALSE || $http_code !== 200) {
-            return 'N/A';
-        }
-        
-        $data = json_decode($response, true);
-        
-        if (isset($data['display_name'])) {
-            return $this->format_location_name_api($data);
-        }
-        
-        return 'N/A';
-    }
-
-    /**
-     * Verificar autenticação do usuário
-     */
     private function check_auth() {
         if (!$this->session->userdata('admin_logged_in')) {
             redirect('auth/login');
