@@ -92,7 +92,7 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * NOVO: Exportar dados brutos conforme modelo fornecido
+     * NOVO: Exportar dados brutos conforme modelo fornecido (Versão Nativa)
      */
     public function export_raw_data() {
         // Verificar autenticação
@@ -102,7 +102,6 @@ class Responses extends CI_Controller {
         }
         
         $user_id = $this->session->userdata('user_id');
-        
         
         // Verificar se é uma requisição POST
         if ($this->input->method() !== 'post') {
@@ -179,8 +178,8 @@ class Responses extends CI_Controller {
             ini_set('memory_limit', '2024M');
             ini_set('max_execution_time', 600);
             
-            // Gerar arquivo Excel com dados brutos
-         //   $this->_generate_raw_data_excel($filters, $questionnaire_id);
+            // Gerar arquivo Excel com dados brutos (versão nativa)
+            $this->_generate_raw_data_excel_native($filters, $questionnaire_id);
             
             // Log sucesso da exportação
             $this->Response_model->log_export_activity(
@@ -209,18 +208,10 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * Método privado para gerar arquivo Excel com dados brutos
+     * Método nativo para gerar arquivo Excel usando XML (sem bibliotecas externas)
      */
-    private function _generate_raw_data_excel($filters, $questionnaire_id) {
-        // Verificar se PhpSpreadsheet está disponível
-        $autoload_path = APPPATH . 'third_party/PhpSpreadsheet/vendor/autoload.php';
-        if (!file_exists($autoload_path)) {
-            throw new Exception('Biblioteca PhpSpreadsheet não encontrada. Instale via Composer ou faça download manual.');
-        }
-        
-        require_once $autoload_path;
-        
-        // Obter dados das respostas com todas as informações necessárias
+    private function _generate_raw_data_excel_native($filters, $questionnaire_id) {
+        // Obter dados das respostas
         $raw_data = $this->Response_model->get_raw_data_for_export($filters);
         
         if (empty($raw_data)) {
@@ -233,102 +224,28 @@ class Responses extends CI_Controller {
         log_message('info', 'Exportando ' . count($raw_data) . ' registros');
         
         try {
-            // Criar arquivo Excel
-            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-            $worksheet = $spreadsheet->getActiveSheet();
-            $worksheet->setTitle('Resultados');
-            
-            // Definir headers baseados no modelo fornecido
-            $headers = $this->_get_export_headers();
-            
-            // Configurar headers
-            $col = 1;
-            foreach ($headers as $header) {
-                $worksheet->setCellValueByColumnAndRow($col, 1, $header);
-                $col++;
-            }
-            
-            // Aplicar estilo aos headers
-            $headerRange = 'A1:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers)) . '1';
-            $worksheet->getStyle($headerRange)->getFont()->setBold(true);
-            $worksheet->getStyle($headerRange)->getFill()
-                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
-                ->getStartColor()->setARGB('FFD9EDF7');
-            
-            // Adicionar bordas aos headers
-            $worksheet->getStyle($headerRange)->getBorders()->getAllBorders()
-                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
-            
-            // Preencher dados
-            $row = 2;
-            foreach ($raw_data as $response_data) {
-                $col = 1;
-                
-                // Mapear dados conforme estrutura do modelo
-                $mapped_data = $this->_map_response_to_excel_format($response_data);
-                
-                foreach ($mapped_data as $value) {
-                    // Tratar valores especiais
-                    if (is_null($value)) {
-                        $value = 'N/A';
-                    }
-                    
-                    $worksheet->setCellValueByColumnAndRow($col, $row, $value);
-                    $col++;
-                }
-                
-                $row++;
-                
-                // Liberar memória a cada 100 linhas para arquivos grandes
-                if ($row % 100 == 0) {
-                    gc_collect_cycles();
-                }
-            }
-            
-            // Auto-ajustar largura das colunas (limitado para evitar colunas muito largas)
-            foreach (range('A', \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers))) as $columnID) {
-                $worksheet->getColumnDimension($columnID)->setAutoSize(true);
-                // Limitar largura máxima
-                if ($worksheet->getColumnDimension($columnID)->getWidth() > 50) {
-                    $worksheet->getColumnDimension($columnID)->setWidth(50);
-                }
-            }
-            
-            // Criar segunda planilha para gráficos (como no modelo)
-            $graphSheet = $spreadsheet->createSheet();
-            $graphSheet->setTitle('Gráficos');
-            
-            // Adicionar alguns dados básicos de estatísticas na planilha de gráficos
-            $this->_add_statistics_to_graph_sheet($graphSheet, $raw_data);
-            
             // Definir nome do arquivo
-            $filename = 'dados_brutos_' . date('Y-m-d_H-i-s') . '.xlsx';
+            $filename = 'dados_brutos_' . date('Y-m-d_H-i-s') . '.xls';
             if ($questionnaire_id && $questionnaire_id !== 'all') {
                 $questionnaire = $this->Questionnaire_model->get_by_id($questionnaire_id);
                 if ($questionnaire) {
                     $safe_title = preg_replace('/[^a-zA-Z0-9_-]/', '_', $questionnaire->title);
-                    $filename = 'dados_brutos_' . $safe_title . '_' . date('Y-m-d_H-i-s') . '.xlsx';
+                    $filename = 'dados_brutos_' . $safe_title . '_' . date('Y-m-d_H-i-s') . '.xls';
                 }
             }
             
-            // Log do arquivo gerado
-            log_message('info', 'Arquivo Excel gerado: ' . $filename . ' com ' . count($raw_data) . ' registros');
-            
             // Configurar headers para download
-            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
             header('Content-Disposition: attachment;filename="' . $filename . '"');
             header('Cache-Control: max-age=0');
             header('Cache-Control: no-cache, must-revalidate');
             header('Pragma: no-cache');
             
-            // Criar writer e fazer download
-            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-            $writer->save('php://output');
+            // Gerar conteúdo Excel XML
+            echo $this->_generate_excel_xml($raw_data);
             
-            // Limpar memória
-            $spreadsheet->disconnectWorksheets();
-            unset($spreadsheet);
-            gc_collect_cycles();
+            // Log do arquivo gerado
+            log_message('info', 'Arquivo Excel gerado: ' . $filename . ' com ' . count($raw_data) . ' registros');
             
             exit;
             
@@ -336,6 +253,195 @@ class Responses extends CI_Controller {
             log_message('error', 'Erro ao criar arquivo Excel: ' . $e->getMessage());
             throw new Exception('Erro ao gerar arquivo Excel: ' . $e->getMessage());
         }
+    }
+    
+    /**
+     * Gerar XML compatível com Excel
+     */
+    private function _generate_excel_xml($raw_data) {
+        $headers = $this->_get_export_headers();
+        
+        // Início do XML Excel
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        $xml .= '<?mso-application progid="Excel.Sheet"?>' . "\n";
+        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"' . "\n";
+        $xml .= ' xmlns:o="urn:schemas-microsoft-com:office:office"' . "\n";
+        $xml .= ' xmlns:x="urn:schemas-microsoft-com:office:excel"' . "\n";
+        $xml .= ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"' . "\n";
+        $xml .= ' xmlns:html="http://www.w3.org/TR/REC-html40">' . "\n";
+        
+        // Estilos
+        $xml .= $this->_get_excel_styles();
+        
+        // Planilha de Resultados
+        $xml .= '<Worksheet ss:Name="Resultados">' . "\n";
+        $xml .= '<Table>' . "\n";
+        
+        // Definir larguras das colunas
+        foreach ($headers as $header) {
+            $width = $this->_get_column_width($header);
+            $xml .= '<Column ss:Width="' . $width . '"/>' . "\n";
+        }
+        
+        // Headers
+        $xml .= '<Row ss:StyleID="HeaderStyle">' . "\n";
+        foreach ($headers as $header) {
+            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($header, ENT_XML1) . '</Data></Cell>' . "\n";
+        }
+        $xml .= '</Row>' . "\n";
+        
+        // Dados
+        foreach ($raw_data as $response_data) {
+            $mapped_data = $this->_map_response_to_excel_format($response_data);
+            
+            $xml .= '<Row>' . "\n";
+            foreach ($mapped_data as $value) {
+                $cell_value = is_null($value) ? 'N/A' : $value;
+                $cell_type = is_numeric($cell_value) && !is_string($cell_value) ? 'Number' : 'String';
+                
+                $xml .= '<Cell><Data ss:Type="' . $cell_type . '">' . 
+                        htmlspecialchars($cell_value, ENT_XML1) . '</Data></Cell>' . "\n";
+            }
+            $xml .= '</Row>' . "\n";
+        }
+        
+        $xml .= '</Table>' . "\n";
+        $xml .= '</Worksheet>' . "\n";
+        
+        // Planilha de Estatísticas
+        $xml .= $this->_generate_statistics_worksheet($raw_data);
+        
+        $xml .= '</Workbook>';
+        
+        return $xml;
+    }
+    
+    /**
+     * Gerar estilos Excel XML
+     */
+    private function _get_excel_styles() {
+        return '<Styles>
+            <Style ss:ID="HeaderStyle">
+                <Font ss:Bold="1" ss:Size="12"/>
+                <Interior ss:Color="#D9EDF7" ss:Pattern="Solid"/>
+                <Borders>
+                    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+                    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+                    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+                    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+                </Borders>
+                <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+            </Style>
+            <Style ss:ID="DataStyle">
+                <Borders>
+                    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+                    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+                    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+                    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+                </Borders>
+            </Style>
+        </Styles>' . "\n";
+    }
+    
+    /**
+     * Determinar largura da coluna baseada no header
+     */
+    private function _get_column_width($header) {
+        $widths = array(
+            'TÉCNICO RESPONSÁVEL PELA APLICAÇÃO' => 200,
+            'DATA' => 80,
+            'NOME' => 150,
+            'COMUNIDADE' => 150,
+            'CPF' => 120,
+            'EMAIL' => 180,
+            'IDADE' => 60,
+            'SEXO' => 80,
+            'LATITUDE' => 100,
+            'LONGITUDE' => 100,
+            'LOCALIZAÇÃO' => 200,
+            'QUESTIONÁRIO' => 180,
+            'CONSENTIMENTO DADO' => 120,
+            'STATUS SINCRONIZAÇÃO' => 120,
+            'DATA INÍCIO' => 120,
+            'DATA CONCLUSÃO' => 120,
+            'FOTO CAPTURADA' => 100,
+            'RESPOSTAS_JSON' => 300,
+            'GLOBALRECORDID' => 150
+        );
+        
+        return isset($widths[$header]) ? $widths[$header] : 100;
+    }
+    
+    /**
+     * Gerar planilha de estatísticas
+     */
+    private function _generate_statistics_worksheet($raw_data) {
+        // Calcular estatísticas
+        $total_responses = count($raw_data);
+        $total_with_consent = 0;
+        $total_with_location = 0;
+        $total_with_photo = 0;
+        $applicators = array();
+        
+        foreach ($raw_data as $response) {
+            if ($response->consent_given) $total_with_consent++;
+            if (!empty($response->latitude) && !empty($response->longitude)) $total_with_location++;
+            if (!empty($response->photo_path)) $total_with_photo++;
+            
+            $applicator = $response->applied_by_name ?? 'Não informado';
+            $applicators[$applicator] = ($applicators[$applicator] ?? 0) + 1;
+        }
+        
+        $xml = '<Worksheet ss:Name="Estatísticas">' . "\n";
+        $xml .= '<Table>' . "\n";
+        
+        // Título
+        $xml .= '<Row>' . "\n";
+        $xml .= '<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Estatísticas da Exportação</Data></Cell>' . "\n";
+        $xml .= '<Cell></Cell>' . "\n";
+        $xml .= '</Row>' . "\n";
+        
+        // Linha em branco
+        $xml .= '<Row><Cell></Cell></Row>' . "\n";
+        
+        // Estatísticas gerais
+        $stats = array(
+            'Total de Respostas' => $total_responses,
+            'Com Consentimento' => $total_with_consent,
+            'Com Localização' => $total_with_location,
+            'Com Foto' => $total_with_photo,
+            'Taxa de Consentimento (%)' => $total_responses > 0 ? round(($total_with_consent / $total_responses) * 100, 1) : 0,
+            'Taxa de Localização (%)' => $total_responses > 0 ? round(($total_with_location / $total_responses) * 100, 1) : 0,
+            'Taxa de Fotos (%)' => $total_responses > 0 ? round(($total_with_photo / $total_responses) * 100, 1) : 0
+        );
+        
+        foreach ($stats as $label => $value) {
+            $xml .= '<Row>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($label, ENT_XML1) . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="Number">' . $value . '</Data></Cell>' . "\n";
+            $xml .= '</Row>' . "\n";
+        }
+        
+        // Linha em branco
+        $xml .= '<Row><Cell></Cell></Row>' . "\n";
+        
+        // Aplicadores
+        $xml .= '<Row>' . "\n";
+        $xml .= '<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Respostas por Aplicador</Data></Cell>' . "\n";
+        $xml .= '<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Quantidade</Data></Cell>' . "\n";
+        $xml .= '</Row>' . "\n";
+        
+        foreach ($applicators as $applicator => $count) {
+            $xml .= '<Row>' . "\n";
+            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($applicator, ENT_XML1) . '</Data></Cell>' . "\n";
+            $xml .= '<Cell><Data ss:Type="Number">' . $count . '</Data></Cell>' . "\n";
+            $xml .= '</Row>' . "\n";
+        }
+        
+        $xml .= '</Table>' . "\n";
+        $xml .= '</Worksheet>' . "\n";
+        
+        return $xml;
     }
     
     /**
@@ -387,62 +493,29 @@ class Responses extends CI_Controller {
             $response_data->started_at ? date('d/m/Y H:i', strtotime($response_data->started_at)) : 'N/A',
             $response_data->completed_at ? date('d/m/Y H:i', strtotime($response_data->completed_at)) : 'N/A',
             !empty($response_data->photo_path) ? 'SIM' : 'NÃO',
-            $response_data->answers_json ?? '{}',
+            $this->_sanitize_json_for_excel($response_data->answers_json ?? '{}'),
             $response_data->id . '-' . uniqid()
         ];
     }
     
     /**
-     * Adicionar estatísticas básicas na planilha de gráficos
+     * Sanitizar JSON para Excel (remover caracteres problemáticos)
      */
-    private function _add_statistics_to_graph_sheet($sheet, $raw_data) {
-        $sheet->setCellValue('A1', 'Estatísticas Básicas');
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-        
-        // Contar totais
-        $total_responses = count($raw_data);
-        $total_with_consent = 0;
-        $total_with_location = 0;
-        $total_with_photo = 0;
-        $applicators = [];
-        
-        foreach ($raw_data as $response) {
-            if ($response->consent_given) $total_with_consent++;
-            if (!empty($response->latitude) && !empty($response->longitude)) $total_with_location++;
-            if (!empty($response->photo_path)) $total_with_photo++;
-            
-            $applicator = $response->applied_by_name ?? 'Não informado';
-            $applicators[$applicator] = ($applicators[$applicator] ?? 0) + 1;
+    private function _sanitize_json_for_excel($json_string) {
+        // Decodificar e recodificar para limpar caracteres especiais
+        $data = json_decode($json_string, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+            // Simplificar JSON para Excel
+            $simplified = array();
+            foreach ($data as $item) {
+                if (isset($item['question_text']) && isset($item['response_value'])) {
+                    $simplified[] = $item['question_text'] . ': ' . $item['response_value'];
+                }
+            }
+            return implode(' | ', $simplified);
         }
         
-        // Adicionar estatísticas
-        $row = 3;
-        $sheet->setCellValue('A' . $row, 'Total de Respostas:');
-        $sheet->setCellValue('B' . $row, $total_responses);
-        $row++;
-        
-        $sheet->setCellValue('A' . $row, 'Com Consentimento:');
-        $sheet->setCellValue('B' . $row, $total_with_consent);
-        $row++;
-        
-        $sheet->setCellValue('A' . $row, 'Com Localização:');
-        $sheet->setCellValue('B' . $row, $total_with_location);
-        $row++;
-        
-        $sheet->setCellValue('A' . $row, 'Com Foto:');
-        $sheet->setCellValue('B' . $row, $total_with_photo);
-        $row += 2;
-        
-        // Aplicadores
-        $sheet->setCellValue('A' . $row, 'Respostas por Aplicador:');
-        $sheet->getStyle('A' . $row)->getFont()->setBold(true);
-        $row++;
-        
-        foreach ($applicators as $applicator => $count) {
-            $sheet->setCellValue('A' . $row, $applicator);
-            $sheet->setCellValue('B' . $row, $count);
-            $row++;
-        }
+        return 'Dados não disponíveis';
     }
 
     /**
