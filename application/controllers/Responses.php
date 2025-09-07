@@ -164,16 +164,16 @@ class Responses extends CI_Controller {
         
         try {
             // Contar registros antes da exportação
-        /*    $record_count = $this->Response_model->count_by_filters($filters);
+            $record_count = $this->Response_model->count_by_filters($filters);
             
             // Log início da exportação
-            $this->Response_model->log_export_activity(
+       /*     $this->Response_model->log_export_activity(
                 $user_id, 
                 'raw_data', 
                 $filters, 
                 $record_count, 
                 'started'
-            );
+            ); */
             
             // Aumentar limites para exportação
             ini_set('memory_limit', '2024M');
@@ -183,7 +183,7 @@ class Responses extends CI_Controller {
             $this->_generate_raw_data_excel($filters, $questionnaire_id);
             
             // Log sucesso da exportação
-            $this->Response_model->log_export_activity(
+        /*    $this->Response_model->log_export_activity(
                 $user_id, 
                 'raw_data', 
                 $filters, 
