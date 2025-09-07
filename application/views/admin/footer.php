@@ -1,4 +1,4 @@
-       </div>
+</div>
     </main>
     
     <!-- Bootstrap JS -->
@@ -8,6 +8,12 @@
     <!-- DataTables -->
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    
+    <!-- Leaflet CSS and JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     
     <script>
         // Sidebar Toggle
@@ -21,7 +27,6 @@
         
         // Initialize DataTables
         $(document).ready(function() {
-
             if ($.fn.DataTable) {
                 // Função para converter data brasileira em timestamp
                 $.fn.dataTable.ext.type.order['date-br-pre'] = function (data) {
@@ -60,28 +65,29 @@
                     return null;
                 });
 
-                
-            $('.data-table').DataTable({
-                responsive: true,
-                language: {
-                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json'
-                },
-                "order": [[5, "desc"]], // Ordenar por Data/Hora descendente (mais recente primeiro)
-                "columnDefs": [
-                    {
-                        "targets": 5, // Coluna Data/Hora
-                        "type": "date-br"
+                // Inicializar DataTables
+                $('.data-table').DataTable({
+                    responsive: true,
+                    language: {
+                        url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json'
                     },
-                    {
-                        "targets": 7, // Coluna Ações
-                        "orderable": false,
-                        "searchable": false
-                    }
-                ],
-                "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>' +
-                   '<"row"<"col-sm-12"tr>>' +
-                   '<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
-            });
+                    order: [[5, "desc"]], // Ordenar por Data/Hora descendente (mais recente primeiro)
+                    columnDefs: [
+                        {
+                            targets: 5, // Coluna Data/Hora
+                            type: "date-br"
+                        },
+                        {
+                            targets: 7, // Coluna Ações
+                            orderable: false,
+                            searchable: false
+                        }
+                    ],
+                    dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>' +
+                         '<"row"<"col-sm-12"tr>>' +
+                         '<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+                });
+            }
         });
         
         // Auto-hide alerts
@@ -89,12 +95,6 @@
             $('.alert').fadeOut();
         }, 5000);
     </script>
-    
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.css" />
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
 </body>
 </html>
