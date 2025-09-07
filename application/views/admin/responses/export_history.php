@@ -36,16 +36,6 @@
                     </div>
                 </div>
                 
-                <?php if ($export_limits['hour_exceeded'] || $export_limits['day_exceeded']): ?>
-                <div class="alert alert-warning mt-3 mb-0">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <?php if ($export_limits['hour_exceeded']): ?>
-                        Limite de exportações por hora atingido.
-                    <?php elseif ($export_limits['day_exceeded']): ?>
-                        Limite de exportações diárias atingido.
-                    <?php endif; ?>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>

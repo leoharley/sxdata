@@ -103,19 +103,6 @@ class Responses extends CI_Controller {
         
         $user_id = $this->session->userdata('user_id');
         
-        // Verificar limites de exportação
-        $limits = $this->Response_model->check_export_limits($user_id);
-        if ($limits['hour_exceeded']) {
-            $this->session->set_flashdata('error', 'Limite de exportações por hora excedido. Tente novamente em alguns minutos.');
-            redirect('responses');
-            return;
-        }
-        
-        if ($limits['day_exceeded']) {
-            $this->session->set_flashdata('error', 'Limite de exportações diárias excedido. Tente novamente amanhã.');
-            redirect('responses');
-            return;
-        }
         
         // Verificar se é uma requisição POST
         if ($this->input->method() !== 'post') {
