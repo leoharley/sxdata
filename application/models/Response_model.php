@@ -1832,12 +1832,6 @@ public function get_top_answered_questions($filters = array(), $limit = 5) {
     return $this->db->get()->result();
 }
 
-<?php
-// Adicionar no Response_model.php
-
-/**
- * Registrar atividade de exportação para auditoria
- */
 public function log_export_activity($user_id, $export_type, $filters, $record_count, $status = 'success', $error_message = null) {
     $log_data = array(
         'user_id' => $user_id,
