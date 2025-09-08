@@ -2104,6 +2104,8 @@ public function validate_export_filters($filters) {
             $individual_data = $this->_extract_individual_response_data($response->id);
             $response = (object) array_merge((array) $response, $individual_data);
         }
+
+        var_dump($this->db->last_query());exit;
         
         return $responses;
     }
