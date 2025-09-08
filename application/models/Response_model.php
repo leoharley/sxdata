@@ -2095,6 +2095,8 @@ public function validate_export_filters($filters) {
         
         $this->db->order_by('fr.completed_at', 'DESC');
         $responses = $this->db->get()->result();
+
+        var_dump($this->db->last_query());exit;
         
         // Para cada resposta, buscar todas as respostas das questões
         foreach ($responses as &$response) {
@@ -2104,8 +2106,6 @@ public function validate_export_filters($filters) {
             $individual_data = $this->_extract_individual_response_data($response->id);
             $response = (object) array_merge((array) $response, $individual_data);
         }
-
-        var_dump($this->db->last_query());exit;
         
         return $responses;
     }
