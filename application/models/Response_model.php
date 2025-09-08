@@ -2055,7 +2055,7 @@ public function validate_export_filters($filters) {
             fr.photo_path,
             fr.consent_given,
             CASE 
-                WHEN fr.sync_status = \'SYNCED\' THEN \'SINCRONIZADO\'
+                WHEN fr.sync_status = \'synced\' THEN \'SINCRONIZADO\'
                 ELSE \'PENDENTE\'
             END as sync_status,
             fr.started_at,
@@ -2095,8 +2095,6 @@ public function validate_export_filters($filters) {
         
         $this->db->order_by('fr.completed_at', 'DESC');
         $responses = $this->db->get()->result();
-
-        var_dump($this->db->last_query());exit;
         
         // Para cada resposta, buscar todas as respostas das questões
         foreach ($responses as &$response) {
