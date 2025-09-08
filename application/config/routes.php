@@ -47,6 +47,18 @@ $route['api/stats/questionnaire-analysis/(:num)'] = 'api/stats/questionnaire_ana
 $route['api/stats/questions-analysis'] = 'api/stats/questions_analysis';
 $route['api/stats/applicators_app'] = 'api/stats/applicators_app';
 
+
+$route['api/questionnaires/(:num)/questions'] = 'api/responses/questionnaire_questions/$1';
+$route['api/responses/raw-data'] = 'api/responses/raw_data';
+$route['api/responses/count'] = 'api/responses/count_records';
+$route['api/responses/validate-export'] = 'api/responses/validate_export';
+$route['api/responses/export-preview'] = 'api/responses/export_preview';
+$route['api/responses/export-statistics'] = 'api/responses/export_statistics';
+$route['api/responses/log-export'] = 'api/responses/log_export';
+$route['api/responses/export-limits'] = 'api/responses/export_limits';
+$route['api/responses/export-history'] = 'api/responses/export_history';
+
+
 $route['responses/export_raw_data'] = 'responses/export_raw_data';
 
 // Rotas adicionais úteis para a funcionalidade
@@ -57,3 +69,5 @@ $route['responses/export_status/(:num)'] = 'responses/export_status/$1';
 // Rotas para AJAX calls
 $route['api/responses/count'] = 'responses/ajax_count_responses';
 $route['api/responses/preview'] = 'responses/ajax_preview_export';
+
+$route['api/health'] = 'api/system/health';
