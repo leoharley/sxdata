@@ -434,7 +434,7 @@ class Responses extends CI_Controller {
             $this->_get_safe_value($response_data, 'longitude'),
             $this->_get_safe_value($response_data, 'location_name'),            
             $response_data->consent_given ? 'SIM' : 'NÃO',
-            strtoupper($this->_get_safe_value($response_data == 'SYNCED'?'SINCRONIZADO':'PENDENTE DE SINCRONIZAR', 'sync_status', 'UNKNOWN')),
+            strtoupper($this->_get_safe_value($response_data, 'sync_status', 'UNKNOWN')),
             $this->_format_datetime($response_data->started_at),
             $this->_format_datetime($response_data->completed_at),
             !empty($response_data->photo_path) ? 'SIM' : 'NÃO',

@@ -2054,7 +2054,7 @@ public function validate_export_filters($filters) {
             fr.location_name,
             fr.photo_path,
             fr.consent_given,
-            fr.sync_status,
+            decode(fr.sync_status,\'SYNCED\',\'SINCRONIZADO\',\'PENDENTE\') as sync_status,
             fr.started_at,
             fr.completed_at,
             fr.created_at,
