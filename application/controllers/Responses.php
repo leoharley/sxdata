@@ -335,7 +335,7 @@ class Responses extends CI_Controller {
             'DATA INÍCIO',
             'DATA CONCLUSÃO',
             'FOTO CAPTURADA',
-            'GLOBALRECORDID'
+            'ID DA QUESTÃO'
         ];
         
         // Headers das perguntas (limitado a 60 caracteres por header)
@@ -544,7 +544,7 @@ class Responses extends CI_Controller {
             'DATA INÍCIO' => 120,
             'DATA CONCLUSÃO' => 120,
             'FOTO CAPTURADA' => 100,
-            'GLOBALRECORDID' => 150
+            'ID DA QUESTÃO' => 150
         );
         
         // Se é header fixo, usar largura predefinida
