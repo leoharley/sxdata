@@ -276,7 +276,7 @@
                             <?= $this->session->userdata('admin_name') ?>
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="<?= base_url('profile') ?>">Perfil</a></li>
+                            <li style="display:none"><a class="dropdown-item" href="<?= base_url('profile') ?>">Perfil</a></li>
                             <li><a class="dropdown-item" href="<?= base_url('settings') ?>">Configurações</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="<?= base_url('auth/logout') ?>">Sair</a></li>
