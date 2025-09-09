@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Configurações do Sistema</h2>
             <div>
-                <button class="btn btn-outline-warning me-2" onclick="backupDatabase()">
+                <button class="btn btn-outline-warning me-2" onclick="backupDatabase()" style="display:none">
                     <i class="fas fa-database me-2"></i>
                     Backup BD
                 </button>
