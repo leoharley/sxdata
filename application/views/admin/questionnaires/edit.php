@@ -517,7 +517,7 @@ function is_checkbox_checked($value) {
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" 
                                                    name="questions[<?= $index ?>][required]" value="1" 
-                                                   <?= $question->is_required ? 'checked' : '' ?>>
+                                                   <?= $question->is_required ? 't' : '' ?>>
                                             <label class="form-check-label">
                                                 Pergunta obrigatória
                                             </label>
