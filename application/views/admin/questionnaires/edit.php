@@ -519,7 +519,7 @@ function is_checkbox_checked($value) {
                                                    name="questions[<?= $index ?>][required]" value="1" 
                                                    <?= $question->is_required != 'f' ? 'checked' : '' ?>>
                                             <label class="form-check-label">
-                                                Pergunta obrigatória <?=  $question->is_required ?>
+                                                Pergunta obrigatória
                                             </label>
                                         </div>
                                     </div>
