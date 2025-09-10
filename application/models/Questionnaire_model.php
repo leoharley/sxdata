@@ -389,12 +389,20 @@ class Questionnaire_model extends CI_Model {
     public function execute_conditional_logic($questions, $responses = []) {
         $question_states = [];
         
-        // Inicializar estados padrão
+        // Criar mapa de ID para pergunta
+        $question_map = [];
         foreach ($questions as $index => $question) {
-            $question_states["q_$index"] = [
+            $question_map[$question->id] = [
+                'index' => $index,
+                'question' => $question
+            ];
+            
+            // Inicializar estados padrão usando IDs
+            $question_states[$question->id] = [
                 'visible' => true,
                 'required' => (bool)$question->is_required,
-                'original_required' => (bool)$question->is_required
+                'original_required' => (bool)$question->is_required,
+                'index' => $index
             ];
         }
         
@@ -405,26 +413,70 @@ class Questionnaire_model extends CI_Model {
                 
                 // Processar regras de visibilidade
                 if (isset($logic['visibility'])) {
-                    $visibility_result = $this->evaluate_rule($logic['visibility'], $responses, $questions);
-                    $question_states["q_$index"]['visible'] = $visibility_result;
+                    $visibility_result = $this->evaluate_rule_with_ids($logic['visibility'], $responses, $question_map);
+                    $question_states[$question->id]['visible'] = $visibility_result;
                 }
                 
                 // Processar regras de obrigatoriedade
                 if (isset($logic['required'])) {
-                    $required_result = $this->evaluate_rule($logic['required'], $responses, $questions);
+                    $required_result = $this->evaluate_rule_with_ids($logic['required'], $responses, $question_map);
                     if ($required_result) {
-                        $question_states["q_$index"]['required'] = true;
+                        $question_states[$question->id]['required'] = true;
                     }
                 }
                 
                 // Se pergunta não está visível, não deve ser obrigatória
-                if (!$question_states["q_$index"]['visible']) {
-                    $question_states["q_$index"]['required'] = false;
+                if (!$question_states[$question->id]['visible']) {
+                    $question_states[$question->id]['required'] = false;
                 }
             }
         }
         
         return $question_states;
+    }
+
+    private function evaluate_rule_with_ids($rule, $responses, $question_map) {
+        if (!isset($rule['conditions']) || empty($rule['conditions'])) {
+            return true;
+        }
+        
+        $operator = isset($rule['operator']) ? $rule['operator'] : 'AND';
+        $results = [];
+        
+        foreach ($rule['conditions'] as $condition) {
+            if (!isset($condition['question'], $condition['operator'])) {
+                continue;
+            }
+            
+            $target_question_id = $condition['question']; // Agora é ID
+            $condition_operator = $condition['operator'];
+            $condition_value = isset($condition['value']) ? $condition['value'] : '';
+            
+            // Obter resposta da pergunta alvo usando ID
+            $response_value = isset($responses[$target_question_id]) ? 
+                            $responses[$target_question_id] : '';
+            
+            // Obter dados da pergunta alvo
+            $target_question = isset($question_map[$target_question_id]) ? 
+                            $question_map[$target_question_id]['question'] : null;
+            
+            // Avaliar condição
+            $condition_result = $this->evaluate_condition(
+                $response_value, 
+                $condition_operator, 
+                $condition_value,
+                $target_question
+            );
+            
+            $results[] = $condition_result;
+        }
+        
+        // Aplicar operador lógico
+        if ($operator === 'OR') {
+            return in_array(true, $results);
+        } else { // AND
+            return !in_array(false, $results);
+        }
     }
 
     /**
@@ -547,8 +599,8 @@ class Questionnaire_model extends CI_Model {
             
             // Validar cada pergunta
             foreach ($questions as $index => $question) {
-                $state = $question_states["q_$index"];
-                $response = isset($responses["q_$index"]) ? $responses["q_$index"] : null;
+                $state = $question_states[$question->id];
+                $response = isset($responses[$question->id]) ? $responses[$question->id] : null;
                 
                 // Se pergunta não está visível, pular validação
                 if (!$state['visible']) {
@@ -581,6 +633,7 @@ class Questionnaire_model extends CI_Model {
         
         return $validation;
     }
+
 
     /**
      * Validar tipo de resposta para uma pergunta
@@ -748,9 +801,8 @@ class Questionnaire_model extends CI_Model {
             
             // Processar cada pergunta
             foreach ($questions as $index => $question) {
-                $state = $question_states["q_$index"];
-                $response_key = "q_$index";
-                $raw_response = isset($raw_responses[$response_key]) ? $raw_responses[$response_key] : null;
+                $state = $question_states[$question->id];
+                $raw_response = isset($raw_responses[$question->id]) ? $raw_responses[$question->id] : null;
                 
                 // Contabilizar pergunta visível
                 if ($state['visible']) {
@@ -762,7 +814,7 @@ class Questionnaire_model extends CI_Model {
                     
                     // Processar resposta se pergunta está visível
                     if (!empty($raw_response) || $raw_response === '0') {
-                        $processed['responses'][$response_key] = [
+                        $processed['responses'][$question->id] = [
                             'question_id' => $question->id,
                             'question_text' => $question->question_text,
                             'question_type' => $question->question_type,
@@ -779,7 +831,7 @@ class Questionnaire_model extends CI_Model {
                     }
                 } else {
                     // Pergunta não visível - registrar como não aplicável
-                    $processed['responses'][$response_key] = [
+                    $processed['responses'][$question->id] = [
                         'question_id' => $question->id,
                         'question_text' => $question->question_text,
                         'question_type' => $question->question_type,
@@ -867,7 +919,8 @@ class Questionnaire_model extends CI_Model {
                     'questions_with_logic' => 0,
                     'logic_types' => ['visibility' => 0, 'required' => 0, 'both' => 0],
                     'complexity_score' => 0,
-                    'dependencies' => []
+                    'dependencies' => [],
+                    'id_based_logic' => true // Indicador de que usa IDs
                 ];
                 
                 // Obter estatísticas de lógica condicional
@@ -895,7 +948,8 @@ class Questionnaire_model extends CI_Model {
                 'total_questions' => array_sum(array_column($report['questionnaires'], 'total_questions')),
                 'total_logic_questions' => $report['total_logic_usage'],
                 'average_complexity' => count($report['questionnaires']) > 0 ? 
-                    array_sum(array_column($report['questionnaires'], 'complexity_score')) / count($report['questionnaires']) : 0
+                    array_sum(array_column($report['questionnaires'], 'complexity_score')) / count($report['questionnaires']) : 0,
+                'uses_id_based_logic' => true
             ];
             
         } catch (Exception $e) {
@@ -904,6 +958,102 @@ class Questionnaire_model extends CI_Model {
         }
         
         return $report;
+    }
+
+    public function convert_responses_indices_to_ids($responses, $questions) {
+        $converted_responses = [];
+        
+        // Criar mapa de índice para ID
+        $index_to_id_map = [];
+        foreach ($questions as $index => $question) {
+            $index_to_id_map["q_$index"] = $question->id;
+        }
+        
+        foreach ($responses as $key => $value) {
+            if (isset($index_to_id_map[$key])) {
+                $question_id = $index_to_id_map[$key];
+                $converted_responses[$question_id] = $value;
+            } else {
+                // Se já está no formato de ID, manter
+                $converted_responses[$key] = $value;
+            }
+        }
+        
+        return $converted_responses;
+    }
+
+    public function convert_states_indices_to_ids($states, $questions) {
+        $converted_states = [];
+        
+        // Criar mapa de índice para ID
+        $index_to_id_map = [];
+        foreach ($questions as $index => $question) {
+            $index_to_id_map["q_$index"] = $question->id;
+        }
+        
+        foreach ($states as $key => $value) {
+            if (isset($index_to_id_map[$key])) {
+                $question_id = $index_to_id_map[$key];
+                $converted_states[$question_id] = $value;
+            } else {
+                // Se já está no formato de ID, manter
+                $converted_states[$key] = $value;
+            }
+        }
+        
+        return $converted_states;
+    }
+
+    public function detect_logic_format($questionnaire_id) {
+        try {
+            $this->db->select('conditional_logic');
+            $this->db->from('questions');
+            $this->db->where('questionnaire_id', $questionnaire_id);
+            $this->db->where('conditional_logic IS NOT NULL');
+            $this->db->where('conditional_logic !=', '');
+            $this->db->limit(5); // Amostra pequena
+            
+            $results = $this->db->get()->result();
+            
+            $uses_ids = 0;
+            $uses_indices = 0;
+            
+            foreach ($results as $result) {
+                $logic = json_decode($result->conditional_logic, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    foreach (['visibility', 'required'] as $rule_type) {
+                        if (isset($logic[$rule_type]['conditions'])) {
+                            foreach ($logic[$rule_type]['conditions'] as $condition) {
+                                if (isset($condition['question'])) {
+                                    if (is_numeric($condition['question']) && $condition['question'] < 100) {
+                                        $uses_indices++;
+                                    } else {
+                                        $uses_ids++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return [
+                'format' => $uses_ids > $uses_indices ? 'ids' : 'indices',
+                'confidence' => $uses_ids + $uses_indices > 0 ? max($uses_ids, $uses_indices) / ($uses_ids + $uses_indices) : 0,
+                'samples' => [
+                    'ids' => $uses_ids,
+                    'indices' => $uses_indices
+                ]
+            ];
+            
+        } catch (Exception $e) {
+            log_message('error', 'Erro ao detectar formato da lógica: ' . $e->getMessage());
+            return [
+                'format' => 'unknown',
+                'confidence' => 0,
+                'error' => $e->getMessage()
+            ];
+        }
     }
 
     /**

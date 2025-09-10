@@ -765,6 +765,9 @@ class Question_model extends CI_Model {
             
             $questions = $this->get_by_questionnaire($questionnaire_id);
             
+            // Criar mapa de IDs válidos
+            $valid_question_ids = array_column($questions, 'id');
+            
             foreach ($questions as $question) {
                 if (!empty($question->conditional_logic)) {
                     $logic = json_decode($question->conditional_logic, true);
@@ -776,7 +779,7 @@ class Question_model extends CI_Model {
                         $cleaned_count++;
                     } else {
                         // Validar e limpar lógica inválida
-                        $cleaned_logic = $this->clean_logic_structure($logic);
+                        $cleaned_logic = $this->clean_logic_structure_with_ids($logic, $valid_question_ids);
                         
                         if ($cleaned_logic !== $logic) {
                             $new_logic_json = !empty($cleaned_logic) ? json_encode($cleaned_logic) : null;
@@ -801,6 +804,96 @@ class Question_model extends CI_Model {
         }
         
         return $cleaned_count;
+    }
+
+    private function clean_logic_structure_with_ids($logic, $valid_question_ids) {
+        $cleaned = [];
+        
+        // Limpar regras de visibilidade
+        if (isset($logic['visibility']) && is_array($logic['visibility'])) {
+            $cleaned_visibility = $this->clean_rule_structure_with_ids($logic['visibility'], $valid_question_ids);
+            if (!empty($cleaned_visibility)) {
+                $cleaned['visibility'] = $cleaned_visibility;
+            }
+        }
+        
+        // Limpar regras de obrigatoriedade
+        if (isset($logic['required']) && is_array($logic['required'])) {
+            $cleaned_required = $this->clean_rule_structure_with_ids($logic['required'], $valid_question_ids);
+            if (!empty($cleaned_required)) {
+                $cleaned['required'] = $cleaned_required;
+            }
+        }
+        
+        return $cleaned;
+    }
+
+    private function clean_rule_structure_with_ids($rule, $valid_question_ids) {
+        if (!isset($rule['conditions']) || !is_array($rule['conditions'])) {
+            return [];
+        }
+        
+        $valid_conditions = [];
+        
+        foreach ($rule['conditions'] as $condition) {
+            if (is_array($condition) && 
+                isset($condition['question']) && 
+                in_array($condition['question'], $valid_question_ids) &&
+                isset($condition['operator']) && !empty($condition['operator'])) {
+                $valid_conditions[] = $condition;
+            }
+        }
+        
+        if (empty($valid_conditions)) {
+            return [];
+        }
+        
+        return [
+            'operator' => isset($rule['operator']) && in_array($rule['operator'], ['AND', 'OR']) ? $rule['operator'] : 'AND',
+            'conditions' => $valid_conditions
+        ];
+    }
+
+    public function update_logic_question_ids($questionnaire_id, $id_mapping) {
+        try {
+            $this->db->trans_start();
+            
+            $questions = $this->get_by_questionnaire_with_logic($questionnaire_id);
+            
+            foreach ($questions as $question) {
+                if (!empty($question->conditional_logic_decoded)) {
+                    $logic = $question->conditional_logic_decoded;
+                    $updated = false;
+                    
+                    foreach (['visibility', 'required'] as $rule_type) {
+                        if (isset($logic[$rule_type]['conditions'])) {
+                            foreach ($logic[$rule_type]['conditions'] as &$condition) {
+                                if (isset($condition['question'])) {
+                                    $old_id = $condition['question'];
+                                    if (isset($id_mapping[$old_id])) {
+                                        $condition['question'] = $id_mapping[$old_id];
+                                        $updated = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    if ($updated) {
+                        $this->db->where('id', $question->id);
+                        $this->db->update('questions', ['conditional_logic' => json_encode($logic)]);
+                    }
+                }
+            }
+            
+            $this->db->trans_complete();
+            return $this->db->trans_status();
+            
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            log_message('error', 'Erro ao atualizar IDs de lógica condicional: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -966,6 +1059,15 @@ class Question_model extends CI_Model {
             $questions = $this->get_by_questionnaire_with_logic($questionnaire_id);
             $analysis['summary'] = $this->get_conditional_logic_stats($questionnaire_id);
             
+            // Criar mapa de ID para pergunta
+            $question_map = [];
+            foreach ($questions as $index => $question) {
+                $question_map[$question->id] = [
+                    'index' => $index,
+                    'question' => $question
+                ];
+            }
+            
             foreach ($questions as $index => $question) {
                 $question_analysis = [
                     'index' => $index,
@@ -984,14 +1086,14 @@ class Question_model extends CI_Model {
                     $logic = $question->conditional_logic_decoded;
                     $question_analysis['logic'] = $logic;
                     
-                    // Analisar dependências
+                    // Analisar dependências usando IDs
                     foreach (['visibility', 'required'] as $rule_type) {
                         if (isset($logic[$rule_type]['conditions'])) {
                             foreach ($logic[$rule_type]['conditions'] as $condition) {
                                 if (isset($condition['question'])) {
-                                    $dep_index = intval($condition['question']);
+                                    $dep_id = $condition['question'];
                                     $question_analysis['dependencies'][] = [
-                                        'question_index' => $dep_index,
+                                        'question_id' => $dep_id,
                                         'rule_type' => $rule_type,
                                         'operator' => $condition['operator'],
                                         'value' => $condition['value'] ?? null
@@ -1002,15 +1104,15 @@ class Question_model extends CI_Model {
                     }
                     
                     // Validar integridade
-                    $validation = $this->validate_question_logic_integrity($question, $index, $questions);
+                    $validation = $this->validate_question_logic_integrity_with_ids($question, $index, $question_map);
                     $question_analysis['issues'] = array_merge($validation['errors'], $validation['warnings']);
                 }
                 
                 $analysis['questions'][] = $question_analysis;
             }
             
-            // Gerar mapa de dependências
-            $analysis['dependencies'] = $this->generate_dependency_map($analysis['questions']);
+            // Gerar mapa de dependências usando IDs
+            $analysis['dependencies'] = $this->generate_dependency_map_with_ids($analysis['questions']);
             
             // Coletar todos os issues
             foreach ($analysis['questions'] as $q) {
@@ -1023,6 +1125,34 @@ class Question_model extends CI_Model {
         }
         
         return $analysis;
+    }
+
+    private function generate_dependency_map_with_ids($questions_analysis) {
+        $map = [];
+        
+        foreach ($questions_analysis as $question) {
+            if (!empty($question['dependencies'])) {
+                foreach ($question['dependencies'] as $dep) {
+                    $target_id = $dep['question_id'];
+                    
+                    if (!isset($map[$target_id])) {
+                        $map[$target_id] = [
+                            'question_id' => $target_id,
+                            'dependents' => []
+                        ];
+                    }
+                    
+                    $map[$target_id]['dependents'][] = [
+                        'question_id' => $question['id'],
+                        'rule_type' => $dep['rule_type'],
+                        'operator' => $dep['operator'],
+                        'value' => $dep['value']
+                    ];
+                }
+            }
+        }
+        
+        return array_values($map);
     }
 
     /**
@@ -1080,7 +1210,7 @@ class Question_model extends CI_Model {
      * @param int $target_question_index Índice da pergunta alvo
      * @return array Perguntas dependentes
      */
-    public function get_dependent_questions($questionnaire_id, $target_question_index) {
+    public function get_dependent_questions($questionnaire_id, $target_question_id) {
         $dependent_questions = [];
         
         try {
@@ -1094,7 +1224,7 @@ class Question_model extends CI_Model {
                     foreach (['visibility', 'required'] as $rule_type) {
                         if (isset($logic[$rule_type]['conditions'])) {
                             foreach ($logic[$rule_type]['conditions'] as $condition) {
-                                if (isset($condition['question']) && intval($condition['question']) === $target_question_index) {
+                                if (isset($condition['question']) && $condition['question'] == $target_question_id) {
                                     $has_dependency = true;
                                     break 2;
                                 }
@@ -1104,8 +1234,8 @@ class Question_model extends CI_Model {
                     
                     if ($has_dependency) {
                         $dependent_questions[] = [
-                            'index' => $index,
                             'id' => $question->id,
+                            'index' => $index,
                             'text' => $question->question_text,
                             'type' => $question->question_type
                         ];

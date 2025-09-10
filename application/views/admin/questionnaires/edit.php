@@ -812,6 +812,7 @@ function is_checkbox_checked($value) {
 
 <script>
 let questionIndex = <?= count($questions) ?>;
+let nextQuestionId = 1000; // Contador para IDs temporários de novas questões
 const existingQuestions = <?= json_encode($questions) ?>;
 
 // Dados dos projetos para JavaScript
@@ -978,7 +979,7 @@ function moveQuestion(fromIndex, toIndex) {
     }
     
     const questionToMove = questions[fromIndex];
-    const nextIndicator = dropIndicators[fromIndex + 1]; // Indicador após a pergunta
+    const nextIndicator = dropIndicators[fromIndex + 1];
     
     // Remover a pergunta e seu indicador do DOM
     questionToMove.remove();
@@ -993,13 +994,10 @@ function moveQuestion(fromIndex, toIndex) {
     // Determinar onde inserir
     let insertionPoint;
     if (toIndex === 0) {
-        // Inserir no início
         insertionPoint = remainingIndicators[0];
     } else if (toIndex >= remainingQuestions.length) {
-        // Inserir no final
-        insertionPoint = null; // appendChild
+        insertionPoint = null;
     } else {
-        // Inserir antes da pergunta na posição de destino
         insertionPoint = remainingQuestions[toIndex];
     }
     
@@ -1028,6 +1026,9 @@ function moveQuestion(fromIndex, toIndex) {
     // Atualizar tudo
     updateQuestionIndicesAndNumbers();
     updateAllReorderButtons();
+    
+    // NOVO: Atualizar referências de lógica condicional após reordenação
+    updateLogicReferencesAfterReorder();
     
     if (typeof validateAllConditionalLogic === 'function') {
         validateAllConditionalLogic();
@@ -1346,7 +1347,7 @@ function loadConditionalLogicForQuestion(questionIndex, logic) {
     }
 }
 
-// Função para carregar condições de uma regra
+// Função para carregar condições de uma regra (ATUALIZADA PARA IDs)
 function loadConditionsForRule(questionIndex, ruleType, ruleData) {
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][operator]"]`);
     if (operatorSelect) {
@@ -1370,6 +1371,7 @@ function loadConditionsForRule(questionIndex, ruleType, ruleData) {
                     const valueField = lastCondition.querySelector('input[name*="[value]"], select[name*="[value]"]');
                     
                     if (questionSelect && conditionData.question !== undefined) {
+                        // Usar ID da questão diretamente
                         questionSelect.value = conditionData.question;
                         
                         // Trigger change para atualizar operadores
@@ -1401,8 +1403,12 @@ function addQuestion() {
     const container = document.getElementById('questionsContainer');
     const noQuestions = document.getElementById('noQuestions');
     
+    // Gerar ID temporário para nova pergunta
+    const tempQuestionId = `temp_${nextQuestionId}`;
+    nextQuestionId++;
+    
     const questionHtml = `
-        <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}">
+        <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}" data-question-id="${tempQuestionId}">
             <!-- Controles de reordenação -->
             <div class="reorder-controls" style="display: flex;">
                 <button type="button" class="btn-reorder-up" onclick="moveQuestionUp(${questionIndex})" title="Mover para cima">
@@ -1699,7 +1705,7 @@ function addCondition(questionIndex, ruleType) {
                             name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"
                             onchange="updateConditionOperators(${questionIndex}, '${ruleType}', ${conditionIndex})">
                         <option value="">Pergunta...</option>
-                        ${availableQuestions.map(q => `<option value="${q.index}">${q.title}</option>`).join('')}
+                        ${availableQuestions.map(q => `<option value="${q.id}">${q.title}</option>`).join('')}
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -1741,8 +1747,20 @@ function getAvailableQuestionsForCondition(currentQuestionIndex) {
     questions.forEach((question, index) => {
         if (index < currentQuestionIndex) {
             const textArea = question.querySelector('textarea[name*="[text]"]');
-            const title = textArea ? textArea.value.substring(0, 50) + '...' : `Pergunta ${index + 1}`;
+            const questionId = question.getAttribute('data-question-id');
+            
+            // Para questões existentes, usar texto atual ou do banco
+            let title;
+            if (textArea && textArea.value.trim()) {
+                title = textArea.value.substring(0, 50) + '...';
+            } else if (existingQuestions[index]) {
+                title = existingQuestions[index].question_text.substring(0, 50) + '...';
+            } else {
+                title = `Pergunta ${index + 1}`;
+            }
+            
             available.push({
+                id: questionId, // Usar ID real da questão
                 index: index,
                 title: title || `Pergunta ${index + 1}`
             });
@@ -1757,16 +1775,19 @@ function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
     const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
     
-    const selectedQuestionIndex = questionSelect.value;
-    if (!selectedQuestionIndex) return;
+    const selectedQuestionId = questionSelect.value;
+    if (!selectedQuestionId) return;
     
     let targetQuestion = null;
     
-    // Tentar encontrar a pergunta alvo
-    if (existingQuestions[selectedQuestionIndex]) {
-        targetQuestion = existingQuestions[selectedQuestionIndex];
+    // Tentar encontrar a pergunta alvo usando ID
+    // Primeiro, verificar se é uma pergunta existente
+    const existingQuestion = existingQuestions.find(q => q.id == selectedQuestionId);
+    if (existingQuestion) {
+        targetQuestion = existingQuestion;
     } else {
-        const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+        // Se não encontrou nas existentes, buscar no DOM (nova pergunta)
+        const targetQuestionElement = document.querySelector(`[data-question-id="${selectedQuestionId}"]`);
         if (targetQuestionElement) {
             const typeSelect = targetQuestionElement.querySelector('select[name*="[type]"]');
             targetQuestion = {
@@ -1813,10 +1834,10 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
     const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
     
-    const selectedQuestionIndex = questionSelect.value;
+    const selectedQuestionId = questionSelect.value;
     const selectedOperator = operatorSelect.value;
     
-    if (!selectedQuestionIndex || !selectedOperator) return;
+    if (!selectedQuestionId || !selectedOperator) return;
     
     // Se operador é "is_empty" ou "is_not_empty", esconder campo de valor
     if (['is_empty', 'is_not_empty'].includes(selectedOperator)) {
@@ -1828,19 +1849,29 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
     }
     
     let targetQuestion = null;
-    if (existingQuestions[selectedQuestionIndex]) {
-        targetQuestion = existingQuestions[selectedQuestionIndex];
+    
+    // Buscar pergunta alvo usando ID
+    const existingQuestion = existingQuestions.find(q => q.id == selectedQuestionId);
+    if (existingQuestion) {
+        targetQuestion = existingQuestion;
+    } else {
+        // Buscar no DOM se for nova pergunta
+        const targetQuestionElement = document.querySelector(`[data-question-id="${selectedQuestionId}"]`);
+        if (targetQuestionElement) {
+            const questionType = targetQuestionElement.querySelector('select[name*="[type]"]').value;
+            targetQuestion = { question_type: questionType };
+        }
     }
     
     // Se é pergunta de múltipla escolha, converter para select
     if (targetQuestion && ['radio', 'checkbox', 'select'].includes(targetQuestion.question_type)) {
         let options = [];
         
-        if (targetQuestion.options && targetQuestion.options.length > 0) {
-            options = targetQuestion.options;
+        if (existingQuestion && existingQuestion.options && existingQuestion.options.length > 0) {
+            options = existingQuestion.options;
         } else {
             // Tentar buscar opções do DOM
-            const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+            const targetQuestionElement = document.querySelector(`[data-question-id="${selectedQuestionId}"]`);
             if (targetQuestionElement) {
                 const optionInputs = targetQuestionElement.querySelectorAll('input[name*="[options]"][name*="[text]"]');
                 optionInputs.forEach(input => {
@@ -1884,12 +1915,20 @@ function updateConditionQuestionOptions(questionElement, newIndex) {
     const conditionSelects = questionElement.querySelectorAll('select[name*="[question]"]');
     
     conditionSelects.forEach(select => {
-        // Remover opções que referenciam perguntas posteriores ou a própria pergunta
-        Array.from(select.options).forEach(option => {
-            if (option.value && parseInt(option.value) >= newIndex) {
-                option.remove();
+        const currentValue = select.value;
+        
+        // Verificar se a pergunta referenciada ainda é válida (anterior)
+        if (currentValue) {
+            const referencedQuestion = document.querySelector(`[data-question-id="${currentValue}"]`);
+            if (referencedQuestion) {
+                const referencedIndex = parseInt(referencedQuestion.getAttribute('data-index'));
+                if (referencedIndex >= newIndex) {
+                    // Pergunta referenciada agora é posterior, remover referência
+                    select.value = '';
+                    console.warn(`Referência removida: pergunta ${currentValue} agora é posterior`);
+                }
             }
-        });
+        }
     });
 }
 
@@ -2023,6 +2062,17 @@ function validateQuestionConditionalLogic(question, questionIndex) {
     const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + questionIndex + ' .condition-item');
     const requiredConditions = question.querySelectorAll('#requiredConditions-' + questionIndex + ' .condition-item');
     
+    // Obter todas as questões existentes para validação
+    const allQuestions = document.querySelectorAll('.question-item');
+    const questionIds = [];
+    const questionIndices = {};
+    
+    allQuestions.forEach((q, idx) => {
+        const questionId = q.getAttribute('data-question-id');
+        questionIds.push(questionId);
+        questionIndices[questionId] = idx;
+    });
+    
     [...visibilityConditions, ...requiredConditions].forEach((condition, condIndex) => {
         const questionSelect = condition.querySelector('select[name*="[question]"]');
         const operatorSelect = condition.querySelector('select[name*="[operator]"]');
@@ -2036,8 +2086,18 @@ function validateQuestionConditionalLogic(question, questionIndex) {
             errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem operador selecionado`);
         }
         
-        if (questionSelect.value && parseInt(questionSelect.value) >= questionIndex) {
-            errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+        // Validar se a pergunta referenciada existe e não é posterior
+        if (questionSelect.value) {
+            const targetQuestionId = questionSelect.value;
+            
+            if (!questionIds.includes(targetQuestionId)) {
+                errors.push(`Pergunta ${questionIndex + 1}: Referencia pergunta inexistente (ID: ${targetQuestionId})`);
+            } else {
+                const targetIndex = questionIndices[targetQuestionId];
+                if (targetIndex >= questionIndex) {
+                    errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+                }
+            }
         }
         
         if (operatorSelect.value && !['is_empty', 'is_not_empty'].includes(operatorSelect.value) && (!valueField || !valueField.value.trim())) {
@@ -2169,7 +2229,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.visibility.conditions.push({
-                        question: parseInt(questionSelect.value),
+                        question: questionSelect.value, // Agora é ID ao invés de índice
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -2194,7 +2254,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.required.conditions.push({
-                        question: parseInt(questionSelect.value),
+                        question: questionSelect.value, // Agora é ID ao invés de índice
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -2211,6 +2271,42 @@ function serializeConditionalLogic() {
             question.appendChild(hiddenInput);
         }
     });
+}
+
+function updateLogicReferencesAfterReorder() {
+    const questions = document.querySelectorAll('.question-item');
+    
+    questions.forEach((question, index) => {
+        // Atualizar opções disponíveis nos selects de condições
+        const conditionSelects = question.querySelectorAll('select[name*="[question]"]');
+        
+        conditionSelects.forEach(select => {
+            const currentValue = select.value;
+            
+            // Limpar e repovoar opções
+            select.innerHTML = '<option value="">Pergunta...</option>';
+            
+            const availableQuestions = getAvailableQuestionsForCondition(index);
+            availableQuestions.forEach(q => {
+                const option = document.createElement('option');
+                option.value = q.id;
+                option.textContent = q.title;
+                if (q.id === currentValue) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+            
+            // Se a opção selecionada não está mais disponível, limpar
+            if (currentValue && !availableQuestions.some(q => q.id === currentValue)) {
+                select.value = '';
+                console.warn(`Referência para pergunta ${currentValue} foi removida devido à reordenação`);
+            }
+        });
+    });
+    
+    // Atualizar preview da lógica
+    updateLogicPreview();
 }
 
 // Validação do formulário

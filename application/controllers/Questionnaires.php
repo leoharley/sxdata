@@ -509,8 +509,8 @@ class Questionnaires extends CI_Controller {
                 $logic = json_decode($question['conditional_logic'], true);
                 
                 if (json_last_error() === JSON_ERROR_NONE) {
-                    // Validar a lógica
-                    $validation = $this->validate_conditional_logic_structure($logic, $index, $questions);
+                    // Validar a lógica usando IDs
+                    $validation = $this->validate_conditional_logic_structure_with_ids($logic, $index, $questions);
                     
                     if (!$validation['valid']) {
                         // Se há erros, remover a lógica inválida
@@ -532,6 +532,189 @@ class Questionnaires extends CI_Controller {
         
         return $processed_questions;
     }
+
+    private function validate_conditional_logic_structure_with_ids($logic, $current_index, $all_questions) {
+        $errors = [];
+        $warnings = [];
+        
+        // Criar mapa de ID para questão para validação
+        $question_map = [];
+        foreach ($all_questions as $idx => $q) {
+            if (isset($q['id']) && !empty($q['id'])) {
+                $question_map[$q['id']] = [
+                    'index' => $idx,
+                    'data' => $q
+                ];
+            }
+        }
+        
+        // Validar regras de visibilidade
+        if (isset($logic['visibility'])) {
+            $validation = $this->validate_rule_structure_with_ids($logic['visibility'], 'visibility', $current_index, $question_map);
+            $errors = array_merge($errors, $validation['errors']);
+            $warnings = array_merge($warnings, $validation['warnings']);
+        }
+        
+        // Validar regras de obrigatoriedade
+        if (isset($logic['required'])) {
+            $validation = $this->validate_rule_structure_with_ids($logic['required'], 'required', $current_index, $question_map);
+            $errors = array_merge($errors, $validation['errors']);
+            $warnings = array_merge($warnings, $validation['warnings']);
+        }
+        
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors,
+            'warnings' => $warnings
+        ];
+    }
+
+    private function validate_rule_structure_with_ids($rule, $rule_type, $current_index, $question_map) {
+        $errors = [];
+        $warnings = [];
+        
+        if (!isset($rule['operator']) || !in_array($rule['operator'], ['AND', 'OR'])) {
+            $errors[] = "Operador lógico inválido para regra de {$rule_type}";
+        }
+        
+        if (!isset($rule['conditions']) || !is_array($rule['conditions']) || empty($rule['conditions'])) {
+            $errors[] = "Nenhuma condição definida para regra de {$rule_type}";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        foreach ($rule['conditions'] as $condition_index => $condition) {
+            $condition_validation = $this->validate_condition_structure_with_ids($condition, $current_index, $question_map, $condition_index + 1);
+            $errors = array_merge($errors, $condition_validation['errors']);
+            $warnings = array_merge($warnings, $condition_validation['warnings']);
+        }
+        
+        return ['errors' => $errors, 'warnings' => $warnings];
+    }
+
+    private function validate_condition_structure_with_ids($condition, $current_index, $question_map, $condition_number) {
+        $errors = [];
+        $warnings = [];
+        
+        if (!isset($condition['question']) || (!is_numeric($condition['question']) && !is_string($condition['question']))) {
+            $errors[] = "Condição {$condition_number}: ID de pergunta de referência inválido";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        if (!isset($condition['operator']) || empty($condition['operator'])) {
+            $errors[] = "Condição {$condition_number}: Operador não definido";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        $target_question_id = $condition['question'];
+        $operator = $condition['operator'];
+        $value = isset($condition['value']) ? $condition['value'] : '';
+        
+        // Verificar se a questão referenciada existe
+        if (!isset($question_map[$target_question_id])) {
+            $errors[] = "Condição {$condition_number}: Questão referenciada (ID: {$target_question_id}) não existe";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        $target_question_info = $question_map[$target_question_id];
+        
+        // Verificar se não está referenciando pergunta posterior ou a si mesma
+        if ($target_question_info['index'] >= $current_index) {
+            $errors[] = "Condição {$condition_number}: Não pode referenciar pergunta posterior ou a si mesma";
+        }
+        
+        $valid_operators = ['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
+        if (!in_array($operator, $valid_operators)) {
+            $errors[] = "Condição {$condition_number}: Operador '{$operator}' inválido";
+        }
+        
+        if (!in_array($operator, ['is_empty', 'is_not_empty']) && empty($value)) {
+            $warnings[] = "Condição {$condition_number}: Valor não definido para operador '{$operator}'";
+        }
+        
+        return ['errors' => $errors, 'warnings' => $warnings];
+    }
+
+    public function migrate_logic_from_indices_to_ids($questionnaire_id) {
+        if (ENVIRONMENT !== 'development') {
+            show_404();
+        }
+        
+        try {
+            $this->db->trans_start();
+            
+            // Obter todas as questões do questionário
+            $questions = $this->get_questions_safe($questionnaire_id);
+            
+            $migrated_count = 0;
+            
+            foreach ($questions as $question) {
+                if (!empty($question->conditional_logic)) {
+                    $logic = json_decode($question->conditional_logic, true);
+                    
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $updated_logic = $this->convert_logic_indices_to_ids($logic, $questions);
+                        
+                        if ($updated_logic !== $logic) {
+                            $this->db->where('id', $question->id);
+                            $this->db->update('questions', ['conditional_logic' => json_encode($updated_logic)]);
+                            $migrated_count++;
+                        }
+                    }
+                }
+            }
+            
+            $this->db->trans_complete();
+            
+            if ($this->db->trans_status() === FALSE) {
+                $this->session->set_flashdata('error', 'Erro na migração da lógica condicional.');
+            } else {
+                $this->session->set_flashdata('success', "Migração concluída! {$migrated_count} pergunta(s) foram migradas para usar IDs.");
+            }
+            
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            $this->session->set_flashdata('error', 'Erro na migração: ' . $e->getMessage());
+        }
+        
+        redirect('questionnaires/edit/' . $questionnaire_id);
+    }
+
+    private function convert_logic_indices_to_ids($logic, $questions) {
+        $updated_logic = $logic;
+        
+        // Criar mapa de índice para ID
+        $index_to_id_map = [];
+        foreach ($questions as $index => $question) {
+            $index_to_id_map[$index] = $question->id;
+        }
+        
+        // Processar regras de visibilidade
+        if (isset($updated_logic['visibility']['conditions'])) {
+            foreach ($updated_logic['visibility']['conditions'] as &$condition) {
+                if (isset($condition['question']) && is_numeric($condition['question'])) {
+                    $question_index = intval($condition['question']);
+                    if (isset($index_to_id_map[$question_index])) {
+                        $condition['question'] = $index_to_id_map[$question_index];
+                    }
+                }
+            }
+        }
+        
+        // Processar regras de obrigatoriedade
+        if (isset($updated_logic['required']['conditions'])) {
+            foreach ($updated_logic['required']['conditions'] as &$condition) {
+                if (isset($condition['question']) && is_numeric($condition['question'])) {
+                    $question_index = intval($condition['question']);
+                    if (isset($index_to_id_map[$question_index])) {
+                        $condition['question'] = $index_to_id_map[$question_index];
+                    }
+                }
+            }
+        }
+        
+        return $updated_logic;
+    }
+        
 
     /**
      * Validar estrutura da lógica condicional
@@ -709,7 +892,7 @@ class Questionnaires extends CI_Controller {
                     $logic = json_decode($question['conditional_logic'], true);
                     
                     if (json_last_error() === JSON_ERROR_NONE) {
-                        $validation = $this->validate_conditional_logic_structure($logic, $index, $questions);
+                        $validation = $this->validate_conditional_logic_structure_with_ids($logic, $index, $questions);
                         
                         foreach ($validation['errors'] as $error) {
                             $all_errors[] = "Pergunta " . ($index + 1) . ": " . $error;

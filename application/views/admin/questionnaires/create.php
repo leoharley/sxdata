@@ -304,6 +304,7 @@
 
 <script>
 let questionIndex = 0;
+let nextQuestionId = 1; // Contador para IDs temporários de novas questões
 
 // Dados dos projetos para JavaScript
 const projectsData = <?= json_encode($projects) ?>;
@@ -394,8 +395,12 @@ function addQuestion() {
     const container = document.getElementById('questionsContainer');
     const noQuestions = document.getElementById('noQuestions');
     
+    // Gerar ID temporário para nova pergunta
+    const tempQuestionId = `temp_${nextQuestionId}`;
+    nextQuestionId++;
+    
     const questionHtml = `
-        <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}">
+        <div class="question-item border rounded p-3 mb-3" data-index="${questionIndex}" data-question-id="${tempQuestionId}">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <h6 class="mb-0">Pergunta ${questionIndex + 1}</h6>
                 <div>
@@ -701,7 +706,7 @@ function addCondition(questionIndex, ruleType) {
                             name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][question]"
                             onchange="updateConditionOperators(${questionIndex}, '${ruleType}', ${conditionIndex})">
                         <option value="">Pergunta...</option>
-                        ${availableQuestions.map(q => `<option value="${q.index}">${q.title}</option>`).join('')}
+                        ${availableQuestions.map(q => `<option value="${q.id}">${q.title}</option>`).join('')}
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -745,8 +750,11 @@ function getAvailableQuestionsForCondition(currentQuestionIndex) {
     questions.forEach((question, index) => {
         if (index < currentQuestionIndex) {
             const textArea = question.querySelector('textarea[name*="[text]"]');
+            const questionId = question.getAttribute('data-question-id');
             const title = textArea ? textArea.value.substring(0, 50) + '...' : `Pergunta ${index + 1}`;
+            
             available.push({
+                id: questionId, // Usar ID ao invés de índice
                 index: index,
                 title: title || `Pergunta ${index + 1}`
             });
@@ -762,13 +770,13 @@ function updateConditionOperators(questionIndex, ruleType, conditionIndex) {
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
     const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
     
-    const selectedQuestionIndex = questionSelect.value;
-    if (!selectedQuestionIndex) return;
+    const selectedQuestionId = questionSelect.value;
+    if (!selectedQuestionId) return;
     
     let targetQuestion = null;
     
-    // CORREÇÃO: Buscar pergunta alvo sem depender de existingQuestions
-    const targetQuestionElement = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+    // Buscar pergunta alvo usando ID
+    const targetQuestionElement = document.querySelector(`[data-question-id="${selectedQuestionId}"]`);
     if (targetQuestionElement) {
         const typeSelect = targetQuestionElement.querySelector('select[name*="[type]"]');
         targetQuestion = {
@@ -818,10 +826,10 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
     const operatorSelect = document.querySelector(`select[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][operator]"]`);
     const valueInput = document.querySelector(`input[name="questions[${questionIndex}][logic][${ruleType}][conditions][${conditionIndex}][value]"]`);
     
-    const selectedQuestionIndex = questionSelect.value;
+    const selectedQuestionId = questionSelect.value;
     const selectedOperator = operatorSelect.value;
     
-    if (!selectedQuestionIndex || !selectedOperator) return;
+    if (!selectedQuestionId || !selectedOperator) return;
     
     // Se operador é "is_empty" ou "is_not_empty", esconder campo de valor
     if (['is_empty', 'is_not_empty'].includes(selectedOperator)) {
@@ -832,8 +840,8 @@ function updateConditionValue(questionIndex, ruleType, conditionIndex) {
         valueInput.style.display = 'block';
     }
     
-    // CORREÇÃO: Buscar pergunta alvo sem depender de existingQuestions
-    const targetQuestion = document.querySelector(`[data-index="${selectedQuestionIndex}"]`);
+    // Buscar pergunta alvo usando ID
+    const targetQuestion = document.querySelector(`[data-question-id="${selectedQuestionId}"]`);
     if (!targetQuestion) return;
     
     const questionType = targetQuestion.querySelector('select[name*="[type]"]').value;
@@ -876,9 +884,18 @@ function updateConditionQuestionOptions(questionElement, newIndex) {
     
     conditionSelects.forEach(select => {
         // Remover opções que referenciam perguntas posteriores ou a própria pergunta
+        const currentQuestionId = questionElement.getAttribute('data-question-id');
+        
         Array.from(select.options).forEach(option => {
-            if (option.value && parseInt(option.value) >= newIndex) {
-                option.remove();
+            if (option.value) {
+                // Encontrar o elemento da pergunta referenciada
+                const referencedQuestion = document.querySelector(`[data-question-id="${option.value}"]`);
+                if (referencedQuestion) {
+                    const referencedIndex = parseInt(referencedQuestion.getAttribute('data-index'));
+                    if (referencedIndex >= newIndex) {
+                        option.remove();
+                    }
+                }
             }
         });
     });
@@ -1019,6 +1036,17 @@ function validateQuestionConditionalLogic(question, questionIndex) {
     const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + questionIndex + ' .condition-item');
     const requiredConditions = question.querySelectorAll('#requiredConditions-' + questionIndex + ' .condition-item');
     
+    // Obter todas as questões existentes para validação
+    const allQuestions = document.querySelectorAll('.question-item');
+    const questionIds = [];
+    const questionIndices = {};
+    
+    allQuestions.forEach((q, idx) => {
+        const questionId = q.getAttribute('data-question-id');
+        questionIds.push(questionId);
+        questionIndices[questionId] = idx;
+    });
+    
     [...visibilityConditions, ...requiredConditions].forEach((condition, condIndex) => {
         const questionSelect = condition.querySelector('select[name*="[question]"]');
         const operatorSelect = condition.querySelector('select[name*="[operator]"]');
@@ -1032,8 +1060,18 @@ function validateQuestionConditionalLogic(question, questionIndex) {
             errors.push(`Pergunta ${questionIndex + 1}: Condição ${condIndex + 1} sem operador selecionado`);
         }
         
-        if (questionSelect.value && parseInt(questionSelect.value) >= questionIndex) {
-            errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+        // Validar se a pergunta referenciada existe e não é posterior
+        if (questionSelect.value) {
+            const targetQuestionId = questionSelect.value;
+            
+            if (!questionIds.includes(targetQuestionId)) {
+                errors.push(`Pergunta ${questionIndex + 1}: Referencia pergunta inexistente`);
+            } else {
+                const targetIndex = questionIndices[targetQuestionId];
+                if (targetIndex >= questionIndex) {
+                    errors.push(`Pergunta ${questionIndex + 1}: Não pode referenciar pergunta posterior ou a si mesma`);
+                }
+            }
         }
         
         if (operatorSelect.value && !['is_empty', 'is_not_empty'].includes(operatorSelect.value) && (!valueField || !valueField.value.trim())) {
@@ -1212,7 +1250,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.visibility.conditions.push({
-                        question: parseInt(questionSelect.value),
+                        question: questionSelect.value, // Agora é ID ao invés de índice
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1237,7 +1275,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.required.conditions.push({
-                        question: parseInt(questionSelect.value),
+                        question: questionSelect.value, // Agora é ID ao invés de índice
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
