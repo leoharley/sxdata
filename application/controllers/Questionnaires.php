@@ -284,7 +284,7 @@ class Questionnaires extends CI_Controller {
 
                             $question_id = null;
 
-                            var_dump($question_data);exit;
+                            var_dump($question_data);
 
                             // Verificar se é pergunta existente ou nova
                             if (!empty($question['id']) && is_numeric($question['id'])) {
@@ -326,6 +326,8 @@ class Questionnaires extends CI_Controller {
                                 }
                             }
                         }
+
+                        exit;
 
                         // Remover perguntas que foram excluídas
                         $questions_to_delete = array_diff($existing_question_ids, $processed_question_ids);
