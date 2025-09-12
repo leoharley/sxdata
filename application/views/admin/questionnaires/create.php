@@ -1225,101 +1225,222 @@ function cleanEmptyFields() {
 
 // Função para serializar lógica condicional
 function serializeConditionalLogic() {
-    console.log('Iniciando serialização da lógica condicional...');
+    console.log('=== INICIANDO SERIALIZAÇÃO CORRIGIDA ===');
     
     const questions = document.querySelectorAll('.question-item');
     let serializedCount = 0;
     
-    questions.forEach((question, index) => {
-        // Remover campos de lógica existentes para evitar duplicatas
-        const existingLogicInputs = question.querySelectorAll('input[name*="[conditional_logic]"]');
-        existingLogicInputs.forEach(input => input.remove());
+    questions.forEach((question, questionIndex) => {
+        console.log(`\nProcessando pergunta ${questionIndex + 1}:`);
         
-        const logicData = {
-            visibility: null,
-            required: null
-        };
+        // 1. REMOVER todos os campos de logic existentes para evitar conflito
+        const existingLogicFields = question.querySelectorAll('input[name*="[logic]"], select[name*="[logic]"]');
+        const existingConditionalFields = question.querySelectorAll('input[name*="[conditional_logic]"]');
         
+        console.log(`  Removendo ${existingLogicFields.length} campos de logic`);
+        console.log(`  Removendo ${existingConditionalFields.length} campos de conditional_logic`);
+        
+        existingLogicFields.forEach(field => field.remove());
+        existingConditionalFields.forEach(field => field.remove());
+        
+        // 2. COLETAR dados da lógica condicional
+        const logicData = {};
         let hasLogic = false;
         
-        // Serializar condições de visibilidade
-        const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
+        // Processar visibilidade
+        const visibilityConditions = question.querySelectorAll(`#visibilityConditions-${questionIndex} .condition-item`);
         if (visibilityConditions.length > 0) {
-            console.log(`Pergunta ${index + 1}: Encontradas ${visibilityConditions.length} condições de visibilidade`);
+            console.log(`  Encontradas ${visibilityConditions.length} condições de visibilidade`);
             
-            const visibilityOperator = question.querySelector(`select[name="questions[${index}][logic][visibility][operator]"]`);
+            const visibilityOperatorSelect = question.querySelector(`select[name="questions[${questionIndex}][logic][visibility][operator]"]`);
+            const operator = visibilityOperatorSelect ? visibilityOperatorSelect.value : 'AND';
             
-            logicData.visibility = {
-                operator: visibilityOperator ? visibilityOperator.value : 'AND',
-                conditions: []
-            };
-            
+            const conditions = [];
             visibilityConditions.forEach((condition, condIndex) => {
                 const questionSelect = condition.querySelector('select[name*="[question]"]');
                 const operatorSelect = condition.querySelector('select[name*="[operator]"]');
                 const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
                 
                 if (questionSelect && questionSelect.value && operatorSelect && operatorSelect.value) {
-                    const conditionData = {
+                    conditions.push({
                         question: questionSelect.value,
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
-                    };
-                    
-                    logicData.visibility.conditions.push(conditionData);
-                    console.log(`Condição de visibilidade ${condIndex + 1}:`, conditionData);
-                    hasLogic = true;
+                    });
+                    console.log(`    Condição ${condIndex + 1}: ${questionSelect.value} ${operatorSelect.value} ${valueField ? valueField.value : ''}`);
                 }
             });
+            
+            if (conditions.length > 0) {
+                logicData.visibility = { operator, conditions };
+                hasLogic = true;
+            }
         }
         
-        // Serializar condições de obrigatoriedade
-        const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
+        // Processar obrigatoriedade
+        const requiredConditions = question.querySelectorAll(`#requiredConditions-${questionIndex} .condition-item`);
         if (requiredConditions.length > 0) {
-            console.log(`Pergunta ${index + 1}: Encontradas ${requiredConditions.length} condições de obrigatoriedade`);
+            console.log(`  Encontradas ${requiredConditions.length} condições de obrigatoriedade`);
             
-            const requiredOperator = question.querySelector(`select[name="questions[${index}][logic][required][operator]"]`);
+            const requiredOperatorSelect = question.querySelector(`select[name="questions[${questionIndex}][logic][required][operator]"]`);
+            const operator = requiredOperatorSelect ? requiredOperatorSelect.value : 'AND';
             
-            logicData.required = {
-                operator: requiredOperator ? requiredOperator.value : 'AND',
-                conditions: []
-            };
-            
+            const conditions = [];
             requiredConditions.forEach((condition, condIndex) => {
                 const questionSelect = condition.querySelector('select[name*="[question]"]');
                 const operatorSelect = condition.querySelector('select[name*="[operator]"]');
                 const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
                 
                 if (questionSelect && questionSelect.value && operatorSelect && operatorSelect.value) {
-                    const conditionData = {
+                    conditions.push({
                         question: questionSelect.value,
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
-                    };
-                    
-                    logicData.required.conditions.push(conditionData);
-                    console.log(`Condição de obrigatoriedade ${condIndex + 1}:`, conditionData);
-                    hasLogic = true;
+                    });
+                    console.log(`    Condição ${condIndex + 1}: ${questionSelect.value} ${operatorSelect.value} ${valueField ? valueField.value : ''}`);
                 }
             });
+            
+            if (conditions.length > 0) {
+                logicData.required = { operator, conditions };
+                hasLogic = true;
+            }
         }
         
-        // Adicionar campo hidden com a lógica serializada apenas se houver lógica
+        // 3. CRIAR campo conditional_logic se houver lógica
         if (hasLogic) {
+            const jsonString = JSON.stringify(logicData);
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
-            hiddenInput.name = `questions[${index}][conditional_logic]`;
-            hiddenInput.value = JSON.stringify(logicData);
-            question.appendChild(hiddenInput);
+            hiddenInput.name = `questions[${questionIndex}][conditional_logic]`;
+            hiddenInput.value = jsonString;
             
+            question.appendChild(hiddenInput);
             serializedCount++;
-            console.log(`Pergunta ${index + 1}: Lógica serializada:`, logicData);
+            
+            console.log(`  ✓ Campo conditional_logic criado: ${jsonString}`);
+        } else {
+            console.log(`  ⚠ Nenhuma lógica válida encontrada`);
         }
     });
     
-    console.log(`Serialização concluída. Total de perguntas com lógica: ${serializedCount}`);
+    // 4. REMOVER todos os campos de logic restantes do formulário inteiro
+    const allLogicFields = document.querySelectorAll('input[name*="[logic]"], select[name*="[logic]"]');
+    console.log(`\nRemovendo ${allLogicFields.length} campos de logic restantes do formulário`);
+    allLogicFields.forEach(field => {
+        field.removeAttribute('name'); // Remove do envio
+    });
+    
+    console.log(`\n=== SERIALIZAÇÃO CONCLUÍDA ===`);
+    console.log(`Perguntas com lógica: ${serializedCount}`);
+    
+    // Verificação final
+    const finalConditionalFields = document.querySelectorAll('input[name*="[conditional_logic]"]');
+    console.log(`Campos conditional_logic finais: ${finalConditionalFields.length}`);
+    finalConditionalFields.forEach((field, index) => {
+        console.log(`  ${index + 1}. ${field.name} = ${field.value}`);
+    });
+    
     return serializedCount;
 }
+
+// CORREÇÃO ADICIONAL: Interceptar envio para garantir limpeza
+function cleanupLogicFields() {
+    // Remove TODOS os campos que começam com logic para evitar conflito
+    const logicFields = document.querySelectorAll('[name*="[logic]"]');
+    console.log(`Removendo ${logicFields.length} campos de logic antes do envio`);
+    
+    logicFields.forEach(field => {
+        if (field.name.includes('[logic]')) {
+            field.removeAttribute('name'); // Remove do envio, mas mantém no DOM
+        }
+    });
+}
+
+// MODIFICAR o event listener do submit
+document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
+    const questions = document.querySelectorAll('.question-item');
+    if (questions.length === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos uma pergunta ao questionário.');
+        return false;
+    }
+    
+    // Validar aplicadores
+    const aplicadoresSelect = document.getElementById('aplicadores');
+    if (!aplicadoresSelect.selectedOptions.length) {
+        e.preventDefault();
+        alert('Selecione pelo menos um aplicador para este questionário.');
+        return false;
+    }
+    
+    // Validações básicas das perguntas...
+    let valid = true;
+    questions.forEach((question, index) => {
+        const typeSelect = question.querySelector('select[name*="[type]"]');
+        const type = typeSelect.value;
+        const textArea = question.querySelector('textarea[name*="[text]"]');
+        
+        if (!textArea.value.trim()) {
+            alert(`A pergunta ${index + 1} deve ter um texto.`);
+            valid = false;
+            return;
+        }
+        
+        if (!type) {
+            alert(`Selecione um tipo para a pergunta ${index + 1}.`);
+            valid = false;
+            return;
+        }
+        
+        if (['radio', 'checkbox', 'select'].includes(type)) {
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+            const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
+            
+            if (validOptions.length < 2) {
+                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
+                valid = false;
+                return;
+            }
+        }
+    });
+    
+    if (!valid) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // EXECUTAR serialização e limpeza
+    console.log('=== PROCESSAMENTO PRÉ-ENVIO ===');
+    serializeConditionalLogic();
+    cleanupLogicFields();
+    
+    // Debug final
+    const formData = new FormData(this);
+    let logicFieldsCount = 0;
+    let conditionalFieldsCount = 0;
+    
+    for (let [key, value] of formData.entries()) {
+        if (key.includes('logic') && !key.includes('conditional_logic')) {
+            logicFieldsCount++;
+            console.warn(`⚠ Campo logic ainda presente: ${key}`);
+        }
+        if (key.includes('conditional_logic')) {
+            conditionalFieldsCount++;
+            console.log(`✓ Campo conditional_logic: ${key} = ${value}`);
+        }
+    }
+    
+    console.log(`Campos logic restantes: ${logicFieldsCount}`);
+    console.log(`Campos conditional_logic: ${conditionalFieldsCount}`);
+    
+    if (logicFieldsCount > 0) {
+        console.error('⚠ AVISO: Ainda há campos logic no formulário!');
+    }
+    
+    return true;
+});
 
 // Validação do formulário
 document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
