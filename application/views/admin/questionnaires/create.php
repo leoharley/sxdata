@@ -1252,7 +1252,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.visibility.conditions.push({
-                        question: questionSelect.value, // Agora é ID ao invés de índice
+                        question: questionSelect.value, // Usar ID da questão
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1277,7 +1277,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.required.conditions.push({
-                        question: questionSelect.value, // Agora é ID ao invés de índice
+                        question: questionSelect.value, // Usar ID da questão
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1287,13 +1287,24 @@ function serializeConditionalLogic() {
         
         // Adicionar campo hidden com a lógica serializada
         if (logicData.visibility || logicData.required) {
+            // Remover campo hidden anterior se existir
+            const existingHidden = question.querySelector(`input[name="questions[${index}][conditional_logic]"]`);
+            if (existingHidden) {
+                existingHidden.remove();
+            }
+            
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = `questions[${index}][conditional_logic]`;
             hiddenInput.value = JSON.stringify(logicData);
             question.appendChild(hiddenInput);
+            
+            // Log para debug
+            console.log(`Pergunta ${index + 1}: Lógica serializada`, logicData);
         }
     });
+    
+    console.log('Serialização da lógica condicional concluída');
 }
 
 // Validação do formulário
