@@ -79,7 +79,6 @@ class Questionnaires extends CI_Controller {
                                 continue; // Pular pergunta com tipo inválido
                             }
                             
-                            var_dump($question['logic']);exit;
                             $question_data = array(
                                 'questionnaire_id' => $questionnaire_id,
                                 'question_text' => trim($question['text']),
@@ -273,7 +272,6 @@ class Questionnaires extends CI_Controller {
                                 continue;
                             }
 
-                            var_dump($question['conditional_logic']);exit;
                             $question_data = array(
                                 'questionnaire_id' => $id,
                                 'question_text' => trim($question['text']),
