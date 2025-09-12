@@ -388,7 +388,6 @@ class Questionnaires extends CI_Controller {
         $questionnaire->requires_photo = $this->_convert_to_boolean($questionnaire->requires_photo);
 
         if ($this->input->post()) {
-            var_dump($this->input->post('questions'));exit;
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
