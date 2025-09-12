@@ -2447,7 +2447,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Validar lógica condicional se estiver em modo de edição
-    const editModeToggle = document.getElementById('editModeToggle');
     if (editModeToggle.checked) {
         const logicValidation = validateAllConditionalLogic();
         if (!logicValidation.valid) {
