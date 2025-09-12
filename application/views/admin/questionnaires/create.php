@@ -1368,7 +1368,7 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // CORREÇÃO PRINCIPAL: Validar lógica condicional SEMPRE
+    // Validar lógica condicional
     const logicValidation = validateAllConditionalLogic();
     if (!logicValidation.valid) {
         e.preventDefault();
@@ -1379,15 +1379,7 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
     // Limpar campos vazios antes do envio
     cleanEmptyFields();
     
-    // CORREÇÃO PRINCIPAL: Serializar lógica condicional SEMPRE antes do envio
-    console.log('Serializando lógica condicional...');
+    // Serializar lógica condicional para envio
     serializeConditionalLogic();
-    
-    // Log para debug
-    const serializedLogic = document.querySelectorAll('input[name*="[conditional_logic]"]');
-    console.log('Campos de lógica condicional serializados:', serializedLogic.length);
-    
-    // Permitir o envio
-    return true;
 });
 </script>
