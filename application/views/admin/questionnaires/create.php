@@ -1225,17 +1225,28 @@ function cleanEmptyFields() {
 
 // Função para serializar lógica condicional
 function serializeConditionalLogic() {
+    console.log('Iniciando serialização da lógica condicional...');
+    
     const questions = document.querySelectorAll('.question-item');
+    let serializedCount = 0;
     
     questions.forEach((question, index) => {
+        // Remover campos de lógica existentes para evitar duplicatas
+        const existingLogicInputs = question.querySelectorAll('input[name*="[conditional_logic]"]');
+        existingLogicInputs.forEach(input => input.remove());
+        
         const logicData = {
             visibility: null,
             required: null
         };
         
+        let hasLogic = false;
+        
         // Serializar condições de visibilidade
         const visibilityConditions = question.querySelectorAll('#visibilityConditions-' + index + ' .condition-item');
         if (visibilityConditions.length > 0) {
+            console.log(`Pergunta ${index + 1}: Encontradas ${visibilityConditions.length} condições de visibilidade`);
+            
             const visibilityOperator = question.querySelector(`select[name="questions[${index}][logic][visibility][operator]"]`);
             
             logicData.visibility = {
@@ -1243,17 +1254,21 @@ function serializeConditionalLogic() {
                 conditions: []
             };
             
-            visibilityConditions.forEach(condition => {
+            visibilityConditions.forEach((condition, condIndex) => {
                 const questionSelect = condition.querySelector('select[name*="[question]"]');
                 const operatorSelect = condition.querySelector('select[name*="[operator]"]');
                 const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
                 
-                if (questionSelect.value && operatorSelect.value) {
-                    logicData.visibility.conditions.push({
-                        question: questionSelect.value, // Agora é ID ao invés de índice
+                if (questionSelect && questionSelect.value && operatorSelect && operatorSelect.value) {
+                    const conditionData = {
+                        question: questionSelect.value,
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
-                    });
+                    };
+                    
+                    logicData.visibility.conditions.push(conditionData);
+                    console.log(`Condição de visibilidade ${condIndex + 1}:`, conditionData);
+                    hasLogic = true;
                 }
             });
         }
@@ -1261,6 +1276,8 @@ function serializeConditionalLogic() {
         // Serializar condições de obrigatoriedade
         const requiredConditions = question.querySelectorAll('#requiredConditions-' + index + ' .condition-item');
         if (requiredConditions.length > 0) {
+            console.log(`Pergunta ${index + 1}: Encontradas ${requiredConditions.length} condições de obrigatoriedade`);
+            
             const requiredOperator = question.querySelector(`select[name="questions[${index}][logic][required][operator]"]`);
             
             logicData.required = {
@@ -1268,30 +1285,40 @@ function serializeConditionalLogic() {
                 conditions: []
             };
             
-            requiredConditions.forEach(condition => {
+            requiredConditions.forEach((condition, condIndex) => {
                 const questionSelect = condition.querySelector('select[name*="[question]"]');
                 const operatorSelect = condition.querySelector('select[name*="[operator]"]');
                 const valueField = condition.querySelector('input[name*="[value]"], select[name*="[value]"]');
                 
-                if (questionSelect.value && operatorSelect.value) {
-                    logicData.required.conditions.push({
-                        question: questionSelect.value, // Agora é ID ao invés de índice
+                if (questionSelect && questionSelect.value && operatorSelect && operatorSelect.value) {
+                    const conditionData = {
+                        question: questionSelect.value,
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
-                    });
+                    };
+                    
+                    logicData.required.conditions.push(conditionData);
+                    console.log(`Condição de obrigatoriedade ${condIndex + 1}:`, conditionData);
+                    hasLogic = true;
                 }
             });
         }
         
-        // Adicionar campo hidden com a lógica serializada
-        if (logicData.visibility || logicData.required) {
+        // Adicionar campo hidden com a lógica serializada apenas se houver lógica
+        if (hasLogic) {
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = `questions[${index}][conditional_logic]`;
             hiddenInput.value = JSON.stringify(logicData);
             question.appendChild(hiddenInput);
+            
+            serializedCount++;
+            console.log(`Pergunta ${index + 1}: Lógica serializada:`, logicData);
         }
     });
+    
+    console.log(`Serialização concluída. Total de perguntas com lógica: ${serializedCount}`);
+    return serializedCount;
 }
 
 // Validação do formulário
@@ -1368,7 +1395,7 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Validar lógica condicional
+    // CORREÇÃO PRINCIPAL: Validar lógica condicional SEMPRE
     const logicValidation = validateAllConditionalLogic();
     if (!logicValidation.valid) {
         e.preventDefault();
@@ -1379,7 +1406,15 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
     // Limpar campos vazios antes do envio
     cleanEmptyFields();
     
-    // Serializar lógica condicional para envio
+    // CORREÇÃO PRINCIPAL: Serializar lógica condicional SEMPRE antes do envio
+    console.log('Serializando lógica condicional...');
     serializeConditionalLogic();
+    
+    // Log para debug
+    const serializedLogic = document.querySelectorAll('input[name*="[conditional_logic]"]');
+    console.log('Campos de lógica condicional serializados:', serializedLogic.length);
+    
+    // Permitir o envio
+    return true;
 });
 </script>
