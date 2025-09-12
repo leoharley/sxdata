@@ -894,7 +894,7 @@ function toggleEditMode(enableEdit) {
     const questionItems = document.querySelectorAll('.question-item');
     const addQuestionBtn = document.getElementById('addQuestionBtn');
     
-    questionItems.forEach((question, index) => {
+    questionItems.forEach(question => {
         const readonlyContent = question.querySelector('.readonly-content');
         const editContent = question.querySelector('.edit-content');
         const editControls = question.querySelector('.edit-controls');
@@ -907,15 +907,6 @@ function toggleEditMode(enableEdit) {
             editContent.style.display = 'block';
             editControls.style.display = 'block';
             reorderControls.style.display = 'flex';
-            
-            // NOVO: Se pergunta tem lógica condicional e modo de edição está ativo, manter lógica aberta
-            if (questionHasConditionalLogic(index)) {
-                const logicDiv = question.querySelector(`#conditionalLogic-${index}`);
-                if (logicDiv && logicDiv.style.display === 'none') {
-                    // Não forçar abertura se usuário fechou manualmente
-                    console.log(`Pergunta ${index + 1} tem lógica condicional, mas permanece fechada por escolha do usuário`);
-                }
-            }
         } else {
             question.classList.add('readonly-question');
             question.setAttribute('draggable', 'false');
@@ -928,7 +919,6 @@ function toggleEditMode(enableEdit) {
             const conditionalLogic = question.querySelector('.conditional-rules');
             if (conditionalLogic) {
                 conditionalLogic.style.display = 'none';
-                question.classList.remove('has-conditional');
             }
         }
     });
@@ -940,8 +930,6 @@ function toggleEditMode(enableEdit) {
         initializeReorderSystem();
         updateAllReorderButtons();
     }
-    
-    console.log(`Modo de edição ${enableEdit ? 'ativado' : 'desativado'}`);
 }
 
 // Funções de reordenação (melhoradas)
@@ -1337,10 +1325,6 @@ function loadExistingConditionalLogic() {
             try {
                 const logic = JSON.parse(question.conditional_logic);
                 loadConditionalLogicForQuestion(index, logic);
-                
-                // NOVO: Automaticamente abrir a lógica condicional se existir
-                autoOpenConditionalLogicIfExists(index, logic);
-                
             } catch (e) {
                 console.error('Erro ao carregar lógica condicional da pergunta ' + (index + 1), e);
             }
@@ -1348,94 +1332,18 @@ function loadExistingConditionalLogic() {
     });
 }
 
-function autoOpenConditionalLogicIfExists(questionIndex, logic) {
-    // Verificar se há condições definidas em qualquer regra
-    const hasVisibilityConditions = logic.visibility && 
-                                   logic.visibility.conditions && 
-                                   logic.visibility.conditions.length > 0;
-                                   
-    const hasRequiredConditions = logic.required && 
-                                 logic.required.conditions && 
-                                 logic.required.conditions.length > 0;
-    
-    // Se há qualquer lógica condicional, abrir a seção
-    if (hasVisibilityConditions || hasRequiredConditions) {
-        // Abrir a seção de lógica condicional
-        const logicDiv = document.getElementById(`conditionalLogic-${questionIndex}`);
-        const questionItem = document.querySelector(`[data-index="${questionIndex}"]`);
-        
-        if (logicDiv && questionItem) {
-            logicDiv.style.display = 'block';
-            questionItem.classList.add('has-conditional');
-            
-            // Ativar o tipo de lógica apropriado automaticamente
-            if (hasVisibilityConditions) {
-                selectLogicType(questionIndex, 'visibility');
-                
-                // Se também tem lógica de obrigatoriedade, priorizar visibility primeiro
-                console.log(`Auto-abertura: Lógica de visibilidade ativada para pergunta ${questionIndex + 1}`);
-            } else if (hasRequiredConditions) {
-                selectLogicType(questionIndex, 'required');
-                console.log(`Auto-abertura: Lógica de obrigatoriedade ativada para pergunta ${questionIndex + 1}`);
-            }
-            
-            // Adicionar indicação visual de que foi aberto automaticamente
-            setTimeout(() => {
-                addAutoOpenedIndicator(questionIndex, hasVisibilityConditions, hasRequiredConditions);
-            }, 500);
-            
-            console.log(`Lógica condicional automaticamente aberta para pergunta ${questionIndex + 1}`);
-        }
-    }
-}
-
-// NOVA FUNÇÃO: Adicionar indicador visual de auto-abertura
-function addAutoOpenedIndicator(questionIndex, hasVisibility, hasRequired) {
-    const logicDiv = document.getElementById(`conditionalLogic-${questionIndex}`);
-    
-    if (logicDiv) {
-        // Criar indicador
-        const indicator = document.createElement('div');
-        indicator.className = 'alert alert-info alert-sm mb-2 auto-opened-indicator';
-        indicator.style.fontSize = '0.875rem';
-        indicator.innerHTML = `
-            <i class="fas fa-info-circle me-1"></i>
-            <strong>Lógica condicional existente detectada:</strong> 
-            ${hasVisibility ? '<span class="badge bg-info me-1">Visibilidade</span>' : ''}
-            ${hasRequired ? '<span class="badge bg-primary me-1">Obrigatoriedade</span>' : ''}
-            <button type="button" class="btn-close btn-close-sm ms-2" onclick="this.parentElement.remove()"></button>
-        `;
-        
-        // Inserir no topo da seção de lógica
-        const header = logicDiv.querySelector('h6');
-        if (header) {
-            header.parentElement.insertBefore(indicator, header.nextSibling);
-        }
-        
-        // Auto-remover o indicador após 8 segundos
-        setTimeout(() => {
-            if (indicator.parentElement) {
-                indicator.classList.add('fade');
-                setTimeout(() => indicator.remove(), 300);
-            }
-        }, 8000);
-    }
-}
-
 // Função para carregar lógica condicional de uma pergunta
 function loadConditionalLogicForQuestion(questionIndex, logic) {
-    console.log(`Carregando lógica condicional para pergunta ${questionIndex + 1}:`, logic);
-    
     if (logic.visibility) {
         // Ativar seção de visibilidade
+        selectLogicType(questionIndex, 'visibility');
         loadConditionsForRule(questionIndex, 'visibility', logic.visibility);
-        console.log(`- Carregadas ${logic.visibility.conditions?.length || 0} condições de visibilidade`);
     }
     
     if (logic.required) {
-        // Ativar seção de obrigatoriedade  
+        // Ativar seção de obrigatoriedade
+        selectLogicType(questionIndex, 'required');
         loadConditionsForRule(questionIndex, 'required', logic.required);
-        console.log(`- Carregadas ${logic.required.conditions?.length || 0} condições de obrigatoriedade`);
     }
 }
 
@@ -1749,43 +1657,9 @@ function toggleConditionalLogic(questionIndex) {
     if (logicDiv.style.display === 'none' || logicDiv.style.display === '') {
         logicDiv.style.display = 'block';
         questionItem.classList.add('has-conditional');
-        
-        // Remover indicador de auto-abertura se existir
-        const autoIndicator = logicDiv.querySelector('.auto-opened-indicator');
-        if (autoIndicator) {
-            autoIndicator.remove();
-        }
-        
-        console.log(`Lógica condicional aberta manualmente para pergunta ${questionIndex + 1}`);
     } else {
         logicDiv.style.display = 'none';
         questionItem.classList.remove('has-conditional');
-        
-        console.log(`Lógica condicional fechada para pergunta ${questionIndex + 1}`);
-    }
-}
-
-function questionHasConditionalLogic(questionIndex) {
-    const questionData = existingQuestions[questionIndex];
-    
-    if (!questionData || !questionData.conditional_logic) {
-        return false;
-    }
-    
-    try {
-        const logic = JSON.parse(questionData.conditional_logic);
-        
-        const hasVisibilityConditions = logic.visibility && 
-                                       logic.visibility.conditions && 
-                                       logic.visibility.conditions.length > 0;
-                                       
-        const hasRequiredConditions = logic.required && 
-                                     logic.required.conditions && 
-                                     logic.required.conditions.length > 0;
-        
-        return hasVisibilityConditions || hasRequiredConditions;
-    } catch (e) {
-        return false;
     }
 }
 
@@ -2436,10 +2310,9 @@ function updateLogicReferencesAfterReorder() {
 }
 
 // Validação do formulário
-document.addEventListener('DOMContentLoaded', function() {
+document.querySelector('form').addEventListener('submit', function(e) {
+    // Validar se pelo menos um aplicador foi selecionado
     const aplicadoresSelect = document.getElementById('aplicadores');
-    const projectSelect = document.getElementById('project_id');
-    const editModeToggle = document.getElementById('editModeToggle');
     if (!aplicadoresSelect.selectedOptions.length) {
         e.preventDefault();
         alert('Selecione pelo menos um aplicador para este questionário.');
@@ -2447,6 +2320,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Validar lógica condicional se estiver em modo de edição
+    const editModeToggle = document.getElementById('editModeToggle');
     if (editModeToggle.checked) {
         const logicValidation = validateAllConditionalLogic();
         if (!logicValidation.valid) {
@@ -2458,14 +2332,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Serializar lógica condicional para envio
         serializeConditionalLogic();
     }
-
-    console.log('Carregando lógica condicional existente...');
-    loadExistingConditionalLogic();
-    const questionsWithLogic = existingQuestions.filter((q, index) => questionHasConditionalLogic(index));
-    if (questionsWithLogic.length > 0) {
-        console.log(`${questionsWithLogic.length} pergunta(s) com lógica condicional detectada(s) e abertas automaticamente`);
-    }
-
 });
 
 // Incluir Bootstrap JS para modals
@@ -2474,48 +2340,4 @@ if (typeof bootstrap === 'undefined') {
     script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js';
     document.head.appendChild(script);
 }
-
-const autoOpenStyles = document.createElement('style');
-autoOpenStyles.textContent = `
-    .auto-opened-indicator {
-        border-left: 4px solid #17a2b8 !important;
-        background-color: #f8f9fa;
-        transition: opacity 0.3s ease;
-    }
-    
-    .auto-opened-indicator.fade {
-        opacity: 0;
-    }
-    
-    .auto-opened-indicator .btn-close-sm {
-        font-size: 0.75rem;
-        padding: 0.25rem;
-    }
-    
-    .has-conditional {
-        border-left-color: #007bff !important;
-        box-shadow: -2px 0 4px rgba(0, 123, 255, 0.1);
-    }
-    
-    .conditional-rules {
-        animation: slideDown 0.3s ease-out;
-    }
-    
-    @keyframes slideDown {
-        from {
-            opacity: 0;
-            max-height: 0;
-            padding-top: 0;
-            padding-bottom: 0;
-        }
-        to {
-            opacity: 1;
-            max-height: 500px;
-            padding-top: 15px;
-            padding-bottom: 15px;
-        }
-    }
-`;
-document.head.appendChild(autoOpenStyles);
-
 </script>
