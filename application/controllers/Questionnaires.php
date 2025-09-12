@@ -32,7 +32,7 @@ class Questionnaires extends CI_Controller {
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
             if ($this->form_validation->run()) {
-                // Processar aplicadores selecionados
+                // Processar aplicaggfgdores selecionados
                 $aplicadores = $this->input->post('aplicadores');
                 $aplicadores_json = null;
                 
