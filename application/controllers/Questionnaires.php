@@ -281,8 +281,6 @@ class Questionnaires extends CI_Controller {
                                 'conditional_logic' => $question['conditional_logic']
                             );
 
-                            var_dump($question['conditional_logic']);exit;
-                            
                             $question_id = null;
 
                             // Verificar se é pergunta existente ou nova
