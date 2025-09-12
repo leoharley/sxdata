@@ -221,7 +221,6 @@ class Questionnaires extends CI_Controller {
         $questionnaire->requires_photo = $this->_convert_to_boolean($questionnaire->requires_photo);
 
         if ($this->input->post()) {
-            var_dump($this->input->post('questions')['conditional_logic']);exit;
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
@@ -284,6 +283,8 @@ class Questionnaires extends CI_Controller {
                             );
 
                             $question_id = null;
+
+                            var_dump($question_data);exit;
 
                             // Verificar se é pergunta existente ou nova
                             if (!empty($question['id']) && is_numeric($question['id'])) {
