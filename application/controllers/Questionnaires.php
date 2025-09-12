@@ -64,7 +64,7 @@ class Questionnaires extends CI_Controller {
                     if ($questions && is_array($questions)) {
                         // Filtrar e validar perguntas antes do processamento
                         $valid_questions = $this->filter_and_validate_questions($questions);
-                        $processed_questions = $this->process_conditional_logic($valid_questions);
+                        $processed_questions = $this->process_conditional_logic($questions);
                         
                         foreach ($processed_questions as $index => $question) {
                             // VALIDAÇÃO ADICIONAL: Verificar se todos os campos obrigatórios estão presentes
