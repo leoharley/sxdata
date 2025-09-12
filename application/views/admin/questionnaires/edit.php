@@ -1325,6 +1325,27 @@ function loadExistingConditionalLogic() {
             try {
                 const logic = JSON.parse(question.conditional_logic);
                 loadConditionalLogicForQuestion(index, logic);
+                
+                // Auto-abrir se tem lógica condicional
+                const hasConditions = (logic.visibility && logic.visibility.conditions && logic.visibility.conditions.length > 0) ||
+                                    (logic.required && logic.required.conditions && logic.required.conditions.length > 0);
+                
+                if (hasConditions) {
+                    const logicDiv = document.getElementById(`conditionalLogic-${index}`);
+                    const questionItem = document.querySelector(`[data-index="${index}"]`);
+                    
+                    if (logicDiv && questionItem) {
+                        logicDiv.style.display = 'block';
+                        questionItem.classList.add('has-conditional');
+                        
+                        // Ativar o primeiro tipo de lógica encontrado
+                        if (logic.visibility && logic.visibility.conditions && logic.visibility.conditions.length > 0) {
+                            selectLogicType(index, 'visibility');
+                        } else if (logic.required && logic.required.conditions && logic.required.conditions.length > 0) {
+                            selectLogicType(index, 'required');
+                        }
+                    }
+                }
             } catch (e) {
                 console.error('Erro ao carregar lógica condicional da pergunta ' + (index + 1), e);
             }
