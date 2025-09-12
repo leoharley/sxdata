@@ -32,7 +32,6 @@ class Questionnaires extends CI_Controller {
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
             if ($this->form_validation->run()) {
-                var_dump($this->input->post('questions'));exit;
                 // Processar aplicadores selecionados
                 $aplicadores = $this->input->post('aplicadores');
                 $aplicadores_json = null;
@@ -89,6 +88,8 @@ class Questionnaires extends CI_Controller {
                                 'conditional_logic' => $question['conditional_logic']
                             );
 
+                            var_dump($question_data);
+
                             try {
                                 $question_id = $this->Question_model->create($question_data);
 
@@ -103,6 +104,7 @@ class Questionnaires extends CI_Controller {
                                 continue;
                             }
                         }
+                        exit;
                     }
 
                     $this->session->set_flashdata('success', 'Questionário criado com sucesso!');
