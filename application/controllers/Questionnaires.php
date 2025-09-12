@@ -62,8 +62,21 @@ class Questionnaires extends CI_Controller {
                     // CORREÇÃO: Processar perguntas com validação rigorosa
                     $questions = $this->input->post('questions');
                     if ($questions && is_array($questions)) {
+                        // Debug log para verificar se chegaram perguntas com lógica
+                        if (ENVIRONMENT === 'development') {
+                            $questions_with_logic = 0;
+                            foreach ($questions as $q) {
+                                if (!empty($q['conditional_logic'])) {
+                                    $questions_with_logic++;
+                                }
+                            }
+                            log_message('debug', "Recebidas {$questions_with_logic} perguntas com lógica condicional no create");
+                        }
+                        
                         // Filtrar e validar perguntas antes do processamento
                         $valid_questions = $this->filter_and_validate_questions($questions);
+                        
+                        // CORREÇÃO PRINCIPAL: Processar lógica condicional ANTES da inserção
                         $processed_questions = $this->process_conditional_logic($valid_questions);
                         
                         foreach ($processed_questions as $index => $question) {
@@ -85,11 +98,16 @@ class Questionnaires extends CI_Controller {
                                 'question_type' => $question['type'],
                                 'is_required' => isset($question['required']) ? TRUE : FALSE,
                                 'order_index' => $index + 1,
-                                'conditional_logic' => $question['conditional_logic']
+                                'conditional_logic' => $question['conditional_logic'] // CORREÇÃO: Garantir que a lógica seja salva
                             );
 
                             try {
                                 $question_id = $this->Question_model->create($question_data);
+
+                                // Debug log para confirmar salvamento da lógica
+                                if (ENVIRONMENT === 'development' && !empty($question['conditional_logic'])) {
+                                    log_message('debug', "Pergunta ID $question_id criada com lógica condicional: " . substr($question['conditional_logic'], 0, 100) . '...');
+                                }
 
                                 // CORREÇÃO: Salvar opções apenas para tipos que suportam
                                 if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {

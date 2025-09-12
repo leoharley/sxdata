@@ -1184,7 +1184,7 @@ function cleanEmptyFields() {
     
     questions.forEach((question, questionIndex) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
-        const type = typeSelect.value;
+        const type = typeSelect ? typeSelect.value : '';
         
         // Se não é tipo de múltipla escolha, remover todos os campos de opção
         if (!['radio', 'checkbox', 'select'].includes(type)) {
@@ -1203,14 +1203,14 @@ function cleanEmptyFields() {
                 const optionDivs = optionsContainer.querySelectorAll('.input-group');
                 optionDivs.forEach(optionDiv => {
                     const textInput = optionDiv.querySelector('input[name*="[text]"]');
-                    if (!textInput.value.trim()) {
+                    if (textInput && !textInput.value.trim()) {
                         // Remove opção vazia do envio
                         const inputs = optionDiv.querySelectorAll('input');
                         inputs.forEach(input => {
                             input.removeAttribute('name');
                             input.removeAttribute('required');
                         });
-                    } else {
+                    } else if (textInput) {
                         // Garantir que opções válidas tenham o value correto
                         const valueInput = optionDiv.querySelector('input[name*="[value]"]');
                         if (valueInput && !valueInput.value) {
@@ -1221,6 +1221,8 @@ function cleanEmptyFields() {
             }
         }
     });
+    
+    console.log('Campos vazios limpos com sucesso');
 }
 
 // Função para serializar lógica condicional
@@ -1368,7 +1370,7 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Validar lógica condicional
+    // CORREÇÃO PRINCIPAL: Validar lógica condicional
     const logicValidation = validateAllConditionalLogic();
     if (!logicValidation.valid) {
         e.preventDefault();
@@ -1376,10 +1378,15 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Limpar campos vazios antes do envio
+    // CORREÇÃO PRINCIPAL: Limpar campos vazios antes do envio
     cleanEmptyFields();
     
-    // Serializar lógica condicional para envio
+    // CORREÇÃO PRINCIPAL: Serializar lógica condicional para envio
     serializeConditionalLogic();
+    
+    // Log para debug (remover em produção)
+    if (typeof console !== 'undefined') {
+        console.log('Formulário validado e lógica serializada com sucesso');
+    }
 });
 </script>
