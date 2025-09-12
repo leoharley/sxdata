@@ -26,6 +26,8 @@ class Questionnaires extends CI_Controller {
 
     public function create() {
         $preselected_project_id = $this->input->get('project_id');
+
+        var_dump($this->input->post('questions'));exit;
         
         if ($this->input->post()) {
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
