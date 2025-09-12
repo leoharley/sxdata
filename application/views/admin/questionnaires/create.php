@@ -1250,7 +1250,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.visibility.conditions.push({
-                        question: questionSelect.value, // Agora é ID ao invés de índice
+                        question: questionSelect.value, // Mantém o ID temporário
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1275,7 +1275,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.required.conditions.push({
-                        question: questionSelect.value, // Agora é ID ao invés de índice
+                        question: questionSelect.value, // Mantém o ID temporário
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1291,8 +1291,109 @@ function serializeConditionalLogic() {
             hiddenInput.value = JSON.stringify(logicData);
             question.appendChild(hiddenInput);
         }
+        
+        // NOVO: Adicionar ID temporário como campo hidden para mapeamento
+        const questionId = question.getAttribute('data-question-id');
+        if (questionId && questionId.startsWith('temp_')) {
+            const tempIdInput = document.createElement('input');
+            tempIdInput.type = 'hidden';
+            tempIdInput.name = `questions[${index}][temp_id]`;
+            tempIdInput.value = questionId;
+            question.appendChild(tempIdInput);
+        }
     });
 }
+
+// Validação do formulário (ATUALIZADA)
+document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
+    const questions = document.querySelectorAll('.question-item');
+    if (questions.length === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos uma pergunta ao questionário.');
+        return false;
+    }
+    
+    // Validar aplicadores
+    const aplicadoresSelect = document.getElementById('aplicadores');
+    if (!aplicadoresSelect.selectedOptions.length) {
+        e.preventDefault();
+        alert('Selecione pelo menos um aplicador para este questionário.');
+        return false;
+    }
+    
+    // Validar perguntas e remover required de campos ocultos
+    let valid = true;
+    questions.forEach((question, index) => {
+        const typeSelect = question.querySelector('select[name*="[type]"]');
+        const type = typeSelect.value;
+        const textArea = question.querySelector('textarea[name*="[text]"]');
+        
+        // Validar se pergunta tem texto
+        if (!textArea.value.trim()) {
+            alert(`A pergunta ${index + 1} deve ter um texto.`);
+            valid = false;
+            return;
+        }
+        
+        // Validar tipo de pergunta
+        if (!type) {
+            alert(`Selecione um tipo para a pergunta ${index + 1}.`);
+            valid = false;
+            return;
+        }
+        
+        if (['radio', 'checkbox', 'select'].includes(type)) {
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+            const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
+            
+            if (validOptions.length < 2) {
+                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
+                valid = false;
+                return;
+            }
+            
+            // Garantir que campos de opção visíveis tenham required
+            optionInputs.forEach(input => {
+                if (input.value.trim()) {
+                    input.setAttribute('required', 'required');
+                } else {
+                    input.removeAttribute('required');
+                }
+            });
+        } else {
+            // Remover required de campos de opção para tipos que não precisam
+            const optionsDiv = question.querySelector(`#options-${index}`);
+            if (optionsDiv) {
+                const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
+                optionInputs.forEach(input => {
+                    input.removeAttribute('required');
+                });
+            }
+        }
+    });
+    
+    if (!valid) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // Validar lógica condicional
+    const logicValidation = validateAllConditionalLogic();
+    if (!logicValidation.valid) {
+        e.preventDefault();
+        alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
+        return false;
+    }
+    
+    // Limpar campos vazios antes do envio
+    cleanEmptyFields();
+    
+    // Serializar lógica condicional para envio
+    serializeConditionalLogic();
+    
+    console.log('Formulário validado e enviado com sucesso');
+});
 
 // Validação do formulário
 document.getElementById('questionnaireForm').addEventListener('submit', function(e) {

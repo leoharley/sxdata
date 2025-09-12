@@ -28,7 +28,6 @@ class Questionnaires extends CI_Controller {
         $preselected_project_id = $this->input->get('project_id');
         
         if ($this->input->post()) {
-            var_dump($this->input->post('questions'));exit;
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
@@ -57,62 +56,120 @@ class Questionnaires extends CI_Controller {
                     'project_id' => $this->input->post('project_id') ?: NULL
                 );
 
+                // Iniciar transação
+                $this->db->trans_start();
+
                 $questionnaire_id = $this->Questionnaire_model->create($questionnaire_data);
 
                 if ($questionnaire_id) {
-                    // CORREÇÃO: Processar perguntas com validação rigorosa
                     $questions = $this->input->post('questions');
                     if ($questions && is_array($questions)) {
-                        // Filtrar e validar perguntas antes do processamento
+                        // ETAPA 1: Filtrar e validar perguntas
                         $valid_questions = $this->filter_and_validate_questions($questions);
-                        $processed_questions = $this->process_conditional_logic($valid_questions);
                         
-                        foreach ($processed_questions as $index => $question) {
-                            // VALIDAÇÃO ADICIONAL: Verificar se todos os campos obrigatórios estão presentes
+                        // ETAPA 2: Criar perguntas SEM lógica condicional primeiro para obter IDs reais
+                        $temp_id_to_real_id_map = array();
+                        $question_ids = array();
+                        
+                        foreach ($valid_questions as $index => $question) {
                             if (empty(trim($question['text'])) || empty($question['type'])) {
-                                continue; // Pular pergunta inválida
+                                continue;
                             }
                             
-                            // CORREÇÃO: Validar tipo de pergunta antes da inserção
                             $valid_types = ['text', 'textarea', 'number', 'email', 'date', 'datetime', 'radio', 'checkbox', 'select'];
                             if (!in_array($question['type'], $valid_types)) {
                                 log_message('error', "Tipo de pergunta inválido: {$question['type']}");
-                                continue; // Pular pergunta com tipo inválido
+                                continue;
                             }
                             
+                            // Criar pergunta SEM lógica condicional
                             $question_data = array(
                                 'questionnaire_id' => $questionnaire_id,
                                 'question_text' => trim($question['text']),
                                 'question_type' => $question['type'],
                                 'is_required' => isset($question['required']) ? TRUE : FALSE,
                                 'order_index' => $index + 1,
-                                'conditional_logic' => $question['conditional_logic']
+                                'conditional_logic' => NULL // Temporariamente NULL
                             );
 
                             try {
                                 $question_id = $this->Question_model->create($question_data);
-
-                                // CORREÇÃO: Salvar opções apenas para tipos que suportam
-                                if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {
-                                    $this->save_question_options($question_id, $question['options']);
+                                
+                                if ($question_id) {
+                                    $question_ids[$index] = $question_id;
+                                    
+                                    // Mapear ID temporário para ID real (se existir)
+                                    if (isset($question['temp_id'])) {
+                                        $temp_id_to_real_id_map[$question['temp_id']] = $question_id;
+                                    }
+                                    // Para compatibilidade, também mapear baseado no padrão temp_X
+                                    $temp_id_to_real_id_map["temp_" . ($index + 1)] = $question_id;
+                                    
+                                    // Salvar opções para tipos de múltipla escolha
+                                    if (in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {
+                                        $this->save_question_options($question_id, $question['options']);
+                                    }
                                 }
                             } catch (Exception $e) {
                                 log_message('error', "Erro ao criar pergunta: " . $e->getMessage());
-                                log_message('error', "Dados da pergunta: " . json_encode($question_data));
-                                // Continuar com as outras perguntas
                                 continue;
+                            }
+                        }
+                        
+                        // ETAPA 3: Processar e atualizar lógica condicional com IDs reais
+                        foreach ($valid_questions as $index => $question) {
+                            if (!isset($question_ids[$index])) {
+                                continue; // Pergunta não foi criada com sucesso
+                            }
+                            
+                            $question_id = $question_ids[$index];
+                            $conditional_logic = null;
+                            
+                            // Processar lógica condicional se existir
+                            if (isset($question['conditional_logic']) && !empty($question['conditional_logic'])) {
+                                $logic = json_decode($question['conditional_logic'], true);
+                                
+                                if (json_last_error() === JSON_ERROR_NONE) {
+                                    // Converter IDs temporários para IDs reais
+                                    $updated_logic = $this->convert_temp_ids_to_real_ids($logic, $temp_id_to_real_id_map);
+                                    
+                                    // Validar a lógica com IDs reais
+                                    $validation = $this->validate_converted_logic($updated_logic, $index, $question_ids);
+                                    
+                                    if ($validation['valid']) {
+                                        $conditional_logic = json_encode($updated_logic);
+                                    } else {
+                                        log_message('warning', 'Lógica condicional inválida removida da pergunta ' . ($index + 1) . ': ' . implode(', ', $validation['errors']));
+                                    }
+                                } else {
+                                    log_message('warning', 'JSON inválido na lógica condicional da pergunta ' . ($index + 1));
+                                }
+                            }
+                            
+                            // Atualizar pergunta com lógica condicional processada
+                            if ($conditional_logic !== null) {
+                                $this->db->where('id', $question_id);
+                                $this->db->update('questions', array('conditional_logic' => $conditional_logic));
                             }
                         }
                     }
 
-                    $this->session->set_flashdata('success', 'Questionário criado com sucesso!');
-                    
-                    if ($this->input->post('project_id')) {
-                        redirect('projects/view/' . $this->input->post('project_id'));
+                    // Finalizar transação
+                    $this->db->trans_complete();
+
+                    if ($this->db->trans_status() === FALSE) {
+                        $this->session->set_flashdata('error', 'Erro ao criar questionário.');
                     } else {
-                        redirect('questionnaires');
+                        $this->session->set_flashdata('success', 'Questionário criado com sucesso!');
+                        
+                        if ($this->input->post('project_id')) {
+                            redirect('projects/view/' . $this->input->post('project_id'));
+                        } else {
+                            redirect('questionnaires');
+                        }
                     }
                 } else {
+                    $this->db->trans_rollback();
                     $data['error'] = 'Erro ao criar questionário.';
                 }
             }
@@ -126,6 +183,116 @@ class Questionnaires extends CI_Controller {
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/create', $data);
         $this->load->view('admin/footer');
+    }
+
+    private function validate_converted_logic($logic, $current_index, $question_ids) {
+        $errors = [];
+        $warnings = [];
+        
+        // Criar array de IDs reais para validação
+        $real_ids = array_values($question_ids);
+        
+        // Validar regras de visibilidade
+        if (isset($logic['visibility']['conditions'])) {
+            foreach ($logic['visibility']['conditions'] as $condition_index => $condition) {
+                $validation = $this->validate_converted_condition($condition, $current_index, $question_ids, $condition_index + 1);
+                $errors = array_merge($errors, $validation['errors']);
+                $warnings = array_merge($warnings, $validation['warnings']);
+            }
+        }
+        
+        // Validar regras de obrigatoriedade
+        if (isset($logic['required']['conditions'])) {
+            foreach ($logic['required']['conditions'] as $condition_index => $condition) {
+                $validation = $this->validate_converted_condition($condition, $current_index, $question_ids, $condition_index + 1);
+                $errors = array_merge($errors, $validation['errors']);
+                $warnings = array_merge($warnings, $validation['warnings']);
+            }
+        }
+        
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors,
+            'warnings' => $warnings
+        ];
+    }
+
+    private function validate_converted_condition($condition, $current_index, $question_ids, $condition_number) {
+        $errors = [];
+        $warnings = [];
+        
+        if (!isset($condition['question']) || (!is_numeric($condition['question']) && !is_string($condition['question']))) {
+            $errors[] = "Condição {$condition_number}: ID de pergunta inválido";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        if (!isset($condition['operator']) || empty($condition['operator'])) {
+            $errors[] = "Condição {$condition_number}: Operador não definido";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        $target_question_id = $condition['question'];
+        $operator = $condition['operator'];
+        $value = isset($condition['value']) ? $condition['value'] : '';
+        
+        // Verificar se a questão referenciada existe nos IDs criados
+        if (!in_array($target_question_id, array_values($question_ids))) {
+            $errors[] = "Condição {$condition_number}: Questão referenciada (ID: {$target_question_id}) não existe";
+            return ['errors' => $errors, 'warnings' => $warnings];
+        }
+        
+        // Verificar se não está referenciando pergunta posterior (baseado no mapeamento)
+        $target_index = array_search($target_question_id, $question_ids);
+        if ($target_index !== false && $target_index >= $current_index) {
+            $errors[] = "Condição {$condition_number}: Não pode referenciar pergunta posterior ou a si mesma";
+        }
+        
+        $valid_operators = ['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'];
+        if (!in_array($operator, $valid_operators)) {
+            $errors[] = "Condição {$condition_number}: Operador '{$operator}' inválido";
+        }
+        
+        if (!in_array($operator, ['is_empty', 'is_not_empty']) && empty($value)) {
+            $warnings[] = "Condição {$condition_number}: Valor não definido para operador '{$operator}'";
+        }
+        
+        return ['errors' => $errors, 'warnings' => $warnings];
+    }
+
+    private function convert_temp_ids_to_real_ids($logic, $temp_id_to_real_id_map) {
+        $updated_logic = $logic;
+        
+        // Processar regras de visibilidade
+        if (isset($updated_logic['visibility']['conditions'])) {
+            foreach ($updated_logic['visibility']['conditions'] as &$condition) {
+                if (isset($condition['question'])) {
+                    $temp_id = $condition['question'];
+                    if (isset($temp_id_to_real_id_map[$temp_id])) {
+                        $condition['question'] = $temp_id_to_real_id_map[$temp_id];
+                        log_message('debug', "Convertido ID temporário '$temp_id' para ID real '{$temp_id_to_real_id_map[$temp_id]}'");
+                    } else {
+                        log_message('warning', "ID temporário '$temp_id' não encontrado no mapeamento");
+                    }
+                }
+            }
+        }
+        
+        // Processar regras de obrigatoriedade
+        if (isset($updated_logic['required']['conditions'])) {
+            foreach ($updated_logic['required']['conditions'] as &$condition) {
+                if (isset($condition['question'])) {
+                    $temp_id = $condition['question'];
+                    if (isset($temp_id_to_real_id_map[$temp_id])) {
+                        $condition['question'] = $temp_id_to_real_id_map[$temp_id];
+                        log_message('debug', "Convertido ID temporário '$temp_id' para ID real '{$temp_id_to_real_id_map[$temp_id]}'");
+                    } else {
+                        log_message('warning', "ID temporário '$temp_id' não encontrado no mapeamento");
+                    }
+                }
+            }
+        }
+        
+        return $updated_logic;
     }
 
     private function filter_and_validate_questions($questions) {
