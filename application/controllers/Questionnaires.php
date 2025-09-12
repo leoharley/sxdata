@@ -28,7 +28,7 @@ class Questionnaires extends CI_Controller {
         $preselected_project_id = $this->input->get('project_id');
         
         if ($this->input->post()) {
-            var_dump($question['conditional_logic']);exit;
+            var_dump($this->input->post('questions'));exit;
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
