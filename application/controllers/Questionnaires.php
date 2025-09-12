@@ -79,7 +79,7 @@ class Questionnaires extends CI_Controller {
                                 continue; // Pular pergunta com tipo inválido
                             }
                             
-                            var_dump($this->extract_conditional_logic($question));exit;
+                            var_dump($question['logic']);exit;
                             $question_data = array(
                                 'questionnaire_id' => $questionnaire_id,
                                 'question_text' => trim($question['text']),
@@ -126,62 +126,6 @@ class Questionnaires extends CI_Controller {
         $this->load->view('admin/header', $data);
         $this->load->view('admin/questionnaires/create', $data);
         $this->load->view('admin/footer');
-    }
-
-
-    private function extract_conditional_logic($question) {
-        // Se já vem como string JSON (formato correto)
-        if (isset($question['conditional_logic']) && is_string($question['conditional_logic'])) {
-            return $question['conditional_logic'];
-        }
-        
-        // Se vem como array (formato atual com problema)
-        if (isset($question['logic']) && is_array($question['logic'])) {
-            $logic_data = array();
-            $has_logic = false;
-            
-            // Processar visibilidade
-            if (isset($question['logic']['visibility']) && 
-                isset($question['logic']['visibility']['conditions']) && 
-                !empty($question['logic']['visibility']['conditions'])) {
-                
-                $logic_data['visibility'] = array(
-                    'operator' => isset($question['logic']['visibility']['operator']) ? $question['logic']['visibility']['operator'] : 'AND',
-                    'conditions' => $question['logic']['visibility']['conditions']
-                );
-                $has_logic = true;
-                
-                if (ENVIRONMENT === 'development') {
-                    log_message('debug', 'Visibilidade extraída: ' . json_encode($logic_data['visibility']));
-                }
-            }
-            
-            // Processar obrigatoriedade
-            if (isset($question['logic']['required']) && 
-                isset($question['logic']['required']['conditions']) && 
-                !empty($question['logic']['required']['conditions'])) {
-                
-                $logic_data['required'] = array(
-                    'operator' => isset($question['logic']['required']['operator']) ? $question['logic']['required']['operator'] : 'AND',
-                    'conditions' => $question['logic']['required']['conditions']
-                );
-                $has_logic = true;
-                
-                if (ENVIRONMENT === 'development') {
-                    log_message('debug', 'Obrigatoriedade extraída: ' . json_encode($logic_data['required']));
-                }
-            }
-            
-            if ($has_logic) {
-                $json_string = json_encode($logic_data);
-                if (ENVIRONMENT === 'development') {
-                    log_message('debug', 'Lógica condicional convertida para JSON: ' . $json_string);
-                }
-                return $json_string;
-            }
-        }
-        
-        return null;
     }
 
     private function filter_and_validate_questions($questions) {
