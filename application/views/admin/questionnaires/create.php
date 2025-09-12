@@ -1184,7 +1184,7 @@ function cleanEmptyFields() {
     
     questions.forEach((question, questionIndex) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
-        const type = typeSelect ? typeSelect.value : '';
+        const type = typeSelect.value;
         
         // Se não é tipo de múltipla escolha, remover todos os campos de opção
         if (!['radio', 'checkbox', 'select'].includes(type)) {
@@ -1203,14 +1203,14 @@ function cleanEmptyFields() {
                 const optionDivs = optionsContainer.querySelectorAll('.input-group');
                 optionDivs.forEach(optionDiv => {
                     const textInput = optionDiv.querySelector('input[name*="[text]"]');
-                    if (textInput && !textInput.value.trim()) {
+                    if (!textInput.value.trim()) {
                         // Remove opção vazia do envio
                         const inputs = optionDiv.querySelectorAll('input');
                         inputs.forEach(input => {
                             input.removeAttribute('name');
                             input.removeAttribute('required');
                         });
-                    } else if (textInput) {
+                    } else {
                         // Garantir que opções válidas tenham o value correto
                         const valueInput = optionDiv.querySelector('input[name*="[value]"]');
                         if (valueInput && !valueInput.value) {
@@ -1221,8 +1221,6 @@ function cleanEmptyFields() {
             }
         }
     });
-    
-    console.log('Campos vazios limpos com sucesso');
 }
 
 // Função para serializar lógica condicional
@@ -1252,7 +1250,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.visibility.conditions.push({
-                        question: questionSelect.value, // Usar ID da questão
+                        question: questionSelect.value, // Agora é ID ao invés de índice
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1277,7 +1275,7 @@ function serializeConditionalLogic() {
                 
                 if (questionSelect.value && operatorSelect.value) {
                     logicData.required.conditions.push({
-                        question: questionSelect.value, // Usar ID da questão
+                        question: questionSelect.value, // Agora é ID ao invés de índice
                         operator: operatorSelect.value,
                         value: valueField ? valueField.value : ''
                     });
@@ -1287,29 +1285,39 @@ function serializeConditionalLogic() {
         
         // Adicionar campo hidden com a lógica serializada
         if (logicData.visibility || logicData.required) {
-            // Remover campo hidden anterior se existir
-            const existingHidden = question.querySelector(`input[name="questions[${index}][conditional_logic]"]`);
-            if (existingHidden) {
-                existingHidden.remove();
-            }
-            
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = `questions[${index}][conditional_logic]`;
             hiddenInput.value = JSON.stringify(logicData);
             question.appendChild(hiddenInput);
-            
-            // Log para debug
-            console.log(`Pergunta ${index + 1}: Lógica serializada`, logicData);
         }
     });
-    
-    console.log('Serialização da lógica condicional concluída');
 }
 
 // Validação do formulário
 document.getElementById('questionnaireForm').addEventListener('submit', function(e) {
+    console.log('=== DEBUG SUBMIT CREATE.PHP ===');
+    
+    // Debug 1: Verificar perguntas no DOM
     const questions = document.querySelectorAll('.question-item');
+    console.log(`Total de perguntas no DOM: ${questions.length}`);
+    
+    // Debug 2: Verificar lógica condicional antes da serialização
+    let questionsWithLogicBefore = 0;
+    questions.forEach((question, index) => {
+        const logicDiv = question.querySelector('.conditional-rules');
+        const hasVisibleLogic = logicDiv && logicDiv.style.display !== 'none';
+        const hasConditions = question.querySelectorAll('.condition-item').length > 0;
+        
+        if (hasVisibleLogic || hasConditions) {
+            questionsWithLogicBefore++;
+            console.log(`Pergunta ${index + 1}: TEM lógica condicional (visible: ${hasVisibleLogic}, conditions: ${hasConditions})`);
+        }
+    });
+    
+    console.log(`Perguntas com lógica ANTES da serialização: ${questionsWithLogicBefore}`);
+    
+    // Validações básicas
     if (questions.length === 0) {
         e.preventDefault();
         alert('Adicione pelo menos uma pergunta ao questionário.');
@@ -1324,54 +1332,37 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // Validar perguntas e remover required de campos ocultos
+    // Validar perguntas individuais
     let valid = true;
     questions.forEach((question, index) => {
         const typeSelect = question.querySelector('select[name*="[type]"]');
-        const type = typeSelect.value;
+        const type = typeSelect ? typeSelect.value : '';
         const textArea = question.querySelector('textarea[name*="[text]"]');
         
-        // Validar se pergunta tem texto
-        if (!textArea.value.trim()) {
+        if (!textArea || !textArea.value.trim()) {
             alert(`A pergunta ${index + 1} deve ter um texto.`);
             valid = false;
             return;
         }
         
-        // Validar tipo de pergunta
         if (!type) {
             alert(`Selecione um tipo para a pergunta ${index + 1}.`);
             valid = false;
             return;
         }
         
+        // Validar opções para múltipla escolha
         if (['radio', 'checkbox', 'select'].includes(type)) {
-            const optionsDiv = question.querySelector(`#options-${index}`);
-            const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
-            const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
-            
-            if (validOptions.length < 2) {
-                alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
-                valid = false;
-                return;
-            }
-            
-            // Garantir que campos de opção visíveis tenham required
-            optionInputs.forEach(input => {
-                if (input.value.trim()) {
-                    input.setAttribute('required', 'required');
-                } else {
-                    input.removeAttribute('required');
-                }
-            });
-        } else {
-            // Remover required de campos de opção para tipos que não precisam
             const optionsDiv = question.querySelector(`#options-${index}`);
             if (optionsDiv) {
                 const optionInputs = optionsDiv.querySelectorAll('input[name*="[text]"]');
-                optionInputs.forEach(input => {
-                    input.removeAttribute('required');
-                });
+                const validOptions = Array.from(optionInputs).filter(input => input.value.trim());
+                
+                if (validOptions.length < 2) {
+                    alert(`A pergunta ${index + 1} deve ter pelo menos 2 opções válidas.`);
+                    valid = false;
+                    return;
+                }
             }
         }
     });
@@ -1381,23 +1372,62 @@ document.getElementById('questionnaireForm').addEventListener('submit', function
         return false;
     }
     
-    // CORREÇÃO PRINCIPAL: Validar lógica condicional
+    // Debug 3: Validar lógica condicional
+    console.log('Validando lógica condicional...');
     const logicValidation = validateAllConditionalLogic();
+    
     if (!logicValidation.valid) {
         e.preventDefault();
+        console.error('Erros na lógica condicional:', logicValidation.errors);
         alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
         return false;
     }
     
-    // CORREÇÃO PRINCIPAL: Limpar campos vazios antes do envio
+    console.log('Lógica condicional validada com sucesso');
+    
+    // Debug 4: Limpar campos vazios
+    console.log('Limpando campos vazios...');
     cleanEmptyFields();
     
-    // CORREÇÃO PRINCIPAL: Serializar lógica condicional para envio
+    // Debug 5: Serializar lógica condicional
+    console.log('Serializando lógica condicional...');
     serializeConditionalLogic();
     
-    // Log para debug (remover em produção)
-    if (typeof console !== 'undefined') {
-        console.log('Formulário validado e lógica serializada com sucesso');
+    // Debug 6: Verificar campos hidden criados
+    let questionsWithLogicAfter = 0;
+    const hiddenLogicFields = document.querySelectorAll('input[name*="[conditional_logic]"]');
+    console.log(`Campos hidden de lógica criados: ${hiddenLogicFields.length}`);
+    
+    hiddenLogicFields.forEach((field, index) => {
+        if (field.value && field.value.trim() !== '') {
+            questionsWithLogicAfter++;
+            console.log(`Campo hidden ${index}: ${field.name} = ${field.value.substring(0, 100)}...`);
+        }
+    });
+    
+    console.log(`Perguntas com lógica APÓS serialização: ${questionsWithLogicAfter}`);
+    
+    // Debug 7: Verificar todos os dados do form antes do envio
+    const formData = new FormData(this);
+    let totalQuestionsInForm = 0;
+    let logicFieldsInForm = 0;
+    
+    for (let [key, value] of formData.entries()) {
+        if (key.includes('questions[') && key.includes('][text]')) {
+            totalQuestionsInForm++;
+        }
+        if (key.includes('questions[') && key.includes('][conditional_logic]')) {
+            logicFieldsInForm++;
+            console.log(`Form data lógica: ${key} = ${value.substring(0, 100)}...`);
+        }
     }
+    
+    console.log(`=== RESUMO FINAL ===`);
+    console.log(`Perguntas no form: ${totalQuestionsInForm}`);
+    console.log(`Campos de lógica no form: ${logicFieldsInForm}`);
+    console.log('Enviando formulário...');
+    
+    // Se chegou até aqui, permitir envio
+    return true;
 });
 </script>

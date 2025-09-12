@@ -32,7 +32,7 @@ class Questionnaires extends CI_Controller {
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
             if ($this->form_validation->run()) {
-                // Processar aplicaggfgdores selecionados
+                // Processar aplicadores selecionados
                 $aplicadores = $this->input->post('aplicadores');
                 $aplicadores_json = null;
                 
@@ -59,66 +59,115 @@ class Questionnaires extends CI_Controller {
                 $questionnaire_id = $this->Questionnaire_model->create($questionnaire_data);
 
                 if ($questionnaire_id) {
-                    // CORREÇÃO: Processar perguntas com validação rigorosa
+                    // CORREÇÃO: Processar perguntas com validação rigorosa e debug
                     $questions = $this->input->post('questions');
-                    if ($questions && is_array($questions)) {
-                        // Debug log para verificar se chegaram perguntas com lógica
-                        if (ENVIRONMENT === 'development') {
-                            $questions_with_logic = 0;
-                            foreach ($questions as $q) {
-                                if (!empty($q['conditional_logic'])) {
-                                    $questions_with_logic++;
-                                }
-                            }
-                            log_message('debug', "Recebidas {$questions_with_logic} perguntas com lógica condicional no create");
-                        }
+                    
+                    if (ENVIRONMENT === 'development') {
+                        // Debug detalhado dos dados recebidos
+                        log_message('debug', "=== CREATE QUESTIONNAIRE DEBUG ===");
+                        log_message('debug', "Total de perguntas recebidas: " . (is_array($questions) ? count($questions) : 'Não é array'));
                         
-                        // Filtrar e validar perguntas antes do processamento
+                        if (is_array($questions)) {
+                            foreach ($questions as $idx => $q) {
+                                $has_logic = !empty($q['conditional_logic']);
+                                $logic_preview = $has_logic ? substr($q['conditional_logic'], 0, 100) . '...' : 'Sem lógica';
+                                log_message('debug', "Pergunta $idx: Texto='" . (isset($q['text']) ? substr($q['text'], 0, 50) : 'N/A') . "', Tipo='" . (isset($q['type']) ? $q['type'] : 'N/A') . "', Lógica=$logic_preview");
+                            }
+                        }
+                    }
+                    
+                    if ($questions && is_array($questions)) {
+                        // Etapa 1: Filtrar e validar perguntas
                         $valid_questions = $this->filter_and_validate_questions($questions);
                         
-                        // CORREÇÃO PRINCIPAL: Processar lógica condicional ANTES da inserção
+                        if (ENVIRONMENT === 'development') {
+                            log_message('debug', "Perguntas após filter_and_validate_questions: " . count($valid_questions));
+                            foreach ($valid_questions as $idx => $q) {
+                                $has_logic = !empty($q['conditional_logic']);
+                                log_message('debug', "Pergunta validada $idx: Lógica=" . ($has_logic ? 'SIM' : 'NÃO'));
+                            }
+                        }
+                        
+                        // Etapa 2: Processar lógica condicional
                         $processed_questions = $this->process_conditional_logic($valid_questions);
                         
+                        if (ENVIRONMENT === 'development') {
+                            log_message('debug', "Perguntas após process_conditional_logic: " . count($processed_questions));
+                            foreach ($processed_questions as $idx => $q) {
+                                $has_logic = !empty($q['conditional_logic']);
+                                log_message('debug', "Pergunta processada $idx: Lógica=" . ($has_logic ? 'SIM' : 'NÃO'));
+                            }
+                        }
+                        
+                        // Etapa 3: Inserir perguntas no banco
+                        $questions_inserted = 0;
+                        $questions_with_logic_inserted = 0;
+                        
                         foreach ($processed_questions as $index => $question) {
-                            // VALIDAÇÃO ADICIONAL: Verificar se todos os campos obrigatórios estão presentes
+                            // VALIDAÇÃO: Verificar campos obrigatórios
                             if (empty(trim($question['text'])) || empty($question['type'])) {
-                                continue; // Pular pergunta inválida
+                                log_message('warning', "Pergunta $index: Dados insuficientes - pulando");
+                                continue;
                             }
                             
-                            // CORREÇÃO: Validar tipo de pergunta antes da inserção
+                            // VALIDAÇÃO: Tipo de pergunta
                             $valid_types = ['text', 'textarea', 'number', 'email', 'date', 'datetime', 'radio', 'checkbox', 'select'];
                             if (!in_array($question['type'], $valid_types)) {
-                                log_message('error', "Tipo de pergunta inválido: {$question['type']}");
-                                continue; // Pular pergunta com tipo inválido
+                                log_message('error', "Pergunta $index: Tipo inválido '{$question['type']}' - pulando");
+                                continue;
                             }
                             
+                            // PREPARAR dados para inserção
                             $question_data = array(
                                 'questionnaire_id' => $questionnaire_id,
                                 'question_text' => trim($question['text']),
                                 'question_type' => $question['type'],
                                 'is_required' => isset($question['required']) ? TRUE : FALSE,
                                 'order_index' => $index + 1,
-                                'conditional_logic' => $question['conditional_logic'] // CORREÇÃO: Garantir que a lógica seja salva
+                                'conditional_logic' => $question['conditional_logic'] // CRÍTICO: Este campo deve estar aqui
                             );
 
+                            if (ENVIRONMENT === 'development') {
+                                $has_logic = !empty($question_data['conditional_logic']);
+                                log_message('debug', "Inserindo pergunta $index: '{$question_data['question_text']}', Tipo: {$question_data['question_type']}, Lógica: " . ($has_logic ? 'SIM' : 'NÃO'));
+                                
+                                if ($has_logic) {
+                                    log_message('debug', "Lógica da pergunta $index: " . substr($question_data['conditional_logic'], 0, 200));
+                                }
+                            }
+
                             try {
+                                // INSERIR pergunta
                                 $question_id = $this->Question_model->create($question_data);
 
-                                // Debug log para confirmar salvamento da lógica
-                                if (ENVIRONMENT === 'development' && !empty($question['conditional_logic'])) {
-                                    log_message('debug', "Pergunta ID $question_id criada com lógica condicional: " . substr($question['conditional_logic'], 0, 100) . '...');
-                                }
+                                if ($question_id) {
+                                    $questions_inserted++;
+                                    
+                                    if (!empty($question_data['conditional_logic'])) {
+                                        $questions_with_logic_inserted++;
+                                    }
+                                    
+                                    if (ENVIRONMENT === 'development') {
+                                        log_message('debug', "Pergunta inserida com ID: $question_id" . (!empty($question_data['conditional_logic']) ? ' (COM LÓGICA)' : ''));
+                                    }
 
-                                // CORREÇÃO: Salvar opções apenas para tipos que suportam
-                                if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {
-                                    $this->save_question_options($question_id, $question['options']);
+                                    // INSERIR opções se necessário
+                                    if (in_array($question['type'], ['radio', 'checkbox', 'select']) && isset($question['options'])) {
+                                        $this->save_question_options($question_id, $question['options']);
+                                    }
+                                } else {
+                                    log_message('error', "Falha ao inserir pergunta $index no banco de dados");
                                 }
                             } catch (Exception $e) {
-                                log_message('error', "Erro ao criar pergunta: " . $e->getMessage());
-                                log_message('error', "Dados da pergunta: " . json_encode($question_data));
-                                // Continuar com as outras perguntas
+                                log_message('error', "Erro ao inserir pergunta $index: " . $e->getMessage());
                                 continue;
                             }
+                        }
+
+                        if (ENVIRONMENT === 'development') {
+                            log_message('debug', "=== RESUMO DA INSERÇÃO ===");
+                            log_message('debug', "Perguntas inseridas: $questions_inserted");
+                            log_message('debug', "Perguntas com lógica inseridas: $questions_with_logic_inserted");
                         }
                     }
 
@@ -159,8 +208,14 @@ class Questionnaires extends CI_Controller {
                 'text' => trim($question['text']),
                 'type' => trim($question['type']),
                 'required' => isset($question['required']) ? $question['required'] : false,
+                // CORREÇÃO PRINCIPAL: Preservar a lógica condicional
                 'conditional_logic' => isset($question['conditional_logic']) ? $question['conditional_logic'] : null
             );
+            
+            // Debug log para verificar se a lógica chegou
+            if (ENVIRONMENT === 'development' && !empty($question['conditional_logic'])) {
+                log_message('debug', "Pergunta $index: Lógica condicional preservada - " . substr($question['conditional_logic'], 0, 100) . '...');
+            }
             
             // Validar e limpar opções para tipos de múltipla escolha
             if (in_array($clean_question['type'], ['radio', 'checkbox', 'select'])) {
@@ -188,6 +243,16 @@ class Questionnaires extends CI_Controller {
                 // Para outros tipos, adicionar sem opções
                 $valid_questions[] = $clean_question;
             }
+        }
+        
+        if (ENVIRONMENT === 'development') {
+            $questions_with_logic = 0;
+            foreach ($valid_questions as $q) {
+                if (!empty($q['conditional_logic'])) {
+                    $questions_with_logic++;
+                }
+            }
+            log_message('debug', "filter_and_validate_questions: {$questions_with_logic} perguntas com lógica condicional preservadas");
         }
         
         return $valid_questions;
@@ -522,30 +587,74 @@ class Questionnaires extends CI_Controller {
         foreach ($questions as $index => $question) {
             $processed_question = $question;
             
-            // Processar lógica condicional se existir
+            // CORREÇÃO: Verificar e processar lógica condicional se existir
             if (isset($question['conditional_logic']) && !empty($question['conditional_logic'])) {
-                $logic = json_decode($question['conditional_logic'], true);
                 
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    // Validar a lógica usando IDs
-                    $validation = $this->validate_conditional_logic_structure_with_ids($logic, $index, $questions);
+                // Debug log
+                if (ENVIRONMENT === 'development') {
+                    log_message('debug', "Processando lógica da pergunta $index: " . substr($question['conditional_logic'], 0, 200));
+                }
+                
+                // Verificar se já é string JSON ou precisa decodificar
+                if (is_string($question['conditional_logic'])) {
+                    $logic = json_decode($question['conditional_logic'], true);
+                    
+                    if (json_last_error() === JSON_ERROR_NONE && !empty($logic)) {
+                        // Validar a lógica usando IDs (se disponível) ou índices
+                        $validation = $this->validate_conditional_logic_structure_with_ids($logic, $index, $questions);
+                        
+                        if (!$validation['valid']) {
+                            // Se há erros críticos, remover a lógica inválida
+                            $processed_question['conditional_logic'] = null;
+                            log_message('warning', 'Lógica condicional inválida removida da pergunta ' . ($index + 1) . ': ' . implode(', ', $validation['errors']));
+                        } else {
+                            // Manter a lógica válida como string JSON
+                            $processed_question['conditional_logic'] = $question['conditional_logic'];
+                            
+                            if (ENVIRONMENT === 'development') {
+                                log_message('debug', "Pergunta $index: Lógica condicional validada e preservada");
+                            }
+                        }
+                    } else {
+                        // JSON inválido - remover
+                        $processed_question['conditional_logic'] = null;
+                        log_message('warning', 'JSON inválido na lógica condicional da pergunta ' . ($index + 1));
+                    }
+                } else if (is_array($question['conditional_logic'])) {
+                    // Se chegou como array, converter para JSON
+                    $validation = $this->validate_conditional_logic_structure_with_ids($question['conditional_logic'], $index, $questions);
                     
                     if (!$validation['valid']) {
-                        // Se há erros, remover a lógica inválida
                         $processed_question['conditional_logic'] = null;
-                        log_message('warning', 'Lógica condicional inválida removida da pergunta ' . ($index + 1) . ': ' . implode(', ', $validation['errors']));
+                        log_message('warning', 'Lógica condicional inválida da pergunta ' . ($index + 1));
                     } else {
-                        $processed_question['conditional_logic'] = json_encode($logic);
+                        $processed_question['conditional_logic'] = json_encode($question['conditional_logic']);
+                        
+                        if (ENVIRONMENT === 'development') {
+                            log_message('debug', "Pergunta $index: Lógica condicional convertida de array para JSON");
+                        }
                     }
                 } else {
+                    // Formato inválido
                     $processed_question['conditional_logic'] = null;
-                    log_message('warning', 'JSON inválido na lógica condicional da pergunta ' . ($index + 1));
+                    log_message('warning', 'Formato inválido de lógica condicional na pergunta ' . ($index + 1));
                 }
             } else {
+                // Sem lógica condicional
                 $processed_question['conditional_logic'] = null;
             }
             
             $processed_questions[] = $processed_question;
+        }
+        
+        if (ENVIRONMENT === 'development') {
+            $questions_with_logic = 0;
+            foreach ($processed_questions as $q) {
+                if (!empty($q['conditional_logic'])) {
+                    $questions_with_logic++;
+                }
+            }
+            log_message('debug', "process_conditional_logic: {$questions_with_logic} perguntas processadas com lógica condicional");
         }
         
         return $processed_questions;
