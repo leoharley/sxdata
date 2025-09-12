@@ -28,6 +28,7 @@ class Questionnaires extends CI_Controller {
         $preselected_project_id = $this->input->get('project_id');
         
         if ($this->input->post()) {
+            var_dump($question['conditional_logic']);exit;
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
@@ -64,7 +65,7 @@ class Questionnaires extends CI_Controller {
                     if ($questions && is_array($questions)) {
                         // Filtrar e validar perguntas antes do processamento
                         $valid_questions = $this->filter_and_validate_questions($questions);
-                        $processed_questions = $this->process_conditional_logic($questions);
+                        $processed_questions = $this->process_conditional_logic($valid_questions);
                         
                         foreach ($processed_questions as $index => $question) {
                             // VALIDAÇÃO ADICIONAL: Verificar se todos os campos obrigatórios estão presentes
@@ -88,8 +89,6 @@ class Questionnaires extends CI_Controller {
                                 'conditional_logic' => $question['conditional_logic']
                             );
 
-                            var_dump($question_data);
-
                             try {
                                 $question_id = $this->Question_model->create($question_data);
 
@@ -104,7 +103,6 @@ class Questionnaires extends CI_Controller {
                                 continue;
                             }
                         }
-                        exit;
                     }
 
                     $this->session->set_flashdata('success', 'Questionário criado com sucesso!');
@@ -223,6 +221,7 @@ class Questionnaires extends CI_Controller {
         $questionnaire->requires_photo = $this->_convert_to_boolean($questionnaire->requires_photo);
 
         if ($this->input->post()) {
+            var_dump($question['conditional_logic']);exit;
             $this->form_validation->set_rules('title', 'Título', 'required|max_length[200]');
             $this->form_validation->set_rules('description', 'Descrição', 'max_length[1000]');
 
@@ -286,8 +285,6 @@ class Questionnaires extends CI_Controller {
 
                             $question_id = null;
 
-                            var_dump($question_data);
-
                             // Verificar se é pergunta existente ou nova
                             if (!empty($question['id']) && is_numeric($question['id'])) {
                                 // Pergunta existente - atualizar
@@ -328,8 +325,6 @@ class Questionnaires extends CI_Controller {
                                 }
                             }
                         }
-
-                        exit;
 
                         // Remover perguntas que foram excluídas
                         $questions_to_delete = array_diff($existing_question_ids, $processed_question_ids);
