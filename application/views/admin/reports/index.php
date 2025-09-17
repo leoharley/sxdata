@@ -1,3 +1,9 @@
+<?php
+// admin/reports/index.php
+
+$current_filters = http_build_query($filters ?? []);
+?>
+
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
