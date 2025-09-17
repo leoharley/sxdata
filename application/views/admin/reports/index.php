@@ -3057,7 +3057,7 @@ function showKMZPreviewLoading() {
             <div class="spinner-border text-primary mb-2" role="status">
                 <span class="visually-hidden">Carregando...</span>
             </div>
-            <p class="text-muted mb-0">Carregando preview dos dados...</p>
+            <p class="text-muted mb-0">Carregando prévia dos dados...</p>
         </div>
     `;
 }
@@ -3070,7 +3070,7 @@ function displayKMZPreviewData(data) {
         previewDiv.innerHTML = `
             <h6>
                 <i class="fas fa-eye me-2"></i>
-                Preview dos Dados
+                Prévia dos Dados
             </h6>
             <div class="preview-stats">
                 <div class="preview-stat">
@@ -3113,7 +3113,7 @@ function generateKMZFromModal() {
     }
     
     if (!currentPreviewData || currentPreviewData.total_locations === 0) {
-        alert('Execute o preview primeiro para verificar se há dados disponíveis.');
+        alert('Clique no botão "visualizar" primeiro para verificar se há dados disponíveis.');
         return;
     }
     
