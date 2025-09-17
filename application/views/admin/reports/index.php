@@ -3113,7 +3113,7 @@ function generateKMZFromModal() {
     }
     
     if (!currentPreviewData || currentPreviewData.total_locations === 0) {
-        alert('Clique no botão "visualizar" primeiro para verificar se há dados disponíveis.');
+        alert('Clique no botão "Visualizar" primeiro para verificar se há dados disponíveis.');
         return;
     }
     
