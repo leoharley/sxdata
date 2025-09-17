@@ -187,9 +187,8 @@ class Response_model extends CI_Model {
         // Parâmetros para prepared statement
         $params = array();
         
-        // CORRIGIDO: Suporte para múltiplos questionários
+        // Suporte para múltiplos questionários
         if (isset($filters['questionnaire_ids']) && is_array($filters['questionnaire_ids']) && !empty($filters['questionnaire_ids'])) {
-            // Validar e sanitizar IDs
             $valid_ids = array_filter(
                 array_map('intval', $filters['questionnaire_ids']),
                 function($id) { return $id > 0; }
@@ -227,7 +226,7 @@ class Response_model extends CI_Model {
         
         $where_clause = implode(' AND ', $where_conditions);
         
-        // Query otimizada com todas as informações necessárias
+        // Query corrigida para PostgreSQL - tratando selected_options como JSON
         $sql = "
             SELECT 
                 fr.id,
@@ -254,13 +253,19 @@ class Response_model extends CI_Model {
                     ELSE NULL 
                 END as duration_minutes,
                 (
-                    SELECT COALESCE(
-                        qr.response_text, 
-                        qr.response_number::text,
-                        TO_CHAR(qr.response_date, 'DD/MM/YYYY'),
-                        TO_CHAR(qr.response_datetime, 'DD/MM/YYYY HH24:MI'),
-                        qr.selected_options
-                    )
+                    SELECT CASE
+                        WHEN qr.response_text IS NOT NULL AND qr.response_text != '' 
+                            THEN qr.response_text
+                        WHEN qr.response_number IS NOT NULL 
+                            THEN qr.response_number::text
+                        WHEN qr.response_date IS NOT NULL 
+                            THEN TO_CHAR(qr.response_date, 'DD/MM/YYYY')
+                        WHEN qr.response_datetime IS NOT NULL 
+                            THEN TO_CHAR(qr.response_datetime, 'DD/MM/YYYY HH24:MI')
+                        WHEN qr.selected_options IS NOT NULL 
+                            THEN qr.selected_options::text
+                        ELSE NULL
+                    END
                     FROM question_responses qr
                     JOIN questions quest ON qr.question_id = quest.id
                     WHERE qr.form_response_id = fr.id
@@ -290,6 +295,16 @@ class Response_model extends CI_Model {
                 $response->completed_at_formatted = date('d/m/Y H:i', strtotime($response->completed_at));
                 $response->has_photo = !empty($response->photo_path);
                 $response->coordinates_formatted = number_format($response->latitude, 6) . ', ' . number_format($response->longitude, 6);
+                
+                // Processar indexador se for JSON
+                if ($response->indexador && $this->is_json($response->indexador)) {
+                    $decoded = json_decode($response->indexador, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        if (is_array($decoded)) {
+                            $response->indexador = implode(', ', $decoded);
+                        }
+                    }
+                }
             }
             
             if (ENVIRONMENT === 'development') {
@@ -304,6 +319,15 @@ class Response_model extends CI_Model {
             return array();
         }
     }
+
+    private function is_json($string) {
+        if (!is_string($string)) {
+            return false;
+        }
+        json_decode($string);
+        return json_last_error() === JSON_ERROR_NONE;
+    }
+
 
     public function count_photos($filters = array()) {
         $this->db->from('form_responses fr');
@@ -2377,7 +2401,7 @@ public function get_coverage_statistics($filters = array()) {
     
     $filters = $validation['validated'];
     
-    // Query para estatísticas de cobertura
+    // Query corrigida para PostgreSQL
     $where_conditions = array();
     $where_conditions[] = "fr.latitude IS NOT NULL";
     $where_conditions[] = "fr.longitude IS NOT NULL";
@@ -2406,37 +2430,21 @@ public function get_coverage_statistics($filters = array()) {
     
     $where_clause = implode(' AND ', $where_conditions);
     
+    // Query simplificada sem CTEs complexas para melhor compatibilidade
     $sql = "
-        WITH location_stats AS (
-            SELECT 
-                fr.location_name,
-                fr.latitude,
-                fr.longitude,
-                COUNT(*) as point_count,
-                MIN(fr.completed_at) as first_visit,
-                MAX(fr.completed_at) as last_visit
-            FROM form_responses fr
-            WHERE {$where_clause}
-            GROUP BY fr.location_name, fr.latitude, fr.longitude
-        ),
-        coverage_metrics AS (
-            SELECT 
-                COUNT(*) as total_unique_points,
-                COUNT(DISTINCT location_name) as unique_named_locations,
-                AVG(point_count) as avg_responses_per_point,
-                MIN(latitude) as south_bound,
-                MAX(latitude) as north_bound,
-                MIN(longitude) as west_bound,
-                MAX(longitude) as east_bound,
-                MIN(first_visit) as earliest_data,
-                MAX(last_visit) as latest_data
-            FROM location_stats
-        )
         SELECT 
-            *,
-            (north_bound - south_bound) as lat_span,
-            (east_bound - west_bound) as lng_span
-        FROM coverage_metrics
+            COUNT(DISTINCT CONCAT(fr.latitude::text, ',', fr.longitude::text)) as total_unique_points,
+            COUNT(DISTINCT CASE WHEN fr.location_name IS NOT NULL AND fr.location_name != '' 
+                               THEN fr.location_name END) as unique_named_locations,
+            COUNT(*) as total_responses,
+            MIN(fr.latitude) as south_bound,
+            MAX(fr.latitude) as north_bound,
+            MIN(fr.longitude) as west_bound,
+            MAX(fr.longitude) as east_bound,
+            MIN(fr.completed_at) as earliest_data,
+            MAX(fr.completed_at) as latest_data
+        FROM form_responses fr
+        WHERE {$where_clause}
     ";
     
     try {
@@ -2446,10 +2454,18 @@ public function get_coverage_statistics($filters = array()) {
             $result = $this->db->query($sql)->row();
         }
         
-        if ($result) {
-            // Calcular área aproximada coberta (em km²)
-            $lat_km = $result->lat_span * 111; // 1 grau de latitude ≈ 111 km
-            $lng_km = $result->lng_span * 111 * cos(deg2rad(($result->north_bound + $result->south_bound) / 2));
+        if ($result && $result->total_unique_points > 0) {
+            // Calcular métricas derivadas
+            $avg_responses_per_point = $result->total_unique_points > 0 ? 
+                round($result->total_responses / $result->total_unique_points, 1) : 0;
+            
+            $lat_span = $result->north_bound - $result->south_bound;
+            $lng_span = $result->east_bound - $result->west_bound;
+            
+            // Calcular área aproximada (em km²)
+            $lat_km = $lat_span * 111; // 1 grau de latitude ≈ 111 km
+            $avg_lat = ($result->north_bound + $result->south_bound) / 2;
+            $lng_km = $lng_span * 111 * cos(deg2rad($avg_lat));
             $approximate_area = abs($lat_km * $lng_km);
             
             // Calcular período de coleta
@@ -2460,10 +2476,18 @@ public function get_coverage_statistics($filters = array()) {
                 $collection_days = $end->diff($start)->days;
             }
             
+            // Criar objeto de estatísticas para avaliação
+            $stats_obj = (object) array(
+                'total_unique_points' => $result->total_unique_points,
+                'unique_named_locations' => $result->unique_named_locations,
+                'avg_responses_per_point' => $avg_responses_per_point
+            );
+            
             return array(
                 'total_unique_points' => (int)$result->total_unique_points,
                 'unique_named_locations' => (int)$result->unique_named_locations,
-                'avg_responses_per_point' => round($result->avg_responses_per_point, 1),
+                'total_responses' => (int)$result->total_responses,
+                'avg_responses_per_point' => $avg_responses_per_point,
                 'geographic_bounds' => array(
                     'north' => (float)$result->north_bound,
                     'south' => (float)$result->south_bound,
@@ -2471,8 +2495,8 @@ public function get_coverage_statistics($filters = array()) {
                     'west' => (float)$result->west_bound
                 ),
                 'geographic_span' => array(
-                    'latitude_degrees' => round($result->lat_span, 4),
-                    'longitude_degrees' => round($result->lng_span, 4),
+                    'latitude_degrees' => round($lat_span, 4),
+                    'longitude_degrees' => round($lng_span, 4),
                     'approximate_area_km2' => round($approximate_area, 1)
                 ),
                 'temporal_span' => array(
@@ -2480,7 +2504,7 @@ public function get_coverage_statistics($filters = array()) {
                     'latest_data' => $result->latest_data,
                     'collection_days' => $collection_days
                 ),
-                'coverage_quality' => $this->assess_coverage_quality($result)
+                'coverage_quality' => $this->assess_coverage_quality($stats_obj)
             );
         } else {
             return array(
@@ -2988,6 +3012,7 @@ public function get_location_heatmap_data($filters = array()) {
     
     $where_clause = implode(' AND ', $where_conditions);
     
+    // Query corrigida para PostgreSQL com STRING_AGG
     $sql = "
         SELECT 
             fr.latitude,
@@ -2996,7 +3021,7 @@ public function get_location_heatmap_data($filters = array()) {
             COUNT(*) as response_count,
             COUNT(DISTINCT fr.questionnaire_id) as questionnaire_count,
             COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' THEN 1 END) as photo_count,
-            STRING_AGG(DISTINCT q.title, ', ') as questionnaire_titles,
+            STRING_AGG(DISTINCT q.title, ', ' ORDER BY q.title) as questionnaire_titles,
             MIN(fr.completed_at) as first_response,
             MAX(fr.completed_at) as last_response
         FROM form_responses fr
