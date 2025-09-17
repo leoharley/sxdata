@@ -1640,4 +1640,376 @@ class Questionnaire_model extends CI_Model {
         
         return $stats;
     }
+
+public function validate_questionnaire_ids($questionnaire_ids) {
+    if (empty($questionnaire_ids) || !is_array($questionnaire_ids)) {
+        return [];
+    }
+    
+    // Filtrar apenas IDs válidos (números inteiros positivos)
+    $valid_ids = array_filter(
+        array_map('intval', $questionnaire_ids),
+        function($id) { return $id > 0; }
+    );
+    
+    if (empty($valid_ids)) {
+        return [];
+    }
+    
+    // Verificar se os questionários existem no banco
+    $this->db->select('id, title, status');
+    $this->db->where_in('id', $valid_ids);
+    $this->db->where('status', 'active'); // Apenas questionários ativos
+    $questionnaires = $this->db->get('questionnaires')->result();
+    
+    return array_column($questionnaires, 'id');
+}
+
+/**
+ * NOVO: Obter questionários com contagem de localizações
+ */
+public function get_questionnaires_with_location_count($filters = []) {
+    $this->db->select('
+        q.id,
+        q.title,
+        q.description,
+        q.status,
+        q.created_at,
+        u.full_name as created_by_name,
+        COUNT(DISTINCT fr.id) as total_responses,
+        COUNT(DISTINCT CASE 
+            WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL 
+                AND fr.latitude != 0 AND fr.longitude != 0 
+            THEN fr.id 
+            ELSE NULL 
+        END) as responses_with_location,
+        COUNT(DISTINCT CASE 
+            WHEN fr.photo_path IS NOT NULL AND fr.photo_path != \'\'
+            THEN fr.id 
+            ELSE NULL 
+        END) as responses_with_photos,
+        COUNT(DISTINCT fr.location_name) as unique_locations,
+        COUNT(DISTINCT fr.applied_by) as unique_applicators,
+        MIN(fr.completed_at) as first_response,
+        MAX(fr.completed_at) as last_response
+    ');
+    
+    $this->db->from('questionnaires q');
+    $this->db->join('users u', 'q.created_by = u.id', 'left');
+    $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.completed_at IS NOT NULL', 'left');
+    
+    // Aplicar filtros se fornecidos
+    if (isset($filters['status']) && !empty($filters['status'])) {
+        $this->db->where('q.status', $filters['status']);
+    } else {
+        $this->db->where('q.status', 'active'); // Default: apenas ativos
+    }
+    
+    if (isset($filters['date_from']) && !empty($filters['date_from'])) {
+        $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
+    }
+    
+    if (isset($filters['date_to']) && !empty($filters['date_to'])) {
+        $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
+    }
+    
+    $this->db->group_by('q.id, q.title, q.description, q.status, q.created_at, u.full_name');
+    $this->db->order_by('responses_with_location', 'DESC');
+    
+    $questionnaires = $this->db->get()->result();
+    
+    // Processar dados adicionais
+    foreach ($questionnaires as &$questionnaire) {
+        // Calcular taxa de localização
+        $questionnaire->location_rate = $questionnaire->total_responses > 0 ? 
+            round(($questionnaire->responses_with_location / $questionnaire->total_responses) * 100, 1) : 0;
+        
+        // Calcular taxa de fotos
+        $questionnaire->photo_rate = $questionnaire->total_responses > 0 ? 
+            round(($questionnaire->responses_with_photos / $questionnaire->total_responses) * 100, 1) : 0;
+        
+        // Formatar datas
+        $questionnaire->first_response_formatted = $questionnaire->first_response ? 
+            date('d/m/Y', strtotime($questionnaire->first_response)) : 'N/A';
+        
+        $questionnaire->last_response_formatted = $questionnaire->last_response ? 
+            date('d/m/Y', strtotime($questionnaire->last_response)) : 'N/A';
+        
+        // Calcular adequação para KMZ
+        $questionnaire->kmz_ready = ($questionnaire->responses_with_location > 0);
+        $questionnaire->kmz_quality_score = $this->calculate_kmz_quality_score($questionnaire);
+    }
+    
+    return $questionnaires;
+}
+
+/**
+ * NOVO: Calcular score de qualidade para KMZ
+ */
+private function calculate_kmz_quality_score($questionnaire) {
+    $score = 0;
+    
+    // Pontuação por número de localizações (máximo 40 pontos)
+    if ($questionnaire->responses_with_location >= 100) {
+        $score += 40;
+    } elseif ($questionnaire->responses_with_location >= 50) {
+        $score += 30;
+    } elseif ($questionnaire->responses_with_location >= 20) {
+        $score += 20;
+    } elseif ($questionnaire->responses_with_location >= 5) {
+        $score += 10;
+    }
+    
+    // Pontuação por diversidade de locais (máximo 25 pontos)
+    if ($questionnaire->unique_locations >= 20) {
+        $score += 25;
+    } elseif ($questionnaire->unique_locations >= 10) {
+        $score += 20;
+    } elseif ($questionnaire->unique_locations >= 5) {
+        $score += 15;
+    } elseif ($questionnaire->unique_locations >= 2) {
+        $score += 10;
+    }
+    
+    // Pontuação por taxa de localização (máximo 20 pontos)
+    if ($questionnaire->location_rate >= 90) {
+        $score += 20;
+    } elseif ($questionnaire->location_rate >= 70) {
+        $score += 15;
+    } elseif ($questionnaire->location_rate >= 50) {
+        $score += 10;
+    } elseif ($questionnaire->location_rate >= 25) {
+        $score += 5;
+    }
+    
+    // Pontuação por presença de fotos (máximo 15 pontos)
+    if ($questionnaire->photo_rate >= 80) {
+        $score += 15;
+    } elseif ($questionnaire->photo_rate >= 50) {
+        $score += 10;
+    } elseif ($questionnaire->photo_rate >= 25) {
+        $score += 5;
+    }
+    
+    return $score;
+}
+
+/**
+ * NOVO: Obter questionários mais adequados para KMZ
+ */
+public function get_top_kmz_questionnaires($limit = 10) {
+    $questionnaires = $this->get_questionnaires_with_location_count();
+    
+    // Filtrar apenas questionários com dados de localização
+    $kmz_ready = array_filter($questionnaires, function($q) {
+        return $q->kmz_ready && $q->responses_with_location > 0;
+    });
+    
+    // Ordenar por score de qualidade
+    usort($kmz_ready, function($a, $b) {
+        return $b->kmz_quality_score - $a->kmz_quality_score;
+    });
+    
+    return array_slice($kmz_ready, 0, $limit);
+}
+
+/**
+ * NOVO: Obter detalhes de questionário para KMZ
+ */
+public function get_questionnaire_kmz_details($questionnaire_id) {
+    // Buscar informações básicas do questionário
+    $this->db->select('
+        q.*,
+        u.full_name as created_by_name,
+        p.name as project_name
+    ');
+    $this->db->from('questionnaires q');
+    $this->db->join('users u', 'q.created_by = u.id', 'left');
+    $this->db->join('projects p', 'q.project_id = p.id', 'left');
+    $this->db->where('q.id', $questionnaire_id);
+    
+    $questionnaire = $this->db->get()->row();
+    
+    if (!$questionnaire) {
+        return null;
+    }
+    
+    // Buscar estatísticas de localização
+    $this->load->model('Response_model');
+    $location_stats = $this->Response_model->get_location_stats_by_questionnaire($questionnaire_id);
+    
+    // Buscar distribuição geográfica
+    $geographic_distribution = $this->Response_model->get_geographic_distribution([
+        'questionnaire_ids' => [$questionnaire_id]
+    ]);
+    
+    // Buscar histórico de aplicações por mês
+    $this->db->select('
+        DATE_TRUNC(\'month\', completed_at) as month,
+        COUNT(*) as total_responses,
+        COUNT(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 1 END) as responses_with_location
+    ');
+    $this->db->from('form_responses');
+    $this->db->where('questionnaire_id', $questionnaire_id);
+    $this->db->where('completed_at IS NOT NULL');
+    $this->db->group_by('DATE_TRUNC(\'month\', completed_at)');
+    $this->db->order_by('month', 'ASC');
+    
+    $monthly_stats = $this->db->get()->result();
+    
+    // Processar dados mensais
+    foreach ($monthly_stats as &$stat) {
+        $stat->month_formatted = date('m/Y', strtotime($stat->month));
+        $stat->location_rate = $stat->total_responses > 0 ? 
+            round(($stat->responses_with_location / $stat->total_responses) * 100, 1) : 0;
+    }
+    
+    return [
+        'questionnaire' => $questionnaire,
+        'location_stats' => $location_stats,
+        'geographic_distribution' => $geographic_distribution,
+        'monthly_stats' => $monthly_stats,
+        'kmz_quality_score' => $this->calculate_kmz_quality_score((object)[
+            'responses_with_location' => $location_stats->with_location ?? 0,
+            'unique_locations' => $location_stats->unique_locations ?? 0,
+            'location_rate' => $location_stats->location_rate ?? 0,
+            'photo_rate' => $location_stats->photo_rate ?? 0
+        ])
+    ];
+}
+
+/**
+ * NOVO: Verificar se questionário tem dados suficientes para KMZ
+ */
+public function check_kmz_readiness($questionnaire_id) {
+    $this->db->select('
+        COUNT(*) as total_responses,
+        COUNT(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL 
+                  AND latitude != 0 AND longitude != 0 
+             THEN 1 END) as responses_with_location,
+        COUNT(DISTINCT location_name) as unique_locations
+    ');
+    $this->db->from('form_responses');
+    $this->db->where('questionnaire_id', $questionnaire_id);
+    $this->db->where('completed_at IS NOT NULL');
+    
+    $stats = $this->db->get()->row();
+    
+    if (!$stats) {
+        return [
+            'ready' => false,
+            'reason' => 'Nenhuma resposta encontrada',
+            'requirements' => [],
+            'stats' => null
+        ];
+    }
+    
+    $requirements = [
+        'has_responses' => $stats->total_responses > 0,
+        'has_locations' => $stats->responses_with_location > 0,
+        'min_locations' => $stats->responses_with_location >= 1,
+        'location_diversity' => $stats->unique_locations >= 1
+    ];
+    
+    $ready = array_reduce($requirements, function($carry, $req) {
+        return $carry && $req;
+    }, true);
+    
+    $reason = '';
+    if (!$requirements['has_responses']) {
+        $reason = 'Questionário não possui respostas';
+    } elseif (!$requirements['has_locations']) {
+        $reason = 'Nenhuma resposta possui dados de localização';
+    } elseif (!$requirements['min_locations']) {
+        $reason = 'Número insuficiente de localizações';
+    }
+    
+    return [
+        'ready' => $ready,
+        'reason' => $reason,
+        'requirements' => $requirements,
+        'stats' => $stats,
+        'recommendations' => $this->get_kmz_recommendations($stats)
+    ];
+}
+
+/**
+ * NOVO: Obter recomendações para melhorar dados de KMZ
+ */
+private function get_kmz_recommendations($stats) {
+    $recommendations = [];
+    
+    if ($stats->responses_with_location == 0) {
+        $recommendations[] = [
+            'type' => 'critical',
+            'message' => 'Ative a captura de localização nas configurações do questionário',
+            'action' => 'edit_questionnaire_settings'
+        ];
+    } elseif ($stats->responses_with_location < 10) {
+        $recommendations[] = [
+            'type' => 'warning',
+            'message' => 'Colete mais dados com localização para melhor visualização',
+            'action' => 'continue_data_collection'
+        ];
+    }
+    
+    if ($stats->unique_locations <= 1) {
+        $recommendations[] = [
+            'type' => 'info',
+            'message' => 'Diversifique os locais de coleta para melhor cobertura geográfica',
+            'action' => 'expand_geographic_coverage'
+        ];
+    }
+    
+    $location_rate = $stats->total_responses > 0 ? 
+        ($stats->responses_with_location / $stats->total_responses) * 100 : 0;
+    
+    if ($location_rate < 50) {
+        $recommendations[] = [
+            'type' => 'warning',
+            'message' => 'Taxa de captura de localização baixa (' . round($location_rate, 1) . '%)',
+            'action' => 'improve_location_capture'
+        ];
+    }
+    
+    return $recommendations;
+}
+
+/**
+ * NOVO: Obter questionários por região geográfica
+ */
+public function get_questionnaires_by_region($filters = []) {
+    $this->db->select('
+        q.id,
+        q.title,
+        COUNT(DISTINCT fr.location_name) as unique_locations,
+        COUNT(fr.id) as total_responses,
+        STRING_AGG(DISTINCT fr.location_name, \', \' ORDER BY fr.location_name) as locations_list
+    ');
+    
+    $this->db->from('questionnaires q');
+    $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.completed_at IS NOT NULL', 'inner');
+    
+    $this->db->where('q.status', 'active');
+    $this->db->where('fr.location_name IS NOT NULL');
+    $this->db->where('fr.location_name !=', '');
+    
+    // Filtros opcionais
+    if (isset($filters['location_pattern']) && !empty($filters['location_pattern'])) {
+        $this->db->like('fr.location_name', $filters['location_pattern'], 'both');
+    }
+    
+    if (isset($filters['min_locations']) && is_numeric($filters['min_locations'])) {
+        $this->db->having('COUNT(DISTINCT fr.location_name) >=', (int)$filters['min_locations']);
+    }
+    
+    $this->db->group_by('q.id, q.title');
+    $this->db->order_by('unique_locations', 'DESC');
+    
+    if (isset($filters['limit']) && is_numeric($filters['limit'])) {
+        $this->db->limit((int)$filters['limit']);
+    }
+    
+    return $this->db->get()->result();
+}
 }

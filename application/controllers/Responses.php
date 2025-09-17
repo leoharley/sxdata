@@ -1068,4 +1068,5 @@ class Responses extends CI_Controller {
             redirect('auth/login');
         }
     }
+    
 }

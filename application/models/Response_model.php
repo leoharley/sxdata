@@ -176,119 +176,134 @@ class Response_model extends CI_Model {
     }
 
     public function get_with_location($filters = array()) {
-    // Construir WHERE conditions
-    $where_conditions = array();
-    $where_conditions[] = "fr.latitude IS NOT NULL";
-    $where_conditions[] = "fr.longitude IS NOT NULL";
-    $where_conditions[] = "fr.latitude != 0";
-    $where_conditions[] = "fr.longitude != 0";
-    $where_conditions[] = "fr.completed_at IS NOT NULL";
-    
-    // Parâmetros para prepared statement
-    $params = array();
-    
-    if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
-        $where_conditions[] = "fr.questionnaire_id = ?";
-        $params[] = $filters['questionnaire_id'];
+        // Construir condições WHERE
+        $where_conditions = array();
+        $where_conditions[] = "fr.latitude IS NOT NULL";
+        $where_conditions[] = "fr.longitude IS NOT NULL";
+        $where_conditions[] = "fr.latitude != 0";
+        $where_conditions[] = "fr.longitude != 0";
+        $where_conditions[] = "fr.completed_at IS NOT NULL";
+        
+        // Parâmetros para prepared statement
+        $params = array();
+        
+        // CORRIGIDO: Suporte para múltiplos questionários
+        if (isset($filters['questionnaire_ids']) && is_array($filters['questionnaire_ids']) && !empty($filters['questionnaire_ids'])) {
+            // Validar e sanitizar IDs
+            $valid_ids = array_filter(
+                array_map('intval', $filters['questionnaire_ids']),
+                function($id) { return $id > 0; }
+            );
+            
+            if (!empty($valid_ids)) {
+                $placeholders = implode(',', array_fill(0, count($valid_ids), '?'));
+                $where_conditions[] = "fr.questionnaire_id IN ($placeholders)";
+                $params = array_merge($params, $valid_ids);
+            }
+        } elseif (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
+            $where_conditions[] = "fr.questionnaire_id = ?";
+            $params[] = (int)$filters['questionnaire_id'];
+        }
+        
+        if (isset($filters['applied_by']) && $filters['applied_by']) {
+            $where_conditions[] = "fr.applied_by = ?";
+            $params[] = (int)$filters['applied_by'];
+        }
+        
+        if (isset($filters['date_from']) && $filters['date_from']) {
+            $where_conditions[] = "DATE(fr.completed_at) >= ?";
+            $params[] = $filters['date_from'];
+        }
+        
+        if (isset($filters['date_to']) && $filters['date_to']) {
+            $where_conditions[] = "DATE(fr.completed_at) <= ?";
+            $params[] = $filters['date_to'];
+        }
+        
+        if (isset($filters['sync_status']) && $filters['sync_status']) {
+            $where_conditions[] = "fr.sync_status = ?";
+            $params[] = $filters['sync_status'];
+        }
+        
+        $where_clause = implode(' AND ', $where_conditions);
+        
+        // Query otimizada com todas as informações necessárias
+        $sql = "
+            SELECT 
+                fr.id,
+                fr.questionnaire_id,
+                fr.respondent_name,
+                fr.respondent_email,
+                fr.applied_by,
+                fr.latitude,
+                fr.longitude,
+                fr.location_name,
+                fr.photo_path,
+                fr.consent_given,
+                fr.sync_status,
+                fr.started_at,
+                fr.completed_at,
+                fr.created_at,
+                q.title as questionnaire_title,
+                q.description as questionnaire_description,
+                u.full_name as applied_by_name,
+                u.username as applied_by_username,
+                CASE 
+                    WHEN fr.started_at IS NOT NULL AND fr.completed_at IS NOT NULL 
+                    THEN EXTRACT(EPOCH FROM (fr.completed_at - fr.started_at))/60 
+                    ELSE NULL 
+                END as duration_minutes,
+                (
+                    SELECT COALESCE(
+                        qr.response_text, 
+                        qr.response_number::text,
+                        TO_CHAR(qr.response_date, 'DD/MM/YYYY'),
+                        TO_CHAR(qr.response_datetime, 'DD/MM/YYYY HH24:MI'),
+                        qr.selected_options
+                    )
+                    FROM question_responses qr
+                    JOIN questions quest ON qr.question_id = quest.id
+                    WHERE qr.form_response_id = fr.id
+                    ORDER BY quest.order_index ASC
+                    LIMIT 1
+                ) as indexador
+            FROM form_responses fr
+            LEFT JOIN questionnaires q ON fr.questionnaire_id = q.id
+            LEFT JOIN users u ON fr.applied_by = u.id
+            WHERE {$where_clause}
+            ORDER BY fr.completed_at DESC
+        ";
+        
+        try {
+            if (!empty($params)) {
+                $query = $this->db->query($sql, $params);
+            } else {
+                $query = $this->db->query($sql);
+            }
+            
+            $result = $query->result();
+            
+            // Processar resultados
+            foreach ($result as &$response) {
+                // Formatações adicionais
+                $response->duration_formatted = $this->format_duration($response->duration_minutes);
+                $response->completed_at_formatted = date('d/m/Y H:i', strtotime($response->completed_at));
+                $response->has_photo = !empty($response->photo_path);
+                $response->coordinates_formatted = number_format($response->latitude, 6) . ', ' . number_format($response->longitude, 6);
+            }
+            
+            if (ENVIRONMENT === 'development') {
+                log_message('debug', 'Query get_with_location executada com sucesso. Total: ' . count($result));
+            }
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            log_message('error', 'Erro em get_with_location: ' . $e->getMessage());
+            log_message('error', 'SQL: ' . $sql);
+            return array();
+        }
     }
-    
-    if (isset($filters['applied_by']) && $filters['applied_by']) {
-        $where_conditions[] = "fr.applied_by = ?";
-        $params[] = $filters['applied_by'];
-    }
-    
-    if (isset($filters['date_from']) && $filters['date_from']) {
-        $where_conditions[] = "DATE(fr.completed_at) >= ?";
-        $params[] = $filters['date_from'];
-    }
-    
-    if (isset($filters['date_to']) && $filters['date_to']) {
-        $where_conditions[] = "DATE(fr.completed_at) <= ?";
-        $params[] = $filters['date_to'];
-    }
-    
-    if (isset($filters['sync_status']) && $filters['sync_status']) {
-        $where_conditions[] = "fr.sync_status = ?";
-        $params[] = $filters['sync_status'];
-    }
-    
-    $where_clause = implode(' AND ', $where_conditions);
-    
-    // Query manual para evitar problemas de escaping
-    $sql = "
-        SELECT 
-            fr.id,
-            fr.questionnaire_id,
-            fr.respondent_name,
-            fr.respondent_email,
-            fr.applied_by,
-            fr.latitude,
-            fr.longitude,
-            fr.location_name,
-            fr.photo_path,
-            fr.consent_given,
-            fr.sync_status,
-            fr.started_at,
-            fr.completed_at,
-            fr.created_at,
-            q.title as questionnaire_title,
-            u.full_name as applied_by_name,
-            (
-                SELECT COALESCE(
-                    qr.response_text, 
-                    CASE 
-                        WHEN qr.response_number IS NOT NULL THEN qr.response_number::text
-                        ELSE NULL
-                    END,
-                    CASE 
-                        WHEN qr.response_date IS NOT NULL THEN TO_CHAR(qr.response_date, 'DD/MM/YYYY')
-                        ELSE NULL
-                    END,
-                    CASE 
-                        WHEN qr.response_datetime IS NOT NULL THEN TO_CHAR(qr.response_datetime, 'DD/MM/YYYY HH24:MI')
-                        ELSE NULL
-                    END,
-                    CASE 
-                        WHEN qr.selected_options IS NOT NULL THEN qr.selected_options::text
-                        ELSE NULL
-                    END
-                )
-                FROM question_responses qr
-                JOIN questions quest ON qr.question_id = quest.id
-                WHERE qr.form_response_id = fr.id
-                AND quest.order_index = (
-                    SELECT MIN(order_index) 
-                    FROM questions 
-                    WHERE questionnaire_id = fr.questionnaire_id
-                )
-                LIMIT 1
-            ) as indexador
-        FROM form_responses fr
-        LEFT JOIN questionnaires q ON fr.questionnaire_id = q.id
-        LEFT JOIN users u ON fr.applied_by = u.id
-        WHERE {$where_clause}
-        ORDER BY fr.completed_at DESC
-    ";
-    
-    // Executar query
-    if (!empty($params)) {
-        $query = $this->db->query($sql, $params);
-    } else {
-        $query = $this->db->query($sql);
-    }
-    
-    $result = $query->result();
-    
-    // Debug em desenvolvimento
-    if (ENVIRONMENT === 'development') {
-        log_message('debug', 'Query get_with_location: ' . $this->db->last_query());
-        log_message('debug', 'Total resultados: ' . count($result));
-    }
-    
-    return $result;
-}
-
-
 
     public function count_photos($filters = array()) {
         $this->db->from('form_responses fr');
@@ -2272,6 +2287,912 @@ public function validate_export_filters($filters) {
             'location_rate' => $total > 0 ? round(($with_location / $total) * 100, 1) : 0
         );
     }
+    
+/**
+ * MÉTODO DE APOIO: Validar formato de data
+ */
+private function validate_date($date) {
+    if (empty($date)) {
+        return false;
+    }
+    
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    return $d && $d->format('Y-m-d') === $date;
+}
 
+/**
+ * MÉTODO DE APOIO: Sanitizar coordenadas
+ */
+private function sanitize_coordinates($lat, $lng) {
+    $lat = floatval($lat);
+    $lng = floatval($lng);
+    
+    // Validar limites geográficos
+    if ($lat < -90 || $lat > 90) {
+        return array('valid' => false, 'error' => 'Latitude inválida');
+    }
+    
+    if ($lng < -180 || $lng > 180) {
+        return array('valid' => false, 'error' => 'Longitude inválida');
+    }
+    
+    // Verificar se não são coordenadas nulas/padrão
+    if ($lat == 0 && $lng == 0) {
+        return array('valid' => false, 'error' => 'Coordenadas não podem ser 0,0');
+    }
+    
+    return array(
+        'valid' => true,
+        'lat' => $lat,
+        'lng' => $lng
+    );
+}
+
+/**
+ * MÉTODO DE APOIO: Construir cláusula WHERE dinamicamente
+ */
+private function build_where_clause($conditions, $params) {
+    if (empty($conditions)) {
+        return array('clause' => '1=1', 'params' => array());
+    }
+    
+    return array(
+        'clause' => implode(' AND ', $conditions),
+        'params' => $params
+    );
+}
+
+/**
+ * MÉTODO DE APOIO: Calcular distância entre dois pontos (em km)
+ */
+private function calculate_distance($lat1, $lng1, $lat2, $lng2) {
+    $earth_radius = 6371; // Raio da Terra em km
+    
+    $lat1_rad = deg2rad($lat1);
+    $lng1_rad = deg2rad($lng1);
+    $lat2_rad = deg2rad($lat2);
+    $lng2_rad = deg2rad($lng2);
+    
+    $delta_lat = $lat2_rad - $lat1_rad;
+    $delta_lng = $lng2_rad - $lng1_rad;
+    
+    $a = sin($delta_lat / 2) * sin($delta_lat / 2) +
+         cos($lat1_rad) * cos($lat2_rad) *
+         sin($delta_lng / 2) * sin($delta_lng / 2);
+    
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+    
+    return $earth_radius * $c;
+}
+
+/**
+ * MÉTODO ADICIONAL: Obter estatísticas de cobertura geográfica
+ */
+public function get_coverage_statistics($filters = array()) {
+    $validation = $this->validate_filter_params($filters);
+    if (!$validation['is_valid']) {
+        log_message('error', 'Parâmetros inválidos em get_coverage_statistics: ' . implode(', ', $validation['errors']));
+        return array('error' => 'Parâmetros inválidos: ' . implode(', ', $validation['errors']));
+    }
+    
+    $filters = $validation['validated'];
+    
+    // Query para estatísticas de cobertura
+    $where_conditions = array();
+    $where_conditions[] = "fr.latitude IS NOT NULL";
+    $where_conditions[] = "fr.longitude IS NOT NULL";
+    $where_conditions[] = "fr.latitude != 0";
+    $where_conditions[] = "fr.longitude != 0";
+    $where_conditions[] = "fr.completed_at IS NOT NULL";
+    
+    $params = array();
+    
+    // Aplicar filtros validados
+    if (isset($filters['questionnaire_ids'])) {
+        $placeholders = implode(',', array_fill(0, count($filters['questionnaire_ids']), '?'));
+        $where_conditions[] = "fr.questionnaire_id IN ($placeholders)";
+        $params = array_merge($params, $filters['questionnaire_ids']);
+    }
+    
+    if (isset($filters['date_from'])) {
+        $where_conditions[] = "DATE(fr.completed_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (isset($filters['date_to'])) {
+        $where_conditions[] = "DATE(fr.completed_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $where_clause = implode(' AND ', $where_conditions);
+    
+    $sql = "
+        WITH location_stats AS (
+            SELECT 
+                fr.location_name,
+                fr.latitude,
+                fr.longitude,
+                COUNT(*) as point_count,
+                MIN(fr.completed_at) as first_visit,
+                MAX(fr.completed_at) as last_visit
+            FROM form_responses fr
+            WHERE {$where_clause}
+            GROUP BY fr.location_name, fr.latitude, fr.longitude
+        ),
+        coverage_metrics AS (
+            SELECT 
+                COUNT(*) as total_unique_points,
+                COUNT(DISTINCT location_name) as unique_named_locations,
+                AVG(point_count) as avg_responses_per_point,
+                MIN(latitude) as south_bound,
+                MAX(latitude) as north_bound,
+                MIN(longitude) as west_bound,
+                MAX(longitude) as east_bound,
+                MIN(first_visit) as earliest_data,
+                MAX(last_visit) as latest_data
+            FROM location_stats
+        )
+        SELECT 
+            *,
+            (north_bound - south_bound) as lat_span,
+            (east_bound - west_bound) as lng_span
+        FROM coverage_metrics
+    ";
+    
+    try {
+        if (!empty($params)) {
+            $result = $this->db->query($sql, $params)->row();
+        } else {
+            $result = $this->db->query($sql)->row();
+        }
+        
+        if ($result) {
+            // Calcular área aproximada coberta (em km²)
+            $lat_km = $result->lat_span * 111; // 1 grau de latitude ≈ 111 km
+            $lng_km = $result->lng_span * 111 * cos(deg2rad(($result->north_bound + $result->south_bound) / 2));
+            $approximate_area = abs($lat_km * $lng_km);
+            
+            // Calcular período de coleta
+            $collection_days = 0;
+            if ($result->earliest_data && $result->latest_data) {
+                $start = new DateTime($result->earliest_data);
+                $end = new DateTime($result->latest_data);
+                $collection_days = $end->diff($start)->days;
+            }
+            
+            return array(
+                'total_unique_points' => (int)$result->total_unique_points,
+                'unique_named_locations' => (int)$result->unique_named_locations,
+                'avg_responses_per_point' => round($result->avg_responses_per_point, 1),
+                'geographic_bounds' => array(
+                    'north' => (float)$result->north_bound,
+                    'south' => (float)$result->south_bound,
+                    'east' => (float)$result->east_bound,
+                    'west' => (float)$result->west_bound
+                ),
+                'geographic_span' => array(
+                    'latitude_degrees' => round($result->lat_span, 4),
+                    'longitude_degrees' => round($result->lng_span, 4),
+                    'approximate_area_km2' => round($approximate_area, 1)
+                ),
+                'temporal_span' => array(
+                    'earliest_data' => $result->earliest_data,
+                    'latest_data' => $result->latest_data,
+                    'collection_days' => $collection_days
+                ),
+                'coverage_quality' => $this->assess_coverage_quality($result)
+            );
+        } else {
+            return array(
+                'total_unique_points' => 0,
+                'unique_named_locations' => 0,
+                'message' => 'Nenhum dado de localização encontrado'
+            );
+        }
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro em get_coverage_statistics: ' . $e->getMessage());
+        return array('error' => 'Erro ao calcular estatísticas de cobertura');
+    }
+}
+
+/**
+ * MÉTODO PRIVADO: Avaliar qualidade da cobertura geográfica
+ */
+private function assess_coverage_quality($stats) {
+    $quality_score = 0;
+    $recommendations = array();
+    
+    // Avaliar número de pontos únicos
+    if ($stats->total_unique_points >= 100) {
+        $quality_score += 3;
+    } elseif ($stats->total_unique_points >= 50) {
+        $quality_score += 2;
+    } elseif ($stats->total_unique_points >= 10) {
+        $quality_score += 1;
+    } else {
+        $recommendations[] = 'Coletar dados em mais localizações diferentes';
+    }
+    
+    // Avaliar distribuição de respostas por ponto
+    if ($stats->avg_responses_per_point >= 3 && $stats->avg_responses_per_point <= 10) {
+        $quality_score += 2; // Boa distribuição
+    } elseif ($stats->avg_responses_per_point > 10) {
+        $recommendations[] = 'Considere diversificar mais as localizações de coleta';
+    } else {
+        $recommendations[] = 'Considere coletar mais dados por localização';
+    }
+    
+    // Avaliar diversidade de locais nomeados
+    $location_diversity = $stats->unique_named_locations / max(1, $stats->total_unique_points);
+    if ($location_diversity >= 0.8) {
+        $quality_score += 2;
+    } elseif ($location_diversity >= 0.5) {
+        $quality_score += 1;
+    } else {
+        $recommendations[] = 'Melhorar nomenclatura/identificação dos locais';
+    }
+    
+    // Determinar classificação
+    if ($quality_score >= 6) {
+        $classification = 'Excelente';
+    } elseif ($quality_score >= 4) {
+        $classification = 'Boa';
+    } elseif ($quality_score >= 2) {
+        $classification = 'Regular';
+    } else {
+        $classification = 'Precisa melhorar';
+    }
+    
+    return array(
+        'score' => $quality_score,
+        'max_score' => 7,
+        'classification' => $classification,
+        'recommendations' => $recommendations
+    );
+}
+
+/**
+ * MÉTODO ADICIONAL: Detectar clusters de localizações
+ */
+public function detect_location_clusters($filters = array(), $max_distance_km = 1.0) {
+    // Obter todas as localizações
+    $locations = $this->get_location_heatmap_data($filters);
+    
+    if (empty($locations['points'])) {
+        return array('clusters' => array(), 'isolated_points' => array());
+    }
+    
+    $points = $locations['points'];
+    $clusters = array();
+    $processed = array();
+    
+    foreach ($points as $i => $point1) {
+        if (in_array($i, $processed)) {
+            continue;
+        }
+        
+        $cluster = array($point1);
+        $cluster_indices = array($i);
+        
+        foreach ($points as $j => $point2) {
+            if ($i == $j || in_array($j, $processed)) {
+                continue;
+            }
+            
+            $distance = $this->calculate_distance(
+                $point1['lat'], $point1['lng'],
+                $point2['lat'], $point2['lng']
+            );
+            
+            if ($distance <= $max_distance_km) {
+                $cluster[] = $point2;
+                $cluster_indices[] = $j;
+            }
+        }
+        
+        if (count($cluster) > 1) {
+            // É um cluster
+            $clusters[] = array(
+                'points' => $cluster,
+                'count' => count($cluster),
+                'total_responses' => array_sum(array_column($cluster, 'weight')),
+                'center' => $this->calculate_cluster_center($cluster),
+                'max_distance_km' => $max_distance_km
+            );
+            $processed = array_merge($processed, $cluster_indices);
+        } else {
+            // Ponto isolado
+            $processed[] = $i;
+        }
+    }
+    
+    // Pontos isolados
+    $isolated_points = array();
+    foreach ($points as $i => $point) {
+        if (!in_array($i, $processed)) {
+            $isolated_points[] = $point;
+        }
+    }
+    
+    return array(
+        'clusters' => $clusters,
+        'isolated_points' => $isolated_points,
+        'total_clusters' => count($clusters),
+        'total_isolated' => count($isolated_points)
+    );
+}
+
+/**
+ * MÉTODO PRIVADO: Calcular centro de um cluster
+ */
+private function calculate_cluster_center($cluster_points) {
+    $total_weight = array_sum(array_column($cluster_points, 'weight'));
+    $weighted_lat = 0;
+    $weighted_lng = 0;
+    
+    foreach ($cluster_points as $point) {
+        $weight_ratio = $point['weight'] / $total_weight;
+        $weighted_lat += $point['lat'] * $weight_ratio;
+        $weighted_lng += $point['lng'] * $weight_ratio;
+    }
+    
+    return array(
+        'lat' => $weighted_lat,
+        'lng' => $weighted_lng
+    );
+}
+
+private function validate_filter_params($filters) {
+    $validated = array();
+    $errors = array();
+    
+    // Validar questionnaire_ids
+    if (isset($filters['questionnaire_ids'])) {
+        if (is_array($filters['questionnaire_ids'])) {
+            $valid_ids = array_filter(
+                array_map('intval', $filters['questionnaire_ids']),
+                function($id) { return $id > 0; }
+            );
+            if (!empty($valid_ids)) {
+                $validated['questionnaire_ids'] = $valid_ids;
+            }
+        } else {
+            $errors[] = 'questionnaire_ids deve ser um array';
+        }
+    }
+    
+    // Validar questionnaire_id
+    if (isset($filters['questionnaire_id'])) {
+        $id = intval($filters['questionnaire_id']);
+        if ($id > 0) {
+            $validated['questionnaire_id'] = $id;
+        } else {
+            $errors[] = 'questionnaire_id deve ser um número positivo';
+        }
+    }
+    
+    // Validar applied_by
+    if (isset($filters['applied_by'])) {
+        $id = intval($filters['applied_by']);
+        if ($id > 0) {
+            $validated['applied_by'] = $id;
+        } else {
+            $errors[] = 'applied_by deve ser um número positivo';
+        }
+    }
+    
+    // Validar datas
+    if (isset($filters['date_from'])) {
+        if ($this->validate_date($filters['date_from'])) {
+            $validated['date_from'] = $filters['date_from'];
+        } else {
+            $errors[] = 'date_from deve estar no formato YYYY-MM-DD';
+        }
+    }
+    
+    if (isset($filters['date_to'])) {
+        if ($this->validate_date($filters['date_to'])) {
+            $validated['date_to'] = $filters['date_to'];
+        } else {
+            $errors[] = 'date_to deve estar no formato YYYY-MM-DD';
+        }
+    }
+    
+    // Validar intervalo de datas
+    if (isset($validated['date_from']) && isset($validated['date_to'])) {
+        if ($validated['date_from'] > $validated['date_to']) {
+            $errors[] = 'date_from deve ser anterior a date_to';
+        }
+    }
+    
+    // Validar sync_status
+    if (isset($filters['sync_status'])) {
+        $valid_statuses = array('pending', 'synced', 'error');
+        if (in_array($filters['sync_status'], $valid_statuses)) {
+            $validated['sync_status'] = $filters['sync_status'];
+        } else {
+            $errors[] = 'sync_status deve ser: ' . implode(', ', $valid_statuses);
+        }
+    }
+    
+    return array(
+        'validated' => $validated,
+        'errors' => $errors,
+        'is_valid' => empty($errors)
+    );
+}
+
+public function get_location_stats_by_questionnaire($questionnaire_id) {
+    $questionnaire_id = (int)$questionnaire_id;
+    
+    $sql = "
+        SELECT 
+            COUNT(*) as total_responses,
+            COUNT(CASE WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL 
+                       AND fr.latitude != 0 AND fr.longitude != 0 
+                  THEN 1 END) as with_location,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' 
+                  THEN 1 END) as with_photos,
+            COUNT(DISTINCT CASE WHEN fr.location_name IS NOT NULL AND fr.location_name != ''
+                               THEN fr.location_name END) as unique_locations,
+            COUNT(DISTINCT fr.applied_by) as unique_applicators,
+            MIN(fr.completed_at) as earliest_response,
+            MAX(fr.completed_at) as latest_response,
+            AVG(CASE 
+                WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL 
+                     AND fr.latitude != 0 AND fr.longitude != 0
+                THEN fr.latitude 
+            END) as avg_latitude,
+            AVG(CASE 
+                WHEN fr.latitude IS NOT NULL AND fr.longitude IS NOT NULL 
+                     AND fr.latitude != 0 AND fr.longitude != 0
+                THEN fr.longitude 
+            END) as avg_longitude
+        FROM form_responses fr
+        WHERE fr.questionnaire_id = ? AND fr.completed_at IS NOT NULL
+    ";
+    
+    try {
+        $result = $this->db->query($sql, array($questionnaire_id))->row();
+        
+        if ($result) {
+            // Calcular taxas
+            $result->location_rate = $result->total_responses > 0 ? 
+                round(($result->with_location / $result->total_responses) * 100, 1) : 0;
+            
+            $result->photo_rate = $result->total_responses > 0 ? 
+                round(($result->with_photos / $result->total_responses) * 100, 1) : 0;
+            
+            // Formatar datas
+            if ($result->earliest_response) {
+                $result->earliest_response_formatted = date('d/m/Y H:i', strtotime($result->earliest_response));
+            }
+            
+            if ($result->latest_response) {
+                $result->latest_response_formatted = date('d/m/Y H:i', strtotime($result->latest_response));
+            }
+            
+            // Calcular período de coleta em dias
+            if ($result->earliest_response && $result->latest_response) {
+                $start = new DateTime($result->earliest_response);
+                $end = new DateTime($result->latest_response);
+                $result->collection_period_days = $end->diff($start)->days;
+            } else {
+                $result->collection_period_days = 0;
+            }
+        }
+        
+        return $result;
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro em get_location_stats_by_questionnaire: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * MÉTODO CORRIGIDO: Validar disponibilidade de dados para KMZ
+ */
+public function validate_kmz_data_availability($filters = array()) {
+    $where_conditions = array();
+    $where_conditions[] = "fr.latitude IS NOT NULL";
+    $where_conditions[] = "fr.longitude IS NOT NULL";
+    $where_conditions[] = "fr.latitude != 0";
+    $where_conditions[] = "fr.longitude != 0";
+    $where_conditions[] = "fr.completed_at IS NOT NULL";
+    
+    $params = array();
+    
+    // Aplicar filtros
+    if (isset($filters['questionnaire_ids']) && is_array($filters['questionnaire_ids']) && !empty($filters['questionnaire_ids'])) {
+        $valid_ids = array_filter(array_map('intval', $filters['questionnaire_ids']), function($id) { return $id > 0; });
+        if (!empty($valid_ids)) {
+            $placeholders = implode(',', array_fill(0, count($valid_ids), '?'));
+            $where_conditions[] = "fr.questionnaire_id IN ($placeholders)";
+            $params = array_merge($params, $valid_ids);
+        }
+    }
+    
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $where_conditions[] = "DATE(fr.completed_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $where_conditions[] = "DATE(fr.completed_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $where_clause = implode(' AND ', $where_conditions);
+    
+    $sql = "
+        SELECT 
+            COUNT(*) as total,
+            COUNT(DISTINCT fr.questionnaire_id) as unique_questionnaires,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' THEN 1 END) as with_photos,
+            COUNT(DISTINCT CASE WHEN fr.location_name IS NOT NULL AND fr.location_name != '' 
+                               THEN fr.location_name END) as unique_locations
+        FROM form_responses fr 
+        WHERE {$where_clause}
+    ";
+    
+    try {
+        if (!empty($params)) {
+            $result = $this->db->query($sql, $params)->row();
+        } else {
+            $result = $this->db->query($sql)->row();
+        }
+        
+        $count = $result ? $result->total : 0;
+        
+        return array(
+            'has_data' => $count > 0,
+            'total_locations' => (int)$count,
+            'unique_questionnaires' => $result ? (int)$result->unique_questionnaires : 0,
+            'with_photos' => $result ? (int)$result->with_photos : 0,
+            'unique_locations' => $result ? (int)$result->unique_locations : 0,
+            'minimum_required' => 1,
+            'meets_requirements' => $count >= 1
+        );
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro em validate_kmz_data_availability: ' . $e->getMessage());
+        return array(
+            'has_data' => false,
+            'total_locations' => 0,
+            'meets_requirements' => false,
+            'error' => $e->getMessage()
+        );
+    }
+}
+
+/**
+ * MÉTODO CORRIGIDO: Obter distribuição geográfica das respostas
+ */
+public function get_geographic_distribution($filters = array()) {
+    $where_conditions = array();
+    $where_conditions[] = "fr.latitude IS NOT NULL";
+    $where_conditions[] = "fr.longitude IS NOT NULL";
+    $where_conditions[] = "fr.latitude != 0";
+    $where_conditions[] = "fr.longitude != 0";
+    $where_conditions[] = "fr.location_name IS NOT NULL";
+    $where_conditions[] = "fr.location_name != ''";
+    $where_conditions[] = "fr.completed_at IS NOT NULL";
+    
+    $params = array();
+    
+    // Aplicar filtros
+    if (isset($filters['questionnaire_ids']) && is_array($filters['questionnaire_ids']) && !empty($filters['questionnaire_ids'])) {
+        $valid_ids = array_filter(array_map('intval', $filters['questionnaire_ids']), function($id) { return $id > 0; });
+        if (!empty($valid_ids)) {
+            $placeholders = implode(',', array_fill(0, count($valid_ids), '?'));
+            $where_conditions[] = "fr.questionnaire_id IN ($placeholders)";
+            $params = array_merge($params, $valid_ids);
+        }
+    }
+    
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $where_conditions[] = "DATE(fr.completed_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $where_conditions[] = "DATE(fr.completed_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $where_clause = implode(' AND ', $where_conditions);
+    
+    $sql = "
+        SELECT
+            fr.location_name,
+            COUNT(*) as total_responses,
+            COUNT(DISTINCT fr.applied_by) as unique_applicators,
+            COUNT(DISTINCT fr.questionnaire_id) as unique_questionnaires,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' THEN 1 END) as responses_with_photos,
+            AVG(fr.latitude) as avg_latitude,
+            AVG(fr.longitude) as avg_longitude,
+            MIN(fr.completed_at) as first_response_date,
+            MAX(fr.completed_at) as last_response_date
+        FROM form_responses fr
+        WHERE {$where_clause}
+        GROUP BY fr.location_name
+        ORDER BY total_responses DESC
+        LIMIT 50
+    ";
+    
+    try {
+        if (!empty($params)) {
+            $query = $this->db->query($sql, $params);
+        } else {
+            $query = $this->db->query($sql);
+        }
+        
+        $distribution = $query->result();
+        
+        // Processar dados
+        foreach ($distribution as &$location) {
+            $location->photo_rate = $location->total_responses > 0 ? 
+                round(($location->responses_with_photos / $location->total_responses) * 100, 1) : 0;
+            
+            $location->first_response_formatted = date('d/m/Y', strtotime($location->first_response_date));
+            $location->last_response_formatted = date('d/m/Y', strtotime($location->last_response_date));
+            
+            // Calcular duração da coleta neste local
+            $first = new DateTime($location->first_response_date);
+            $last = new DateTime($location->last_response_date);
+            $location->collection_duration_days = $last->diff($first)->days;
+        }
+        
+        return $distribution;
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro em get_geographic_distribution: ' . $e->getMessage());
+        return array();
+    }
+}
+
+/**
+ * MÉTODO CORRIGIDO: Obter dados do mapa de calor
+ */
+public function get_location_heatmap_data($filters = array()) {
+    $where_conditions = array();
+    $where_conditions[] = "fr.latitude IS NOT NULL";
+    $where_conditions[] = "fr.longitude IS NOT NULL"; 
+    $where_conditions[] = "fr.latitude != 0";
+    $where_conditions[] = "fr.longitude != 0";
+    $where_conditions[] = "fr.completed_at IS NOT NULL";
+    
+    $params = array();
+    
+    // Aplicar filtros
+    if (isset($filters['questionnaire_ids']) && is_array($filters['questionnaire_ids']) && !empty($filters['questionnaire_ids'])) {
+        $valid_ids = array_filter(array_map('intval', $filters['questionnaire_ids']), function($id) { return $id > 0; });
+        if (!empty($valid_ids)) {
+            $placeholders = implode(',', array_fill(0, count($valid_ids), '?'));
+            $where_conditions[] = "fr.questionnaire_id IN ($placeholders)";
+            $params = array_merge($params, $valid_ids);
+        }
+    }
+    
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $where_conditions[] = "DATE(fr.completed_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $where_conditions[] = "DATE(fr.completed_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $where_clause = implode(' AND ', $where_conditions);
+    
+    $sql = "
+        SELECT 
+            fr.latitude,
+            fr.longitude,
+            fr.location_name,
+            COUNT(*) as response_count,
+            COUNT(DISTINCT fr.questionnaire_id) as questionnaire_count,
+            COUNT(CASE WHEN fr.photo_path IS NOT NULL AND fr.photo_path != '' THEN 1 END) as photo_count,
+            STRING_AGG(DISTINCT q.title, ', ') as questionnaire_titles,
+            MIN(fr.completed_at) as first_response,
+            MAX(fr.completed_at) as last_response
+        FROM form_responses fr
+        LEFT JOIN questionnaires q ON fr.questionnaire_id = q.id
+        WHERE {$where_clause}
+        GROUP BY fr.latitude, fr.longitude, fr.location_name
+        ORDER BY response_count DESC
+    ";
+    
+    try {
+        if (!empty($params)) {
+            $query = $this->db->query($sql, $params);
+        } else {
+            $query = $this->db->query($sql);
+        }
+        
+        $locations = $query->result();
+        
+        // Processar dados para heatmap
+        $heatmap_points = array();
+        $total_responses = 0;
+        
+        foreach ($locations as $location) {
+            $heatmap_points[] = array(
+                'lat' => (float) $location->latitude,
+                'lng' => (float) $location->longitude,
+                'weight' => (int) $location->response_count,
+                'location_name' => $location->location_name ?: 'Localização sem nome',
+                'questionnaire_count' => (int) $location->questionnaire_count,
+                'questionnaire_titles' => $location->questionnaire_titles,
+                'photo_count' => (int) $location->photo_count,
+                'first_response' => $location->first_response,
+                'last_response' => $location->last_response
+            );
+            
+            $total_responses += (int)$location->response_count;
+        }
+        
+        return array(
+            'points' => $heatmap_points,
+            'total_locations' => count($locations),
+            'total_responses' => $total_responses,
+            'max_weight' => !empty($locations) ? max(array_column($heatmap_points, 'weight')) : 0,
+            'avg_responses_per_location' => count($locations) > 0 ? round($total_responses / count($locations), 1) : 0
+        );
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro em get_location_heatmap_data: ' . $e->getMessage());
+        return array(
+            'points' => array(),
+            'total_locations' => 0,
+            'total_responses' => 0,
+            'max_weight' => 0,
+            'error' => $e->getMessage()
+        );
+    }
+}
+
+/**
+ * MÉTODO AUXILIAR: Formatar duração em minutos
+ */
+private function format_duration($minutes) {
+    if (!$minutes || $minutes <= 0) {
+        return 'N/A';
+    }
+    
+    if ($minutes < 60) {
+        return round($minutes) . ' min';
+    } else {
+        $hours = floor($minutes / 60);
+        $mins = round($minutes % 60);
+        return $hours . 'h ' . ($mins > 0 ? $mins . 'min' : '');
+    }
+}
+
+/**
+ * MÉTODO AUXILIAR: Formatar status de sincronização
+ */
+private function format_sync_status($status) {
+    switch (strtolower($status)) {
+        case 'synced': return 'Sincronizado';
+        case 'pending': return 'Pendente';
+        case 'error': return 'Erro';
+        default: return 'Desconhecido';
+    }
+}
+
+/**
+ * MÉTODO ADICIONAL: Obter estatísticas resumidas para KMZ
+ */
+public function get_kmz_summary_stats($filters = array()) {
+    $locations_data = $this->validate_kmz_data_availability($filters);
+    $geographic_data = $this->get_geographic_distribution($filters);
+    
+    return array(
+        'total_locations' => $locations_data['total_locations'],
+        'unique_questionnaires' => $locations_data['unique_questionnaires'], 
+        'with_photos' => $locations_data['with_photos'],
+        'unique_geographic_locations' => $locations_data['unique_locations'],
+        'top_locations' => array_slice($geographic_data, 0, 5),
+        'photo_coverage_rate' => $locations_data['total_locations'] > 0 ? 
+            round(($locations_data['with_photos'] / $locations_data['total_locations']) * 100, 1) : 0,
+        'geographic_diversity' => count($geographic_data),
+        'ready_for_kmz' => $locations_data['has_data'] && $locations_data['meets_requirements']
+    );
+}
+
+/**
+ * MÉTODO ADICIONAL: Obter bounds geográficos para centrar mapa
+ */
+public function get_geographic_bounds($filters = array()) {
+    $where_conditions = array();
+    $where_conditions[] = "fr.latitude IS NOT NULL";
+    $where_conditions[] = "fr.longitude IS NOT NULL";
+    $where_conditions[] = "fr.latitude != 0";
+    $where_conditions[] = "fr.longitude != 0";
+    
+    $params = array();
+    
+    // Aplicar filtros básicos
+    if (isset($filters['questionnaire_ids']) && is_array($filters['questionnaire_ids']) && !empty($filters['questionnaire_ids'])) {
+        $valid_ids = array_filter(array_map('intval', $filters['questionnaire_ids']), function($id) { return $id > 0; });
+        if (!empty($valid_ids)) {
+            $placeholders = implode(',', array_fill(0, count($valid_ids), '?'));
+            $where_conditions[] = "fr.questionnaire_id IN ($placeholders)";
+            $params = array_merge($params, $valid_ids);
+        }
+    }
+    
+    if (isset($filters['date_from']) && $filters['date_from']) {
+        $where_conditions[] = "DATE(fr.completed_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (isset($filters['date_to']) && $filters['date_to']) {
+        $where_conditions[] = "DATE(fr.completed_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $where_clause = implode(' AND ', $where_conditions);
+    
+    $sql = "
+        SELECT 
+            MIN(fr.latitude) as min_lat,
+            MAX(fr.latitude) as max_lat,
+            MIN(fr.longitude) as min_lng,
+            MAX(fr.longitude) as max_lng,
+            AVG(fr.latitude) as center_lat,
+            AVG(fr.longitude) as center_lng,
+            COUNT(*) as total_points
+        FROM form_responses fr
+        WHERE {$where_clause}
+    ";
+    
+    try {
+        if (!empty($params)) {
+            $result = $this->db->query($sql, $params)->row();
+        } else {
+            $result = $this->db->query($sql)->row();
+        }
+        
+        if ($result && $result->total_points > 0) {
+            return array(
+                'bounds' => array(
+                    'southwest' => array(
+                        'lat' => (float)$result->min_lat,
+                        'lng' => (float)$result->min_lng
+                    ),
+                    'northeast' => array(
+                        'lat' => (float)$result->max_lat,
+                        'lng' => (float)$result->max_lng
+                    )
+                ),
+                'center' => array(
+                    'lat' => (float)$result->center_lat,
+                    'lng' => (float)$result->center_lng
+                ),
+                'total_points' => (int)$result->total_points
+            );
+        } else {
+            // Retornar bounds padrão do Brasil se não houver dados
+            return array(
+                'bounds' => array(
+                    'southwest' => array('lat' => -33.7683777, 'lng' => -73.9872354),
+                    'northeast' => array('lat' => 5.2717863, 'lng' => -28.847770)
+                ),
+                'center' => array('lat' => -15.7942, 'lng' => -47.8822),
+                'total_points' => 0
+            );
+        }
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro em get_geographic_bounds: ' . $e->getMessage());
+        return null;
+    }
+
+}
 
 }

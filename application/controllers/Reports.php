@@ -1648,4 +1648,363 @@ private function add_questionnaire_summary($sheet, $startRow, $detailed_analysis
     }
 }
 
+/**
+ * Preview dos dados para geração de KMZ via AJAX
+ */
+public function preview_kmz_data() {
+    // Verificar se é requisição AJAX
+    if (!$this->input->is_ajax_request()) {
+        show_404();
+        return;
+    }
+    
+    header('Content-Type: application/json');
+    
+    try {
+        // Obter dados JSON do corpo da requisição
+        $json_input = json_decode($this->input->raw_input_stream, true);
+        
+        if (!$json_input) {
+            echo json_encode(['success' => false, 'message' => 'Dados inválidos']);
+            return;
+        }
+        
+        // Construir filtros a partir dos dados recebidos
+        $filters = $this->build_kmz_filters($json_input);
+        
+        // Obter preview dos dados
+        $preview = $this->get_kmz_preview($filters);
+        
+        // Retornar resposta JSON
+        echo json_encode([
+            'success' => true, 
+            'preview' => $preview,
+            'filters_applied' => $filters
+        ]);
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro no preview KMZ: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Erro interno do servidor: ' . $e->getMessage()
+        ]);
+    }
+}
+
+/**
+ * Gerar arquivo KMZ com filtros específicos
+ */
+public function generate_kmz_filtered() {
+    $this->check_auth();
+    
+    try {
+        // Construir filtros a partir dos parâmetros GET
+        $filters = $this->build_kmz_filters_from_get();
+        
+        // Obter respostas com localização
+        $responses = $this->Response_model->get_with_location($filters);
+        
+        if (empty($responses)) {
+            $this->session->set_flashdata('error', 'Nenhuma localização encontrada para gerar o arquivo KMZ.');
+            redirect('reports');
+            return;
+        }
+        
+        // Configurar nome do arquivo e título
+        $filename = $this->input->get('filename') ?: 'localizacoes_sxdata';
+        $title = $this->generate_kmz_title($filters);
+        
+        // Configurar opções do KMZ
+        $options = [
+            'include_photos' => $this->input->get('include_photos') === '1',
+            'include_respondent' => $this->input->get('include_respondent') === '1',
+            'include_applicator' => $this->input->get('include_applicator') === '1'
+        ];
+        
+        // Log da operação
+        log_message('info', 'Gerando KMZ filtrado - Usuário: ' . $this->session->userdata('user_id') . 
+                           ', Localizações: ' . count($responses) . 
+                           ', Filtros: ' . json_encode($filters));
+        
+        // Gerar arquivo KMZ
+        $this->kmz_generator->generate($responses, $title, $filename, $options);
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro na geração de KMZ filtrado: ' . $e->getMessage());
+        $this->session->set_flashdata('error', 'Erro ao gerar arquivo KMZ: ' . $e->getMessage());
+        redirect('reports');
+    }
+}
+
+/**
+ * Construir filtros a partir dos dados do modal
+ */
+private function build_kmz_filters($data) {
+    $filters = [];
+    
+    // Filtrar por questionários
+    if (!empty($data['questionnaires']) && !in_array('all', $data['questionnaires'])) {
+        // Filtrar apenas IDs válidos
+        $questionnaire_ids = array_filter(
+            array_map('intval', $data['questionnaires']),
+            function($id) { return $id > 0; }
+        );
+        
+        if (!empty($questionnaire_ids)) {
+            $filters['questionnaire_ids'] = $questionnaire_ids;
+        }
+    }
+    
+    // Filtrar por data inicial
+    if (!empty($data['date_from'])) {
+        $date_from = DateTime::createFromFormat('Y-m-d', $data['date_from']);
+        if ($date_from) {
+            $filters['date_from'] = $date_from->format('Y-m-d');
+        }
+    }
+    
+    // Filtrar por data final
+    if (!empty($data['date_to'])) {
+        $date_to = DateTime::createFromFormat('Y-m-d', $data['date_to']);
+        if ($date_to) {
+            $filters['date_to'] = $date_to->format('Y-m-d');
+        }
+    }
+    
+    // Validar intervalo de datas
+    if (isset($filters['date_from']) && isset($filters['date_to'])) {
+        if ($filters['date_from'] > $filters['date_to']) {
+            throw new Exception('Data inicial deve ser anterior à data final.');
+        }
+    }
+    
+    return $filters;
+}
+
+/**
+ * Construir filtros a partir dos parâmetros GET
+ */
+private function build_kmz_filters_from_get() {
+    $filters = [];
+    
+    // Questionários
+    $questionnaire_ids = $this->input->get('questionnaire_ids');
+    if ($questionnaire_ids && is_array($questionnaire_ids)) {
+        $valid_ids = array_filter(
+            array_map('intval', $questionnaire_ids),
+            function($id) { return $id > 0; }
+        );
+        
+        if (!empty($valid_ids)) {
+            $filters['questionnaire_ids'] = $valid_ids;
+        }
+    }
+    
+    // Datas
+    if ($this->input->get('date_from')) {
+        $filters['date_from'] = $this->input->get('date_from');
+    }
+    
+    if ($this->input->get('date_to')) {
+        $filters['date_to'] = $this->input->get('date_to');
+    }
+    
+    return $filters;
+}
+
+/**
+ * Obter preview dos dados para KMZ
+ */
+private function get_kmz_preview($filters) {
+    // Obter respostas com localização usando os filtros
+    $responses = $this->Response_model->get_with_location($filters);
+    
+    // Inicializar contadores
+    $questionnaires_ids = [];
+    $photos_count = 0;
+    $earliest_date = null;
+    $latest_date = null;
+    
+    // Processar cada resposta
+    foreach ($responses as $response) {
+        // Contar questionários únicos
+        if (!in_array($response->questionnaire_id, $questionnaires_ids)) {
+            $questionnaires_ids[] = $response->questionnaire_id;
+        }
+        
+        // Contar fotos
+        if (!empty($response->photo_path)) {
+            $photos_count++;
+        }
+        
+        // Encontrar intervalo de datas
+        if ($response->completed_at) {
+            $date = new DateTime($response->completed_at);
+            
+            if (!$earliest_date || $date < $earliest_date) {
+                $earliest_date = $date;
+            }
+            
+            if (!$latest_date || $date > $latest_date) {
+                $latest_date = $date;
+            }
+        }
+    }
+    
+    // Calcular período
+    $date_range = 'Todas as datas';
+    if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
+        $start = new DateTime($filters['date_from']);
+        $end = new DateTime($filters['date_to']);
+        $diff = $end->diff($start)->days;
+        $date_range = $diff . ' dia' . ($diff != 1 ? 's' : '');
+    } elseif ($earliest_date && $latest_date) {
+        $diff = $latest_date->diff($earliest_date)->days;
+        $date_range = $diff . ' dia' . ($diff != 1 ? 's' : '') . ' de dados';
+    }
+    
+    // Obter nomes dos questionários
+    $questionnaire_names = [];
+    if (!empty($questionnaires_ids)) {
+        $this->db->select('title');
+        $this->db->where_in('id', $questionnaires_ids);
+        $questionnaires = $this->db->get('questionnaires')->result();
+        
+        foreach ($questionnaires as $q) {
+            $questionnaire_names[] = $q->title;
+        }
+    }
+    
+    return [
+        'total_locations' => count($responses),
+        'questionnaires_count' => count($questionnaires_ids),
+        'questionnaire_names' => $questionnaire_names,
+        'photos_count' => $photos_count,
+        'date_range' => $date_range,
+        'earliest_date' => $earliest_date ? $earliest_date->format('d/m/Y') : null,
+        'latest_date' => $latest_date ? $latest_date->format('d/m/Y') : null,
+        'last_update' => date('d/m/Y H:i:s'),
+        'has_data' => count($responses) > 0
+    ];
+}
+
+/**
+ * Gerar título para o arquivo KMZ baseado nos filtros
+ */
+private function generate_kmz_title($filters) {
+    $title_parts = ['Localizações SXData'];
+    
+    // Adicionar questionários ao título
+    if (!empty($filters['questionnaire_ids'])) {
+        $questionnaire_names = [];
+        
+        $this->db->select('title');
+        $this->db->where_in('id', $filters['questionnaire_ids']);
+        $this->db->limit(3); // Máximo 3 nomes no título
+        $questionnaires = $this->db->get('questionnaires')->result();
+        
+        foreach ($questionnaires as $q) {
+            $questionnaire_names[] = $q->title;
+        }
+        
+        if (!empty($questionnaire_names)) {
+            if (count($filters['questionnaire_ids']) > 3) {
+                $questionnaire_names[] = '...';
+            }
+            $title_parts[] = implode(', ', $questionnaire_names);
+        }
+    }
+    
+    // Adicionar período ao título
+    if (!empty($filters['date_from']) && !empty($filters['date_to'])) {
+        $start = new DateTime($filters['date_from']);
+        $end = new DateTime($filters['date_to']);
+        $title_parts[] = $start->format('d/m/Y') . ' - ' . $end->format('d/m/Y');
+    }
+    
+    return implode(' - ', $title_parts);
+}
+
+/**
+ * Obter estatísticas detalhadas de KMZ por questionário
+ */
+public function get_kmz_questionnaire_stats() {
+    $this->check_auth();
+    
+    header('Content-Type: application/json');
+    
+    try {
+        $questionnaire_id = $this->input->get('questionnaire_id');
+        
+        if (!$questionnaire_id) {
+            echo json_encode(['success' => false, 'message' => 'ID do questionário não fornecido']);
+            return;
+        }
+        
+        $filters = ['questionnaire_id' => $questionnaire_id];
+        $stats = $this->Response_model->get_location_stats_by_questionnaire($questionnaire_id);
+        
+        echo json_encode([
+            'success' => true,
+            'stats' => $stats
+        ]);
+        
+    } catch (Exception $e) {
+        log_message('error', 'Erro ao obter stats de questionário para KMZ: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'Erro interno: ' . $e->getMessage()
+        ]);
+    }
+}
+
+/**
+ * Validar dados do formulário KMZ
+ */
+private function validate_kmz_data($data) {
+    $errors = [];
+    
+    // Validar filename
+    if (empty($data['filename']) || !preg_match('/^[a-zA-Z0-9_-]+$/', $data['filename'])) {
+        $errors[] = 'Nome do arquivo deve conter apenas letras, números, traços e sublinhados.';
+    }
+    
+    // Validar datas
+    if (!empty($data['date_from']) && !empty($data['date_to'])) {
+        $date_from = DateTime::createFromFormat('Y-m-d', $data['date_from']);
+        $date_to = DateTime::createFromFormat('Y-m-d', $data['date_to']);
+        
+        if (!$date_from) {
+            $errors[] = 'Data inicial inválida.';
+        }
+        
+        if (!$date_to) {
+            $errors[] = 'Data final inválida.';
+        }
+        
+        if ($date_from && $date_to && $date_from > $date_to) {
+            $errors[] = 'Data inicial deve ser anterior à data final.';
+        }
+        
+        // Validar período máximo (1 ano)
+        if ($date_from && $date_to) {
+            $diff = $date_to->diff($date_from)->days;
+            if ($diff > 365) {
+                $errors[] = 'Período máximo permitido é de 1 ano.';
+            }
+        }
+    }
+    
+    // Validar questionários se especificados
+    if (!empty($data['questionnaires']) && !in_array('all', $data['questionnaires'])) {
+        $valid_questionnaires = $this->Questionnaire_model->validate_questionnaire_ids($data['questionnaires']);
+        if (count($valid_questionnaires) != count($data['questionnaires'])) {
+            $errors[] = 'Um ou mais questionários selecionados são inválidos.';
+        }
+    }
+    
+    return $errors;
+}
+
+
 }
