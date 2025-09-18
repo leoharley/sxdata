@@ -1130,6 +1130,14 @@ class Questionnaire_model extends CI_Model {
 
 
     public function get_application_history($user_id, $filters = []) {
+        // Debug: Log dos filtros recebidos
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'get_application_history called with user_id: ' . $user_id . ', filters: ' . json_encode($filters));
+        }
+        
+        // CORREÇÃO: Reset query builder para evitar conflitos
+        $this->db->reset_query();
+        
         $this->db->select('
             fr.id,
             fr.questionnaire_id,
@@ -1145,47 +1153,77 @@ class Questionnaire_model extends CI_Model {
             fr.consent_given,
             fr.created_at,
             q.title as questionnaire_title,
-            CONCAT(\'#\', LPAD(q.id::text, 3, \'0\')) as questionnaire_code
+            CONCAT(\'#\', LPAD(CAST(q.id AS VARCHAR), 3, \'0\')) as questionnaire_code
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('fr.applied_by', $user_id);
         
-        // Aplicar filtros
-        if (!empty($filters['period']) && $filters['period'] !== 'all') {
+        // Condição principal: usuário e formulários completados
+        $this->db->where('fr.applied_by', $user_id);
+        $this->db->where('fr.completed_at IS NOT NULL');
+        
+        // Aplicar filtros - CORREÇÃO: Verificar se filtros existem antes de aplicar
+        if (isset($filters['period']) && !empty($filters['period']) && $filters['period'] !== 'all') {
             switch ($filters['period']) {
                 case 'today':
-                    $this->db->where('DATE(fr.completed_at)', date('Y-m-d'));
+                    $this->db->where('fr.completed_at >=', date('Y-m-d 00:00:00'));
+                    $this->db->where('fr.completed_at <=', date('Y-m-d 23:59:59'));
                     break;
                 case 'week':
-                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-7 days')));
+                    $this->db->where('fr.completed_at >=', date('Y-m-d 00:00:00', strtotime('-7 days')));
                     break;
                 case 'month':
-                    $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime('-30 days')));
+                    $this->db->where('fr.completed_at >=', date('Y-m-d 00:00:00', strtotime('-30 days')));
                     break;
+            }
+            
+            // Debug: Log do filtro de período aplicado
+            if (ENVIRONMENT === 'development') {
+                log_message('debug', 'Applied period filter: ' . $filters['period']);
             }
         }
         
-        if (!empty($filters['sync_status'])) {
+        if (isset($filters['sync_status']) && !empty($filters['sync_status'])) {
             $this->db->where('fr.sync_status', $filters['sync_status']);
+            
+            // Debug: Log do filtro de status aplicado
+            if (ENVIRONMENT === 'development') {
+                log_message('debug', 'Applied sync_status filter: ' . $filters['sync_status']);
+            }
         }
         
-        if (!empty($filters['questionnaire_id'])) {
+        if (isset($filters['questionnaire_id']) && !empty($filters['questionnaire_id'])) {
             $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
         }
         
-        // Paginação
-        if (isset($filters['limit']) && is_numeric($filters['limit'])) {
-            $this->db->limit($filters['limit']);
+        // Paginação - CORREÇÃO: Validar valores numéricos
+        if (isset($filters['limit']) && is_numeric($filters['limit']) && $filters['limit'] > 0) {
+            $this->db->limit((int)$filters['limit']);
+        } else {
+            $this->db->limit(50); // Limite padrão
         }
         
-        if (isset($filters['offset']) && is_numeric($filters['offset'])) {
-            $this->db->offset($filters['offset']);
+        if (isset($filters['offset']) && is_numeric($filters['offset']) && $filters['offset'] >= 0) {
+            $this->db->offset((int)$filters['offset']);
         }
         
+        // Ordenação
         $this->db->order_by('fr.completed_at', 'DESC');
         
-        return $this->db->get()->result();
+        // Execute a query
+        $results = $this->db->get()->result();
+        
+        // Debug: Log da query executada e resultados
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'SQL Query executed: ' . $this->db->last_query());
+            log_message('debug', 'Results count: ' . count($results));
+            
+            if (count($results) > 0) {
+                log_message('debug', 'First result sample: ' . json_encode($results[0]));
+            }
+        }
+        
+        return $results;
     }
 
     /**
@@ -1197,32 +1235,55 @@ class Questionnaire_model extends CI_Model {
     public function get_history_counters($user_id) {
         $counters = [];
         
+        // CORREÇÃO: Resetar query builder antes de cada consulta
+        // para evitar acúmulo de condições WHERE
+        
         // Total
+        $this->db->reset_query();
         $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL'); // Apenas formulários completados
         $counters['total'] = $this->db->count_all_results('form_responses');
         
-        // Hoje
+        // Hoje - usando abordagem mais robusta
+        $this->db->reset_query();
         $this->db->where('applied_by', $user_id);
-        $this->db->where('DATE(completed_at)', date('Y-m-d'));
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->where('completed_at >=', date('Y-m-d 00:00:00')); // Início do dia
+        $this->db->where('completed_at <=', date('Y-m-d 23:59:59')); // Final do dia
         $counters['today'] = $this->db->count_all_results('form_responses');
         
-        // Esta semana
+        // Esta semana (últimos 7 dias)
+        $this->db->reset_query();
         $this->db->where('applied_by', $user_id);
-        $this->db->where('completed_at >=', date('Y-m-d', strtotime('-7 days')));
+        $this->db->where('completed_at IS NOT NULL');
+        $this->db->where('completed_at >=', date('Y-m-d 00:00:00', strtotime('-7 days')));
         $counters['week'] = $this->db->count_all_results('form_responses');
         
-        // Por status de sincronização
+        // Por status de sincronização - Pendentes
+        $this->db->reset_query();
         $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
         $this->db->where('sync_status', 'pending');
         $counters['pending'] = $this->db->count_all_results('form_responses');
         
+        // Sincronizados
+        $this->db->reset_query();
         $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
         $this->db->where('sync_status', 'synced');
         $counters['synced'] = $this->db->count_all_results('form_responses');
         
+        // Com erro
+        $this->db->reset_query();
         $this->db->where('applied_by', $user_id);
+        $this->db->where('completed_at IS NOT NULL');
         $this->db->where('sync_status', 'error');
         $counters['error'] = $this->db->count_all_results('form_responses');
+        
+        // Debug log (remover em produção)
+        if (ENVIRONMENT === 'development') {
+            log_message('debug', 'History counters for user ' . $user_id . ': ' . json_encode($counters));
+        }
         
         return $counters;
     }
