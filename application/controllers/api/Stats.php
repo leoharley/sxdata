@@ -392,13 +392,13 @@ class Stats extends CI_Controller {
         } */
 
         // Verificar permissões
-        $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
+      /*  $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
         
         if ($authenticated_user != $user_id && !$is_admin_or_supervisor) {
             $this->output->set_status_header(403);
             echo json_encode(['success' => false, 'message' => 'Access denied']);
             return;
-        }
+        } */
 
         try {
             // Obter filtros da URL
