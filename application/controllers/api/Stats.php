@@ -380,7 +380,7 @@ class Stats extends CI_Controller {
             return;
         }
 
-        // Verificar autenticação
+     /*   // Verificar autenticação
         $authenticated_user = $this->verify_auth();
         if (!$authenticated_user) {
             return;
@@ -389,7 +389,7 @@ class Stats extends CI_Controller {
         // Se não foi especificado user_id, usar o do token
         if (!$user_id) {
             $user_id = $authenticated_user;
-        }
+        } */
 
         // Verificar permissões
         $is_admin_or_supervisor = $this->Response_model->is_supervisor_or_admin($authenticated_user);
