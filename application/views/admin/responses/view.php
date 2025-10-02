@@ -294,28 +294,59 @@ function format_location_name($data)
         </div>
         <?php endif; ?>
         
-        <!-- Foto -->
+        <!-- Foto 1 -->
         <?php if ($response->photo_path): ?>
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-camera me-2"></i>
-                    Evidência Fotográfica
+                    Evidência Fotográfica 1
                 </h5>
             </div>
             <div class="card-body text-center">
-                <img src="<?= base_url('uploads/photos/' . $response->photo_path) ?>" 
-                     class="img-fluid rounded mb-3 shadow-sm" alt="Foto capturada" 
+                <img src="<?= base_url('uploads/photos/' . $response->photo_path) ?>"
+                     class="img-fluid rounded mb-3 shadow-sm" alt="Foto capturada"
                      style="max-height: 200px; cursor: pointer; border: 2px solid #e9ecef;"
                      onclick="showFullPhoto(this.src)">
                 <br>
                 <div class="d-grid gap-2">
-                    <button type="button" class="btn btn-outline-primary btn-sm" 
+                    <button type="button" class="btn btn-outline-primary btn-sm"
                             onclick="showFullPhoto('<?= base_url('uploads/photos/' . $response->photo_path) ?>')">
                         <i class="fas fa-expand me-1"></i>
                         Ver em Tamanho Real
                     </button>
-                    <a href="<?= base_url('uploads/photos/' . $response->photo_path) ?>" 
+                    <a href="<?= base_url('uploads/photos/' . $response->photo_path) ?>"
+                       download class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-download me-1"></i>
+                        Baixar Foto
+                    </a>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Foto 2 -->
+        <?php if ($response->photo_path_2): ?>
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-camera me-2"></i>
+                    Evidência Fotográfica 2
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <img src="<?= base_url('uploads/photos/' . $response->photo_path_2) ?>"
+                     class="img-fluid rounded mb-3 shadow-sm" alt="Foto capturada 2"
+                     style="max-height: 200px; cursor: pointer; border: 2px solid #e9ecef;"
+                     onclick="showFullPhoto(this.src)">
+                <br>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            onclick="showFullPhoto('<?= base_url('uploads/photos/' . $response->photo_path_2) ?>')">
+                        <i class="fas fa-expand me-1"></i>
+                        Ver em Tamanho Real
+                    </button>
+                    <a href="<?= base_url('uploads/photos/' . $response->photo_path_2) ?>"
                        download class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-download me-1"></i>
                         Baixar Foto

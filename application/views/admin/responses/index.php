@@ -411,10 +411,17 @@ function get_location_name_cached($latitude, $longitude)
                                 </a>
                                 <?php endif; ?>
                                 <?php if ($response->photo_path): ?>
-                                <button type="button" class="btn btn-sm btn-outline-info" 
-                                        onclick="showPhoto('<?= base_url('uploads/photos/' . $response->photo_path) ?>')" 
-                                        title="Ver Foto">
+                                <button type="button" class="btn btn-sm btn-outline-info"
+                                        onclick="showPhoto('<?= base_url('uploads/photos/' . $response->photo_path) ?>')"
+                                        title="Ver Foto 1">
                                     <i class="fas fa-camera"></i>
+                                </button>
+                                <?php endif; ?>
+                                <?php if ($response->photo_path_2): ?>
+                                <button type="button" class="btn btn-sm btn-outline-info"
+                                        onclick="showPhoto('<?= base_url('uploads/photos/' . $response->photo_path_2) ?>')"
+                                        title="Ver Foto 2">
+                                    <i class="fas fa-camera"></i> 2
                                 </button>
                                 <?php endif; ?>
                             </div>
