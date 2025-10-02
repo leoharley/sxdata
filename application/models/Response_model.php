@@ -238,6 +238,7 @@ class Response_model extends CI_Model {
                 fr.longitude,
                 fr.location_name,
                 fr.photo_path,
+                fr.photo_path_2,
                 fr.consent_given,
                 fr.sync_status,
                 fr.started_at,
@@ -714,7 +715,8 @@ class Response_model extends CI_Model {
             fr.started_at,
             fr.completed_at,
             fr.sync_status,
-            fr.photo_path
+            fr.photo_path,
+            fr.photo_path_2
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
@@ -2092,6 +2094,7 @@ public function validate_export_filters($filters) {
             fr.longitude,
             fr.location_name,
             fr.photo_path,
+            fr.photo_path_2,
             fr.consent_given,
             CASE 
                 WHEN fr.sync_status = \'synced\' THEN \'SINCRONIZADO\'

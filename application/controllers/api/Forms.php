@@ -61,6 +61,7 @@ class Forms extends CI_Controller {
                 'longitude' => $json['longitude'] ?? null,
                 'location_name' => $json['location_name'] ?? null,
                 'photo_path' => $json['photo_path'] ?? null,
+                'photo_path_2' => $json['photo_path_2'] ?? null,
                 'consent_given' => isset($json['consent_given']) ? (bool)$json['consent_given'] : false,
                 'sync_status' => 'synced',
                 'started_at' => isset($json['started_at']) ? date('Y-m-d H:i:s', strtotime($json['started_at'])) : null,
