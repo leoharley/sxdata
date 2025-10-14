@@ -71,6 +71,7 @@
                     </tr>
                 </thead>
                 <tbody>
+                    <?php if ($questionnaire->status == 'active') ?>
                     <?php foreach ($questionnaires as $questionnaire): ?>
                     <tr data-project="<?= $questionnaire->project_id ?: 'no-project' ?>" 
                         data-status="<?= $questionnaire->status ?>"
@@ -205,6 +206,7 @@
                         </td>
                     </tr>
                     <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
