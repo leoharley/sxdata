@@ -195,12 +195,12 @@
                                         <i class="fas fa-project-diagram"></i>
                                     </a>
                                 <?php endif; ?>
-                                <?php if ($questionnaire->response_count == 0): ?>
+                                <?php //if ($questionnaire->response_count == 0): ?>
                                 <button type="button" class="btn btn-sm btn-outline-danger" 
                                         onclick="deleteQuestionnaire(<?= $questionnaire->id ?>)" title="Excluir">
                                     <i class="fas fa-trash"></i>
                                 </button>
-                                <?php endif; ?>
+                                <?php //endif; ?>
                             </div>
                         </td>
                     </tr>
