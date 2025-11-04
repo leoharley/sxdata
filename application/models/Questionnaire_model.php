@@ -17,6 +17,16 @@ class Questionnaire_model extends CI_Model {
         return $this->db->get()->result();
     }
 
+    public function get_active() {
+        $this->db->select('q.*, u.full_name as created_by_name, p.name as project_name');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where('q.status', 'active');
+        $this->db->order_by('q.created_at', 'DESC');
+        return $this->db->get()->result();
+    }
+
     public function get_all_with_stats() {
         $questionnaires = $this->get_all();
         

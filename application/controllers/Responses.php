@@ -38,7 +38,7 @@ class Responses extends CI_Controller {
         }
 
         $data['responses'] = $this->Response_model->get_filtered($filters);
-        $data['questionnaires'] = $this->Questionnaire_model->get_all();
+        $data['questionnaires'] = $this->Questionnaire_model->get_active();
         $data['users'] = $this->User_model->get_aplicadores();
         $data['filters'] = $filters;
         

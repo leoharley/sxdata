@@ -22,27 +22,30 @@ class Response_model extends CI_Model {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
-        
+
+        // Filtrar apenas questionários ativos
+        $this->db->where('q.status', 'active');
+
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
             $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
         }
-        
+
         if (isset($filters['applied_by']) && $filters['applied_by']) {
             $this->db->where('fr.applied_by', $filters['applied_by']);
         }
-        
+
         if (isset($filters['date_from']) && $filters['date_from']) {
             $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
         }
-        
+
         if (isset($filters['date_to']) && $filters['date_to']) {
             $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
         }
-        
+
         if (isset($filters['sync_status']) && $filters['sync_status']) {
             $this->db->where('fr.sync_status', $filters['sync_status']);
         }
-        
+
         $this->db->order_by('fr.created_at', 'DESC');
         return $this->db->get()->result();
     }
@@ -2096,7 +2099,7 @@ public function validate_export_filters($filters) {
             fr.photo_path,
             fr.photo_path_2,
             fr.consent_given,
-            CASE 
+            CASE
                 WHEN fr.sync_status = \'synced\' THEN \'SINCRONIZADO\'
                 ELSE \'PENDENTE\'
             END as sync_status,
@@ -2110,28 +2113,31 @@ public function validate_export_filters($filters) {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
-        
+
+        // Filtrar apenas questionários ativos
+        $this->db->where('q.status', 'active');
+
         // Aplicar filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
             $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
         }
-        
+
         if (isset($filters['applied_by']) && $filters['applied_by']) {
             $this->db->where('fr.applied_by', $filters['applied_by']);
         }
-        
+
         if (isset($filters['date_from']) && $filters['date_from']) {
             $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
         }
-        
+
         if (isset($filters['date_to']) && $filters['date_to']) {
             $this->db->where('DATE(fr.completed_at) <=', $filters['date_to']);
         }
-        
+
         if (isset($filters['sync_status']) && $filters['sync_status']) {
             $this->db->where('fr.sync_status', $filters['sync_status']);
         }
-        
+
         // Apenas respostas concluídas
         $this->db->where('fr.completed_at IS NOT NULL');
         
