@@ -532,13 +532,15 @@ function is_checkbox_checked($value) {
                                         <?php if (!empty($question->options)): ?>
                                             <?php foreach ($question->options as $opt_index => $option): ?>
                                             <div class="input-group mb-2">
-                                                <input type="text" class="form-control" 
-                                                       name="questions[<?= $index ?>][options][<?= $opt_index ?>][text]" 
-                                                       value="<?= $option->option_text ?>" placeholder="Texto da opção" required onchange="updateLogicPreview()">
-                                                <input type="hidden" 
-                                                       name="questions[<?= $index ?>][options][<?= $opt_index ?>][value]" 
+                                                <input type="text" class="form-control"
+                                                       name="questions[<?= $index ?>][options][<?= $opt_index ?>][text]"
+                                                       value="<?= $option->option_text ?>" placeholder="Texto da opção" required
+                                                       onchange="updateOptionValue(this, <?= $index ?>)"
+                                                       oninput="updateOptionValue(this, <?= $index ?>)">
+                                                <input type="hidden"
+                                                       name="questions[<?= $index ?>][options][<?= $opt_index ?>][value]"
                                                        value="<?= $option->option_value ?>">
-                                                <button type="button" class="btn btn-outline-danger" 
+                                                <button type="button" class="btn btn-outline-danger"
                                                         onclick="this.parentElement.remove(); updateLogicPreview();">
                                                     <i class="fas fa-times"></i>
                                                 </button>
@@ -1636,26 +1638,70 @@ function handleQuestionTypeChange(questionIndex, type) {
     updateLogicPreview();
 }
 
+// Função para gerar option_value único a partir do texto
+function generateUniqueOptionValue(text, questionIndex, currentInput) {
+    // Sanitizar o texto para criar um valor válido
+    let baseValue = text.trim()
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/[^a-z0-9\s-]/g, '') // Remove caracteres especiais
+        .replace(/\s+/g, '_') // Substitui espaços por underscore
+        .replace(/_+/g, '_') // Remove underscores duplicados
+        .replace(/^_|_$/g, ''); // Remove underscores do início e fim
+
+    if (!baseValue) {
+        baseValue = 'opcao';
+    }
+
+    // Obter todos os option_value da mesma questão
+    const container = document.getElementById(`optionsContainer-${questionIndex}`);
+    const allValueInputs = container.querySelectorAll('input[name*="[value]"]');
+    const existingValues = Array.from(allValueInputs)
+        .filter(input => input !== currentInput.parentElement.querySelector('input[name*="[value]"]'))
+        .map(input => input.value);
+
+    // Verificar se o valor já existe e adicionar sufixo numérico se necessário
+    let finalValue = baseValue;
+    let counter = 1;
+    while (existingValues.includes(finalValue)) {
+        finalValue = `${baseValue}_${counter}`;
+        counter++;
+    }
+
+    return finalValue;
+}
+
+// Função para atualizar option_value quando o texto mudar
+function updateOptionValue(textInput, questionIndex) {
+    const valueInput = textInput.parentElement.querySelector('input[name*="[value]"]');
+    if (valueInput && textInput.value.trim()) {
+        valueInput.value = generateUniqueOptionValue(textInput.value, questionIndex, textInput);
+    }
+    updateLogicPreview();
+}
+
 // Função para adicionar opção
 function addOption(questionIndex) {
     const container = document.getElementById(`optionsContainer-${questionIndex}`);
     const optionIndex = container.children.length;
-    
+
     const optionHtml = `
         <div class="input-group mb-2">
-            <input type="text" class="form-control" 
-                   name="questions[${questionIndex}][options][${optionIndex}][text]" 
-                   placeholder="Texto da opção" required onchange="updateLogicPreview()">
-            <input type="hidden" 
-                   name="questions[${questionIndex}][options][${optionIndex}][value]" 
+            <input type="text" class="form-control"
+                   name="questions[${questionIndex}][options][${optionIndex}][text]"
+                   placeholder="Texto da opção" required
+                   onchange="updateOptionValue(this, ${questionIndex})"
+                   oninput="updateOptionValue(this, ${questionIndex})">
+            <input type="hidden"
+                   name="questions[${questionIndex}][options][${optionIndex}][value]"
                    value="">
-            <button type="button" class="btn btn-outline-danger" 
+            <button type="button" class="btn btn-outline-danger"
                     onclick="this.parentElement.remove(); updateLogicPreview();">
                 <i class="fas fa-times"></i>
             </button>
         </div>
     `;
-    
+
     container.insertAdjacentHTML('beforeend', optionHtml);
 }
 
