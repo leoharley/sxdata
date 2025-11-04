@@ -1198,8 +1198,11 @@ private function analyze_text_responses($question_id, $filters, $total_responses
     ');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1210,7 +1213,7 @@ private function analyze_text_responses($question_id, $filters, $total_responses
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $result = $this->db->get()->row();
     
     $filled = $result ? $result->filled_responses : 0;
@@ -1484,17 +1487,20 @@ public function get_question_statistics($question_id, $filters = array()) {
     $this->db->select('question_type');
     $this->db->where('id', $question_id);
     $question = $this->db->get('questions')->row();
-    
+
     if (!$question) {
         return array();
     }
-    
+
     // Contar total de respostas para esta questão
     $this->db->select('COUNT(qr.id) as total_responses');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros de data se fornecidos
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1505,7 +1511,7 @@ public function get_question_statistics($question_id, $filters = array()) {
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $total_result = $this->db->get()->row();
     $total_responses = $total_result ? $total_result->total_responses : 0;
     
@@ -1572,9 +1578,12 @@ private function analyze_option_responses($question_id, $filters, $total_respons
     $this->db->select('qr.selected_options');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
     $this->db->where('qr.selected_options IS NOT NULL');
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1585,7 +1594,7 @@ private function analyze_option_responses($question_id, $filters, $total_respons
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $responses = $this->db->get()->result();
     
     $analysis = array();
@@ -1687,9 +1696,12 @@ private function count_checkbox_option($question_id, $option_value, $filters) {
     $this->db->select('qr.selected_options');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
     $this->db->where('qr.selected_options IS NOT NULL');
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1700,7 +1712,7 @@ private function count_checkbox_option($question_id, $option_value, $filters) {
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $responses = $this->db->get()->result();
     
     $count = 0;
@@ -1741,8 +1753,11 @@ private function analyze_number_responses($question_id, $filters, $total_respons
     ');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1753,7 +1768,7 @@ private function analyze_number_responses($question_id, $filters, $total_respons
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $result = $this->db->get()->row();
     
     $filled = $result ? $result->filled_responses : 0;
@@ -1799,8 +1814,11 @@ private function analyze_date_responses($question_id, $filters, $total_responses
     ');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1811,7 +1829,7 @@ private function analyze_date_responses($question_id, $filters, $total_responses
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $result = $this->db->get()->row();
     
     $filled = $result ? $result->filled_responses : 0;
@@ -1852,8 +1870,11 @@ private function analyze_generic_responses($question_id, $filters, $total_respon
     ');
     $this->db->from('question_responses qr');
     $this->db->join('form_responses fr', 'qr.form_response_id = fr.id', 'inner');
+    $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
+    $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    
+    $this->db->where('quest.status', 'active');
+
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
         $this->db->where('DATE(fr.completed_at) >=', $filters['date_from']);
@@ -1864,7 +1885,7 @@ private function analyze_generic_responses($question_id, $filters, $total_respon
     if (isset($filters['applied_by']) && $filters['applied_by']) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
-    
+
     $result = $this->db->get()->row();
     
     $filled = $result ? $result->filled_responses : 0;
