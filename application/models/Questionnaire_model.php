@@ -166,10 +166,11 @@ class Questionnaire_model extends CI_Model {
         $this->db->select('q.title, COUNT(fr.id) as response_count');
         $this->db->from('questionnaires q');
         $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id', 'left');
+        $this->db->where('q.status', 'active');
         $this->db->group_by('q.id, q.title');
         $this->db->order_by('response_count', 'DESC');
         $this->db->limit(10);
-        
+
         return $this->db->get()->result();
     }
 
