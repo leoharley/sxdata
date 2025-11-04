@@ -73,15 +73,6 @@ class Questionnaire_model extends CI_Model {
         return $result;
     }
 
-    public function get_active() {
-        $this->db->select('q.*, p.name as project_name');
-        $this->db->from('questionnaires q');
-        $this->db->join('projects p', 'q.project_id = p.id', 'left');
-        $this->db->where('q.status', 'active');
-        $this->db->order_by('q.title', 'ASC');
-        return $this->db->get()->result();
-    }
-
     public function get_by_project($project_id) {
         $this->db->select('q.*, u.full_name as created_by_name');
         $this->db->from('questionnaires q');
