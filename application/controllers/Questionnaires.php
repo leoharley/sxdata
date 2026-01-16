@@ -1212,8 +1212,12 @@ class Questionnaires extends CI_Controller {
         $new_id = $this->Questionnaire_model->create($new_data);
 
         if ($new_id) {
-            // Copiar perguntas com lógica condicional
+            // Copiar perguntas SEM lógica condicional primeiro
             $questions = $this->get_questions_safe($id);
+            $old_to_new_id_map = array(); // Mapeamento de IDs antigos para novos
+            $new_question_ids = array(); // Array de novos IDs em ordem
+
+            // Primeira passagem: criar perguntas sem lógica condicional
             foreach ($questions as $question) {
                 $question_data = array(
                     'questionnaire_id' => $new_id,
@@ -1221,10 +1225,14 @@ class Questionnaires extends CI_Controller {
                     'question_type' => $question->question_type,
                     'is_required' => $question->is_required,
                     'order_index' => $question->order_index,
-                    'conditional_logic' => $question->conditional_logic
+                    'conditional_logic' => null // Sem lógica condicional inicialmente
                 );
 
                 $new_question_id = $this->Question_model->create($question_data);
+
+                // Mapear ID antigo para novo ID
+                $old_to_new_id_map[$question->id] = $new_question_id;
+                $new_question_ids[] = $new_question_id;
 
                 // Copiar opções
                 if (!empty($question->options)) {
@@ -1235,6 +1243,28 @@ class Questionnaires extends CI_Controller {
                             'option_value' => $option->option_value,
                             'order_index' => $option->order_index
                         ));
+                    }
+                }
+            }
+
+            // Segunda passagem: atualizar lógica condicional com IDs corretos
+            foreach ($questions as $index => $question) {
+                if (!empty($question->conditional_logic)) {
+                    $logic = json_decode($question->conditional_logic, true);
+
+                    if (json_last_error() === JSON_ERROR_NONE && $logic) {
+                        // Converter IDs antigos para novos IDs
+                        $updated_logic = $this->convert_temp_ids_to_real_ids($logic, $old_to_new_id_map);
+
+                        // Atualizar a pergunta com a lógica corrigida
+                        $new_question_id = $new_question_ids[$index];
+                        $this->Question_model->update($new_question_id, array(
+                            'conditional_logic' => json_encode($updated_logic)
+                        ));
+
+                        log_message('debug', "Lógica condicional atualizada para pergunta duplicada ID: $new_question_id");
+                    } else {
+                        log_message('warning', "Erro ao decodificar lógica condicional da pergunta original ID: {$question->id}");
                     }
                 }
             }
