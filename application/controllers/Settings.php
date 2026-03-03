@@ -20,14 +20,6 @@ class Settings extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
-    public function politica_de_privacidade() {
-        $data['title'] = 'Política de Privacidade - SXData';
-
-        $this->load->view('admin/header', $data);
-        $this->load->view('admin/privacy_policy', $data);
-        $this->load->view('admin/footer');
-    }
-
     public function update() {
         $settings = $this->input->post('settings');
         
