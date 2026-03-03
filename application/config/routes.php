@@ -20,6 +20,7 @@ $route['admin/responses/export'] = 'responses/export';
 $route['admin/users'] = 'users';
 $route['admin/reports'] = 'reports';
 $route['admin/settings'] = 'settings';
+$route['admin/privacy-policy'] = 'privacypolicy';
 
 // API routes
 $route['api/auth/login'] = 'api/auth/login';
