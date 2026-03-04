@@ -11,13 +11,8 @@ class Privacypolicy extends CI_Controller {
         $data['title'] = 'Política de Privacidade - SXData';
 
         $this->load->view('admin/header', $data);
-        $this->load->view('admin/privacy_policy', $data);
+        $this->load->view('admin/privacy', $data);
         $this->load->view('admin/footer');
     }
 
-    private function check_auth() {
-        if (!$this->session->userdata('admin_logged_in')) {
-            redirect('auth/login');
-        }
-    }
 }
