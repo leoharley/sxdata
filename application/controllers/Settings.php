@@ -20,6 +20,10 @@ class Settings extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
+    public function politica_de_privacidade() {
+        exit;
+    }
+
     public function update() {
         $settings = $this->input->post('settings');
         
