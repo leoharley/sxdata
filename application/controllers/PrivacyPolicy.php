@@ -8,8 +8,8 @@ class Privacypolicy extends CI_Controller {
     }
 
     public function politica_de_privacidade() {
-        $data['title'] = 'Política de Privacidade - SXData';
         exit;
+        $data['title'] = 'Política de Privacidade - SXData';
 
         $this->load->view('admin/header', $data);
         $this->load->view('admin/privacy', $data);
