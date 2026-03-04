@@ -86,12 +86,10 @@
         }
         
         .main-content {
-            margin-left: 250px;
+            margin-left: auto;
+            margin-right: auto;
+            max-width: 900px;
             transition: margin-left 0.3s ease;
-        }
-        
-        .main-content.expanded {
-            margin-left: 0;
         }
         
         .navbar {
@@ -203,30 +201,6 @@
 <body>
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
-        <!-- Top Navigation -->
-        <nav class="navbar navbar-expand-lg navbar-light">
-            <div class="container-fluid">
-                <button class="btn btn-outline-secondary d-md-none" type="button" id="sidebarToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-                
-                <div class="navbar-nav ms-auto">
-                    <div class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-circle"></i>
-                            <?= $this->session->userdata('admin_name') ?>
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li style="display:none"><a class="dropdown-item" href="<?= base_url('profile') ?>">Perfil</a></li>
-                            <li><a class="dropdown-item" href="<?= base_url('settings') ?>">Configurações</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="<?= base_url('auth/logout') ?>">Sair</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
         <!-- Content Wrapper -->
         <div class="content-wrapper">
             <?php if ($this->session->flashdata('success')): ?>
