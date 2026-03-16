@@ -271,6 +271,7 @@ function is_checkbox_checked($value) {
 </style>
 
 <?= form_open('questionnaires/edit/' . $questionnaire->id) ?>
+<input type="hidden" name="edit_mode" value="0" id="editModeInput">
 <div class="row">
     <div class="col-lg-8">
         <!-- Informações Básicas -->
@@ -488,7 +489,10 @@ function is_checkbox_checked($value) {
                             <!-- Modo de Edição -->
                             <div class="edit-content" style="display: none;">
                                 <input type="hidden" name="questions[<?= $index ?>][id]" value="<?= $question->id ?>">
-                                
+                                <input type="hidden" name="questions[<?= $index ?>][conditional_logic]"
+                                       value="<?= htmlspecialchars($question->conditional_logic ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                       class="conditional-logic-fallback">
+
                                 <div class="mb-3">
                                     <label class="form-label">Texto da Pergunta *</label>
                                     <textarea class="form-control" name="questions[<?= $index ?>][text]" 
@@ -893,6 +897,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Função para alternar modo de edição (atualizada com reordenação)
 function toggleEditMode(enableEdit) {
+    document.getElementById('editModeInput').value = enableEdit ? '1' : '0';
     const questionItems = document.querySelectorAll('.question-item');
     const addQuestionBtn = document.getElementById('addQuestionBtn');
     
@@ -2329,14 +2334,26 @@ function serializeConditionalLogic() {
             });
         }
         
-        // Adicionar campo hidden com a lógica serializada
+        // Atualizar campo hidden com a lógica serializada
+        const existingField = question.querySelector('input.conditional-logic-fallback');
         if (logicData.visibility || logicData.required) {
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = `questions[${index}][conditional_logic]`;
-            hiddenInput.value = JSON.stringify(logicData);
-            question.appendChild(hiddenInput);
+            const serializedValue = JSON.stringify(logicData);
+            if (existingField) {
+                existingField.value = serializedValue;
+            } else {
+                // Pergunta nova (sem fallback do PHP)
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = `questions[${index}][conditional_logic]`;
+                hiddenInput.value = serializedValue;
+                hiddenInput.classList.add('conditional-logic-fallback');
+                question.appendChild(hiddenInput);
+            }
+        } else if (existingField && document.getElementById('editModeToggle').checked) {
+            // Em modo edição, sem condições = usuário removeu intencionalmente
+            existingField.value = '';
         }
+        // Se NÃO está em modo edição, o fallback mantém o valor original do banco
     });
 }
 
@@ -2386,7 +2403,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
         return false;
     }
     
-    // Validar lógica condicional se estiver em modo de edição
+    // Validar lógica condicional apenas se estiver em modo de edição
     const editModeToggle = document.getElementById('editModeToggle');
     if (editModeToggle.checked) {
         const logicValidation = validateAllConditionalLogic();
@@ -2395,10 +2412,11 @@ document.querySelector('form').addEventListener('submit', function(e) {
             alert('Existem erros na lógica condicional. Verifique as mensagens de erro e corrija-as antes de salvar.');
             return false;
         }
-        
-        // Serializar lógica condicional para envio
-        serializeConditionalLogic();
     }
+
+    // Sempre serializar lógica condicional antes do envio (rede de segurança)
+    // Preserva os valores existentes do banco quando não está em modo edição
+    serializeConditionalLogic();
 });
 
 // Incluir Bootstrap JS para modals

@@ -20,7 +20,7 @@ $route['admin/responses/export'] = 'responses/export';
 $route['admin/users'] = 'users';
 $route['admin/reports'] = 'reports';
 $route['admin/settings'] = 'settings';
-$route['politica_de_privacidade'] = 'privacypolicy';
+$route['politica_de_privacidade'] = 'welcome/politica_de_privacidade';
 
 // Rotas do Módulo de IA
 $route['admin/ai'] = 'ai';

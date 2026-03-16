@@ -423,79 +423,85 @@ class Questionnaires extends CI_Controller {
                 $questionnaire_updated = $this->Questionnaire_model->update($id, $questionnaire_data);
 
                 if ($questionnaire_updated) {
-                    // Processar perguntas editadas com lógica condicional
-                    $questions = $this->input->post('questions');
-                    
-                    if ($questions && is_array($questions)) {
-                        // Processar lógica condicional
-                        $processed_questions = $this->process_conditional_logic($questions);
-                        
-                        // Obter perguntas existentes
-                        $existing_questions = $this->Question_model->get_by_questionnaire($id);
-                        $existing_question_ids = array_column($existing_questions, 'id');
-                        $processed_question_ids = array();
+                    // Só processar perguntas se o modo de edição estava ativo
+                    // Isso evita sobrescrever perguntas/lógica ao alterar apenas metadados
+                    $edit_mode = $this->input->post('edit_mode');
 
-                        foreach ($processed_questions as $index => $question) {
-                            if (empty(trim($question['text']))) {
-                                continue;
-                            }
+                    if ($edit_mode === '1') {
+                        // Processar perguntas editadas com lógica condicional
+                        $questions = $this->input->post('questions');
 
-                            $question_data = array(
-                                'questionnaire_id' => $id,
-                                'question_text' => trim($question['text']),
-                                'question_type' => $question['type'],
-                                'is_required' => isset($question['required']) ? TRUE : FALSE,
-                                'order_index' => $index + 1,
-                                'conditional_logic' => $question['conditional_logic']
-                            );
+                        if ($questions && is_array($questions)) {
+                            // Processar lógica condicional
+                            $processed_questions = $this->process_conditional_logic($questions);
 
-                            $question_id = null;
+                            // Obter perguntas existentes
+                            $existing_questions = $this->Question_model->get_by_questionnaire($id);
+                            $existing_question_ids = array_column($existing_questions, 'id');
+                            $processed_question_ids = array();
 
-                            // Verificar se é pergunta existente ou nova
-                            if (!empty($question['id']) && is_numeric($question['id'])) {
-                                // Pergunta existente - atualizar
-                                $question_id = intval($question['id']);
-                                $this->Question_model->update($question_id, $question_data);
-                                $processed_question_ids[] = $question_id;
-                            } else {
-                                // Nova pergunta - criar
-                                $question_id = $this->Question_model->create($question_data);
-                                if ($question_id) {
-                                    $processed_question_ids[] = $question_id;
+                            foreach ($processed_questions as $index => $question) {
+                                if (empty(trim($question['text']))) {
+                                    continue;
                                 }
-                            }
 
-                            // Processar opções para perguntas de múltipla escolha
-                            if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select'])) {
-                                // Remover opções existentes
-                                $this->Question_model->delete_options($question_id);
+                                $question_data = array(
+                                    'questionnaire_id' => $id,
+                                    'question_text' => trim($question['text']),
+                                    'question_type' => $question['type'],
+                                    'is_required' => isset($question['required']) ? TRUE : FALSE,
+                                    'order_index' => $index + 1,
+                                    'conditional_logic' => $question['conditional_logic']
+                                );
 
-                                // Adicionar novas opções
-                                if (isset($question['options']) && is_array($question['options'])) {
-                                    foreach ($question['options'] as $opt_index => $option) {
-                                        if (!empty(trim($option['text']))) {
-                                            $option_value = !empty($option['value']) ? 
-                                                        $option['value'] : 
-                                                        strtolower(str_replace(' ', '_', trim($option['text'])));
+                                $question_id = null;
 
-                                            $option_data = array(
-                                                'question_id' => $question_id,
-                                                'option_text' => trim($option['text']),
-                                                'option_value' => $option_value,
-                                                'order_index' => $opt_index + 1
-                                            );
+                                // Verificar se é pergunta existente ou nova
+                                if (!empty($question['id']) && is_numeric($question['id'])) {
+                                    // Pergunta existente - atualizar
+                                    $question_id = intval($question['id']);
+                                    $this->Question_model->update($question_id, $question_data);
+                                    $processed_question_ids[] = $question_id;
+                                } else {
+                                    // Nova pergunta - criar
+                                    $question_id = $this->Question_model->create($question_data);
+                                    if ($question_id) {
+                                        $processed_question_ids[] = $question_id;
+                                    }
+                                }
 
-                                            $this->Question_model->create_option($option_data);
+                                // Processar opções para perguntas de múltipla escolha
+                                if ($question_id && in_array($question['type'], ['radio', 'checkbox', 'select'])) {
+                                    // Remover opções existentes
+                                    $this->Question_model->delete_options($question_id);
+
+                                    // Adicionar novas opções
+                                    if (isset($question['options']) && is_array($question['options'])) {
+                                        foreach ($question['options'] as $opt_index => $option) {
+                                            if (!empty(trim($option['text']))) {
+                                                $option_value = !empty($option['value']) ?
+                                                            $option['value'] :
+                                                            strtolower(str_replace(' ', '_', trim($option['text'])));
+
+                                                $option_data = array(
+                                                    'question_id' => $question_id,
+                                                    'option_text' => trim($option['text']),
+                                                    'option_value' => $option_value,
+                                                    'order_index' => $opt_index + 1
+                                                );
+
+                                                $this->Question_model->create_option($option_data);
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        // Remover perguntas que foram excluídas
-                        $questions_to_delete = array_diff($existing_question_ids, $processed_question_ids);
-                        foreach ($questions_to_delete as $question_id_to_delete) {
-                            $this->Question_model->delete($question_id_to_delete);
+                            // Remover perguntas que foram excluídas
+                            $questions_to_delete = array_diff($existing_question_ids, $processed_question_ids);
+                            foreach ($questions_to_delete as $question_id_to_delete) {
+                                $this->Question_model->delete($question_id_to_delete);
+                            }
                         }
                     }
 
