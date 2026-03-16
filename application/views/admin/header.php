@@ -246,6 +246,12 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $this->uri->segment(1) == 'ai' ? 'active' : '' ?>" href="<?= base_url('ai') ?>">
+                    <i class="fas fa-brain"></i>
+                    Inteligência Artificial
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $this->uri->segment(1) == 'settings' ? 'active' : '' ?>" href="<?= base_url('settings') ?>">
                     <i class="fas fa-cog"></i>
                     Configurações

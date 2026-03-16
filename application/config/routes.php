@@ -22,6 +22,24 @@ $route['admin/reports'] = 'reports';
 $route['admin/settings'] = 'settings';
 $route['politica_de_privacidade'] = 'privacypolicy';
 
+// Rotas do Módulo de IA
+$route['admin/ai'] = 'ai';
+$route['admin/ai/settings'] = 'ai/settings';
+$route['admin/ai/prompts'] = 'ai/prompts';
+$route['admin/ai/logs'] = 'ai/logs';
+$route['admin/ai/transcriptions'] = 'ai/transcriptions';
+$route['admin/ai/inconsistencies'] = 'ai/inconsistencies';
+$route['admin/ai/corrections'] = 'ai/corrections';
+$route['admin/ai/smart_fill'] = 'ai/smart_fill';
+$route['admin/ai/reformulations'] = 'ai/reformulations';
+$route['admin/ai/adaptive'] = 'ai/adaptive';
+$route['admin/ai/followup'] = 'ai/followup';
+$route['admin/ai/analysis'] = 'ai/analysis';
+$route['admin/ai/view_analysis/(:num)'] = 'ai/view_analysis/$1';
+$route['admin/ai/charts'] = 'ai/charts';
+$route['admin/ai/reports'] = 'ai/reports';
+$route['admin/ai/view_report/(:num)'] = 'ai/view_report/$1';
+
 // API routes
 $route['api/auth/login'] = 'api/auth/login';
 $route['api/auth/verify'] = 'api/auth/verify';
@@ -72,3 +90,9 @@ $route['api/responses/count'] = 'responses/ajax_count_responses';
 $route['api/responses/preview'] = 'responses/ajax_preview_export';
 
 $route['api/health'] = 'api/system/health';
+
+// API de IA (preparação para app móvel)
+$route['api/ai/status'] = 'api/ai/status';
+$route['api/ai/transcribe'] = 'api/ai/transcribe';
+$route['api/ai/check-inconsistencies'] = 'api/ai/check_inconsistencies';
+$route['api/ai/suggest-fill'] = 'api/ai/suggest_fill';
