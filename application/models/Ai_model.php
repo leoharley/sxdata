@@ -516,6 +516,96 @@ class Ai_model extends CI_Model {
     }
 
     // ============================================================
+    // AUDITORIA (app móvel)
+    // ============================================================
+
+    public function create_audit_log($data) {
+        $data['created_at'] = date('Y-m-d H:i:s');
+        $this->db->insert('ai_audit_logs', $data);
+        return $this->db->insert_id();
+    }
+
+    public function create_audit_logs_batch($events) {
+        $inserted = 0;
+        foreach ($events as $event) {
+            $event['created_at'] = date('Y-m-d H:i:s');
+            if ($this->db->insert('ai_audit_logs', $event)) {
+                $inserted++;
+            }
+        }
+        return $inserted;
+    }
+
+    // ============================================================
+    // CACHE DE IA
+    // ============================================================
+
+    public function get_cache($cache_key) {
+        $row = $this->db->where('cache_key', $cache_key)
+                        ->where('expires_at >', date('Y-m-d H:i:s'))
+                        ->get('ai_cache')
+                        ->row();
+        if ($row) {
+            return json_decode($row->cache_value, true);
+        }
+        return null;
+    }
+
+    public function set_cache($cache_key, $value, $ttl_seconds = 300) {
+        // Remove cache antigo com mesma key
+        $this->db->where('cache_key', $cache_key)->delete('ai_cache');
+
+        return $this->db->insert('ai_cache', array(
+            'cache_key' => $cache_key,
+            'cache_value' => json_encode($value),
+            'expires_at' => date('Y-m-d H:i:s', time() + $ttl_seconds),
+            'created_at' => date('Y-m-d H:i:s'),
+        ));
+    }
+
+    public function clear_expired_cache() {
+        return $this->db->where('expires_at <', date('Y-m-d H:i:s'))
+                        ->delete('ai_cache');
+    }
+
+    // ============================================================
+    // RATE LIMITING
+    // ============================================================
+
+    public function check_rate_limit($user_id, $endpoint, $max_requests = 10, $window_seconds = 60) {
+        $window_start = date('Y-m-d H:i:s', time() - $window_seconds);
+
+        $query = $this->db->select('COUNT(*) as cnt')
+                          ->where('user_id', $user_id)
+                          ->where('endpoint', $endpoint)
+                          ->where('window_start >=', $window_start)
+                          ->get('ai_rate_limits');
+
+        $row = $query->row();
+        $count = $row ? (int) $row->cnt : 0;
+
+        if ($count >= $max_requests) {
+            return false; // limite atingido
+        }
+
+        // Registrar requisição
+        $this->db->insert('ai_rate_limits', array(
+            'user_id' => $user_id,
+            'endpoint' => $endpoint,
+            'window_start' => date('Y-m-d H:i:s'),
+            'created_at' => date('Y-m-d H:i:s'),
+        ));
+
+        return true;
+    }
+
+    public function cleanup_rate_limits() {
+        // Limpar registros antigos (mais de 5 minutos)
+        return $this->db->where('window_start <', date('Y-m-d H:i:s', time() - 300))
+                        ->delete('ai_rate_limits');
+    }
+
+    // ============================================================
     // DASHBOARD DE IA - ESTATÍSTICAS GERAIS
     // ============================================================
 
