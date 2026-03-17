@@ -294,68 +294,80 @@ class Ai extends CI_Controller {
     public function analyze_inconsistencies() {
         header('Content-Type: application/json');
 
-        $form_response_id = $this->input->post('form_response_id');
+        try {
+            $form_response_id = $this->input->post('form_response_id');
 
-        if (!$form_response_id) {
-            echo json_encode(array('success' => false, 'message' => 'Informe o ID da resposta.'));
-            return;
-        }
-
-        // Verificar se a feature está habilitada
-        if (!$this->Ai_model->is_feature_enabled('inconsistency_detection')) {
-            echo json_encode(array('success' => false, 'message' => 'A funcionalidade "Detecção de Inconsistências" está desabilitada. Ative-a em Configurações de IA.'));
-            return;
-        }
-
-        $context = $this->ai_prompt_service->prepare_inconsistency_data($form_response_id);
-        if (!$context) {
-            echo json_encode(array('success' => false, 'message' => 'Resposta #' . $form_response_id . ' não encontrada no banco de dados.'));
-            return;
-        }
-
-        $messages_result = $this->ai_prompt_service->build_messages('inconsistency_detection', $context);
-        if (!$messages_result['success']) {
-            $error_msg = isset($messages_result['error']) ? $messages_result['error'] : 'Erro ao montar prompt.';
-            echo json_encode(array('success' => false, 'message' => $error_msg));
-            return;
-        }
-
-        $result = $this->ai_service->chat_completion_json('inconsistency_detection', $messages_result['messages'], array(
-            'prompt_id' => $messages_result['prompt_id'],
-            'resource_type' => 'form_response',
-            'resource_id' => $form_response_id,
-        ));
-
-        if ($result['success'] && $result['parsed']) {
-            $items = is_array($result['parsed']) && isset($result['parsed'][0]) ? $result['parsed'] : array($result['parsed']);
-            $count = 0;
-
-            foreach ($items as $item) {
-                if (empty($item['description'])) continue;
-
-                $this->Ai_model->create_inconsistency(array(
-                    'form_response_id' => $form_response_id,
-                    'questionnaire_id' => $context['questionnaire_id'],
-                    'inconsistency_type' => isset($item['inconsistency_type']) ? $item['inconsistency_type'] : 'logic',
-                    'severity' => isset($item['severity']) ? $item['severity'] : 'medium',
-                    'consistency_score' => isset($item['consistency_score']) ? $item['consistency_score'] : null,
-                    'description' => isset($item['description']) ? $item['description'] : '',
-                    'ai_justification' => isset($item['description']) ? $item['description'] : '',
-                    'affected_questions' => json_encode(isset($item['affected_questions']) ? $item['affected_questions'] : array()),
-                    'suggested_action' => isset($item['suggested_action']) ? $item['suggested_action'] : '',
-                    'execution_log_id' => $result['log_id'],
-                ));
-                $count++;
+            if (!$form_response_id) {
+                echo json_encode(array('success' => false, 'message' => 'Informe o ID da resposta.'));
+                return;
             }
 
-            echo json_encode(array(
-                'success' => true,
-                'message' => 'Análise concluída com sucesso.',
-                'count' => $count,
+            // Verificar se a feature está habilitada
+            if (!$this->Ai_model->is_feature_enabled('inconsistency_detection')) {
+                echo json_encode(array('success' => false, 'message' => 'A funcionalidade "Detecção de Inconsistências" está desabilitada. Ative-a em Configurações de IA.'));
+                return;
+            }
+
+            // Verificar se a API key está configurada
+            if (!$this->ai_service->is_configured()) {
+                echo json_encode(array('success' => false, 'message' => 'A chave da API OpenAI não está configurada. Verifique o arquivo .env'));
+                return;
+            }
+
+            $context = $this->ai_prompt_service->prepare_inconsistency_data($form_response_id);
+            if (!$context) {
+                echo json_encode(array('success' => false, 'message' => 'Resposta #' . $form_response_id . ' não encontrada no banco de dados.'));
+                return;
+            }
+
+            $messages_result = $this->ai_prompt_service->build_messages('inconsistency_detection', $context);
+            if (!$messages_result['success']) {
+                $error_msg = isset($messages_result['error']) ? $messages_result['error'] : 'Erro ao montar prompt.';
+                echo json_encode(array('success' => false, 'message' => $error_msg));
+                return;
+            }
+
+            $result = $this->ai_service->chat_completion_json('inconsistency_detection', $messages_result['messages'], array(
+                'prompt_id' => $messages_result['prompt_id'],
+                'resource_type' => 'form_response',
+                'resource_id' => $form_response_id,
             ));
-        } else {
-            $error_msg = isset($result['error']) ? $result['error'] : 'Erro ao processar análise com IA.';
-            echo json_encode(array('success' => false, 'message' => $error_msg));
+
+            if ($result['success'] && isset($result['parsed']) && $result['parsed']) {
+                $items = is_array($result['parsed']) && isset($result['parsed'][0]) ? $result['parsed'] : array($result['parsed']);
+                $count = 0;
+
+                foreach ($items as $item) {
+                    if (!is_array($item) || empty($item['description'])) continue;
+
+                    $this->Ai_model->create_inconsistency(array(
+                        'form_response_id' => $form_response_id,
+                        'questionnaire_id' => $context['questionnaire_id'],
+                        'inconsistency_type' => isset($item['inconsistency_type']) ? $item['inconsistency_type'] : 'logic',
+                        'severity' => isset($item['severity']) ? $item['severity'] : 'medium',
+                        'consistency_score' => isset($item['consistency_score']) ? $item['consistency_score'] : null,
+                        'description' => isset($item['description']) ? $item['description'] : '',
+                        'ai_justification' => isset($item['description']) ? $item['description'] : '',
+                        'affected_questions' => json_encode(isset($item['affected_questions']) ? $item['affected_questions'] : array()),
+                        'suggested_action' => isset($item['suggested_action']) ? $item['suggested_action'] : '',
+                        'execution_log_id' => isset($result['log_id']) ? $result['log_id'] : null,
+                    ));
+                    $count++;
+                }
+
+                echo json_encode(array(
+                    'success' => true,
+                    'message' => 'Análise concluída com sucesso.',
+                    'count' => $count,
+                ));
+            } else {
+                $error_msg = isset($result['error']) ? $result['error'] : 'Erro ao processar análise com IA.';
+                echo json_encode(array('success' => false, 'message' => $error_msg));
+            }
+
+        } catch (Exception $e) {
+            log_message('error', 'AI analyze_inconsistencies error: ' . $e->getMessage());
+            echo json_encode(array('success' => false, 'message' => 'Erro interno: ' . $e->getMessage()));
         }
     }
 
@@ -949,6 +961,48 @@ class Ai extends CI_Controller {
             'count' => $results['count'],
             'results' => $results,
         ));
+    }
+
+    // ============================================================
+    // DIAGNÓSTICO (remover após debug)
+    // ============================================================
+
+    public function debug_analyze() {
+        header('Content-Type: application/json');
+        $steps = array();
+
+        try {
+            $steps[] = 'Step 1: Controller OK';
+
+            $form_response_id = $this->input->post('form_response_id');
+            $steps[] = 'Step 2: form_response_id = ' . var_export($form_response_id, true);
+
+            $enabled = $this->Ai_model->is_feature_enabled('inconsistency_detection');
+            $steps[] = 'Step 3: feature_enabled = ' . var_export($enabled, true);
+
+            $configured = $this->ai_service->is_configured();
+            $steps[] = 'Step 4: api_configured = ' . var_export($configured, true);
+
+            if ($form_response_id) {
+                $context = $this->ai_prompt_service->prepare_inconsistency_data($form_response_id);
+                $steps[] = 'Step 5: context = ' . ($context ? 'OK (questionnaire: ' . $context['questionnaire_id'] . ')' : 'NULL - resposta não encontrada');
+
+                if ($context) {
+                    $messages_result = $this->ai_prompt_service->build_messages('inconsistency_detection', $context);
+                    $steps[] = 'Step 6: build_messages = ' . ($messages_result['success'] ? 'OK' : 'FAIL: ' . (isset($messages_result['error']) ? $messages_result['error'] : 'unknown'));
+
+                    if ($messages_result['success'] && $enabled && $configured) {
+                        $steps[] = 'Step 7: Pronto para chamar OpenAI (não vou chamar neste diagnóstico)';
+                    }
+                }
+            }
+
+            echo json_encode(array('success' => true, 'steps' => $steps));
+
+        } catch (Exception $e) {
+            $steps[] = 'EXCEPTION: ' . $e->getMessage() . ' em ' . $e->getFile() . ':' . $e->getLine();
+            echo json_encode(array('success' => false, 'steps' => $steps));
+        }
     }
 
     // ============================================================
