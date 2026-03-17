@@ -450,7 +450,11 @@
 <?php endif; ?>
 
 <script>
-$(function() {
+(function waitForJQuery() {
+    if (typeof jQuery === 'undefined') {
+        return setTimeout(waitForJQuery, 50);
+    }
+    jQuery(function($) {
     var BASE = '<?= base_url() ?>';
 
     function showAlert(container, type, msg) {
@@ -620,5 +624,6 @@ $(function() {
             }
         });
     });
-});
+    });
+})();
 </script>
