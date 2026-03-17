@@ -307,6 +307,33 @@ switch (ENVIRONMENT)
 
 /*
  * --------------------------------------------------------------------
+ * LOAD .ENV FILE
+ * --------------------------------------------------------------------
+ *
+ * Carrega variáveis de ambiente do arquivo .env na raiz do projeto.
+ * Usado para configurar OPENAI_API_KEY e outras variáveis sensíveis.
+ */
+$dotenv_path = FCPATH . '.env';
+if (file_exists($dotenv_path)) {
+	$lines = file($dotenv_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+	foreach ($lines as $line) {
+		$line = trim($line);
+		if ($line === '' || $line[0] === '#') {
+			continue;
+		}
+		if (strpos($line, '=') !== false) {
+			list($key, $value) = array_map('trim', explode('=', $line, 2));
+			if (!getenv($key)) {
+				putenv($key . '=' . $value);
+				$_ENV[$key] = $value;
+				$_SERVER[$key] = $value;
+			}
+		}
+	}
+}
+
+/*
+ * --------------------------------------------------------------------
  * LOAD THE BOOTSTRAP FILE
  * --------------------------------------------------------------------
  *
