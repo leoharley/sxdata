@@ -271,25 +271,49 @@ document.addEventListener('DOMContentLoaded', function() {
         var canvas = document.getElementById('chart-' + index);
         if (!canvas) return;
 
-        var config = chart.data_config || chart.config || chart;
-        var chartType = chart.chart_type || config.type || 'bar';
-        var labels = config.labels || [];
-        var datasets = config.datasets || [];
+        // Suporta múltiplos formatos de resposta da IA
+        var chartType = chart.chart_type || chart.type || 'bar';
 
-        if (datasets.length === 0 && config.data) {
+        // Tenta extrair labels de vários formatos
+        var labels = chart.labels || (chart.data_config && chart.data_config.labels) || [];
+
+        // Tenta extrair valores de vários formatos
+        var rawData = chart.data || chart.values || chart.counts ||
+                      (chart.data_config && (chart.data_config.data || chart.data_config.values)) || null;
+
+        // Se labels e data vieram como objeto {chave: valor}
+        if (!rawData && chart.distribution && typeof chart.distribution === 'object') {
+            labels = Object.keys(chart.distribution);
+            rawData = Object.values(chart.distribution);
+        }
+
+        var datasets = chart.datasets || (chart.data_config && chart.data_config.datasets) || [];
+
+        if (datasets.length === 0 && rawData && rawData.length > 0) {
             datasets = [{
                 label: chart.title || 'Dados',
-                data: config.data,
-                backgroundColor: colorPalette.slice(0, (config.data || []).length),
-                borderColor: borderPalette.slice(0, (config.data || []).length),
+                data: rawData,
+                backgroundColor: colorPalette.slice(0, rawData.length),
+                borderColor: borderPalette.slice(0, rawData.length),
                 borderWidth: 1
             }];
         }
 
+        // Sem dados reais: não renderiza canvas vazio
+        if (datasets.length === 0 || !datasets[0].data || datasets[0].data.length === 0) {
+            canvas.closest('.border.rounded').innerHTML +=
+                '<p class="text-muted small text-center mt-2">Dados insuficientes para gerar gráfico.</p>';
+            return;
+        }
+
         datasets.forEach(function(ds, i) {
             if (!ds.backgroundColor) {
-                ds.backgroundColor = colorPalette[i % colorPalette.length];
-                ds.borderColor = borderPalette[i % borderPalette.length];
+                ds.backgroundColor = (chartType === 'pie' || chartType === 'doughnut')
+                    ? colorPalette.slice(0, (ds.data || []).length)
+                    : colorPalette[i % colorPalette.length];
+                ds.borderColor = (chartType === 'pie' || chartType === 'doughnut')
+                    ? borderPalette.slice(0, (ds.data || []).length)
+                    : borderPalette[i % borderPalette.length];
                 ds.borderWidth = 1;
             }
         });
@@ -300,9 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
+                plugins: { legend: { position: 'bottom' } }
             }
         });
     });
