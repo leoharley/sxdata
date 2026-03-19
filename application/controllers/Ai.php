@@ -455,6 +455,12 @@ class Ai extends CI_Controller {
         echo json_encode($result);
     }
 
+    public function clear_corrections() {
+        header('Content-Type: application/json');
+        $this->db->truncate('ai_corrections');
+        echo json_encode(array('success' => true));
+    }
+
     public function review_correction() {
         $id = $this->input->post('id');
         $action = $this->input->post('action'); // accepted, rejected, edited

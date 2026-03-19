@@ -41,6 +41,7 @@ $route['admin/ai/followup'] = 'ai/followup';
 $route['admin/ai/analysis'] = 'ai/analysis';
 $route['admin/ai/view_analysis/(:num)'] = 'ai/view_analysis/$1';
 $route['ai/delete_analysis'] = 'ai/delete_analysis';
+$route['ai/clear_corrections'] = 'ai/clear_corrections';
 $route['admin/ai/charts'] = 'ai/charts';
 $route['admin/ai/reports'] = 'ai/reports';
 $route['admin/ai/view_report/(:num)'] = 'ai/view_report/$1';

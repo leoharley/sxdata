@@ -215,12 +215,19 @@
     </div>
 
     <!-- Corrections Table -->
-    <h5 class="correction-section-title">
-        <i class="fas fa-list-check me-2"></i>Correções Sugeridas
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="correction-section-title mb-0">
+            <i class="fas fa-list-check me-2"></i>Correções Sugeridas
+            <?php if (!empty($corrections)): ?>
+                <span class="badge bg-secondary ms-2"><?= count($corrections) ?></span>
+            <?php endif; ?>
+        </h5>
         <?php if (!empty($corrections)): ?>
-            <span class="badge bg-secondary ms-2"><?= count($corrections) ?></span>
+        <button class="btn btn-sm btn-outline-danger" id="btnClearAll">
+            <i class="fas fa-trash me-1"></i>Limpar Todas
+        </button>
         <?php endif; ?>
-    </h5>
+    </div>
 
     <?php if (empty($corrections)): ?>
         <!-- Empty State -->
@@ -456,6 +463,30 @@ $(document).ready(function() {
             complete: function() {
                 hideLoading();
                 $btn.prop('disabled', false).html('<i class="fas fa-layer-group me-1"></i>Analisar Lote');
+            }
+        });
+    });
+
+    // Clear All Corrections
+    $('#btnClearAll').on('click', function() {
+        if (!confirm('Tem certeza que deseja excluir TODAS as correções sugeridas? Esta ação não pode ser desfeita.')) return;
+        var $btn = $(this);
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Limpando...');
+        $.ajax({
+            url: baseUrl + 'ai/clear_corrections',
+            type: 'POST',
+            dataType: 'json',
+            success: function(data) {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || 'Erro ao limpar correções.');
+                    $btn.prop('disabled', false).html('<i class="fas fa-trash me-1"></i>Limpar Todas');
+                }
+            },
+            error: function() {
+                alert('Erro de comunicação com o servidor.');
+                $btn.prop('disabled', false).html('<i class="fas fa-trash me-1"></i>Limpar Todas');
             }
         });
     });
