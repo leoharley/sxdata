@@ -401,6 +401,7 @@ class Ai extends CI_Controller {
         $data['corrections'] = $this->Ai_model->get_corrections($filters);
         $data['filters'] = $filters;
         $data['is_enabled'] = $this->Ai_model->is_feature_enabled('data_correction');
+        $data['questionnaires'] = $this->Questionnaire_model->get_active();
 
         $this->load->view('admin/header', $data);
         $this->load->view('admin/ai/corrections', $data);
