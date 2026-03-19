@@ -1078,7 +1078,9 @@ class Ai extends CI_Controller {
                 $items = is_array($result['parsed']) && isset($result['parsed'][0]) ? $result['parsed'] : array($result['parsed']);
 
                 foreach ($items as $item) {
-                    if (empty($item['description'])) continue;
+                    // Validação por tipo: inconsistências exigem 'description', correções exigem 'suggested_value'
+                    if ($type === 'inconsistencies' && empty($item['description'])) continue;
+                    if ($type !== 'inconsistencies' && empty($item['suggested_value'])) continue;
 
                     if ($type === 'inconsistencies') {
                         $this->Ai_model->create_inconsistency(array(
