@@ -916,14 +916,31 @@ class Ai extends CI_Controller {
             return;
         }
 
+        ob_start();
         $result = $this->ai_service->chat_completion_json('smart_charts', $messages_result['messages'], array(
             'prompt_id' => $messages_result['prompt_id'],
             'resource_type' => 'questionnaire',
             'resource_id' => $questionnaire_id,
         ));
+        ob_end_clean();
+
+        if (!$result['success']) {
+            header('Content-Type: application/json');
+            echo json_encode($result);
+            return;
+        }
+
+        $charts = $result['parsed'] ?? [];
+        // A IA pode retornar {charts: [...]} ou diretamente [...]
+        if (isset($charts['charts']) && is_array($charts['charts'])) {
+            $charts = $charts['charts'];
+        }
+        if (!is_array($charts)) {
+            $charts = [];
+        }
 
         header('Content-Type: application/json');
-        echo json_encode($result);
+        echo json_encode(['success' => true, 'charts' => $charts]);
     }
 
     // ============================================================
