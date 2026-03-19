@@ -39,10 +39,10 @@ class Ai extends CI_Controller {
 
         $features = array();
         foreach ($settings as $s) {
-            $features[$s->feature_key] = array(
-                'name' => $s->feature_name,
-                'enabled' => (bool) $s->is_enabled,
-                'model' => $s->model,
+            $features[$s['feature_key']] = array(
+                'name'    => $s['feature_name'],
+                'enabled' => (bool) $s['is_enabled'],
+                'model'   => $s['model'],
             );
         }
 
@@ -828,6 +828,41 @@ class Ai extends CI_Controller {
         $inserted = $this->Ai_model->create_audit_logs_batch($prepared);
 
         echo json_encode(array('success' => true, 'data' => array('inserted' => $inserted)));
+    }
+
+    /**
+     * GET /api/ai/approved-suggestions?questionnaire_id=X
+     * Retorna sugestões aprovadas pelo painel para exibir ao entrevistador no app
+     */
+    public function approved_suggestions() {
+        $user = $this->verify_auth();
+        if (!$user) return;
+
+        $questionnaire_id = (int) $this->input->get('questionnaire_id');
+
+        if (!$questionnaire_id) {
+            echo json_encode(array('success' => false, 'message' => 'questionnaire_id é obrigatório'));
+            return;
+        }
+
+        $suggestions = $this->Ai_model->get_field_suggestions(
+            array('questionnaire_id' => $questionnaire_id, 'status' => 'approved')
+        );
+
+        $result = array();
+        foreach ($suggestions as $s) {
+            $result[] = array(
+                'question_id'     => (int) $s['question_id'],
+                'suggested_value' => $s['suggested_value'],
+                'confidence'      => $s['confidence_score'] ? (float) $s['confidence_score'] : null,
+                'context'         => $s['context_data'] ? json_decode($s['context_data'], true) : null,
+            );
+        }
+
+        echo json_encode(array(
+            'success' => true,
+            'data'    => array('suggestions' => $result),
+        ));
     }
 
     // ============================================================

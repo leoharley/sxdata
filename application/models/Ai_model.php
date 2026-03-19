@@ -371,6 +371,19 @@ class Ai_model extends CI_Model {
                         ->result_array();
     }
 
+    public function get_reformulation($id) {
+        return $this->db->get_where('ai_reformulations', array('id' => $id))->row();
+    }
+
+    public function get_reformulations_by_questionnaire($questionnaire_id) {
+        $this->db->select('ai_reformulations.*, q.question_text as current_text, q.questionnaire_id');
+        $this->db->join('questions q', 'q.id = ai_reformulations.question_id', 'left');
+        $this->db->where('q.questionnaire_id', $questionnaire_id);
+        return $this->db->order_by('ai_reformulations.created_at', 'DESC')
+                        ->get('ai_reformulations')
+                        ->result_array();
+    }
+
     public function create_reformulation($data) {
         $data['created_at'] = date('Y-m-d H:i:s');
         $this->db->insert('ai_reformulations', $data);

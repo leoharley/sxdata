@@ -565,9 +565,14 @@ class Ai extends CI_Controller {
 
     public function reformulations() {
         $data['title'] = 'Reformulação de Perguntas - SXData';
-        $data['reformulations'] = $this->Ai_model->get_reformulations();
         $data['questionnaires'] = $this->Questionnaire_model->get_active();
-        $data['is_enabled'] = $this->Ai_model->is_feature_enabled('question_reformulation');
+        $data['is_enabled']     = $this->Ai_model->is_feature_enabled('question_reformulation');
+
+        $questionnaire_id = (int) $this->input->get('questionnaire_id');
+        $data['selected_questionnaire_id'] = $questionnaire_id;
+        $data['reformulations'] = $questionnaire_id
+            ? $this->Ai_model->get_reformulations_by_questionnaire($questionnaire_id)
+            : array();
 
         $this->load->view('admin/header', $data);
         $this->load->view('admin/ai/reformulations', $data);
@@ -614,17 +619,95 @@ class Ai extends CI_Controller {
     }
 
     public function approve_reformulation() {
-        $id = $this->input->post('id');
-        $action = $this->input->post('action'); // approved, rejected
+        header('Content-Type: application/json');
 
-        $this->Ai_model->update_reformulation($id, array(
-            'status' => $action,
+        $reformulation_id = (int) $this->input->post('reformulation_id');
+        $action           = $this->input->post('action'); // 'approved' ou 'rejected'
+
+        if (!$reformulation_id || !in_array($action, array('approved', 'rejected'))) {
+            echo json_encode(array('success' => false, 'message' => 'Parâmetros inválidos.'));
+            return;
+        }
+
+        $reformulation = $this->Ai_model->get_reformulation($reformulation_id);
+        if (!$reformulation) {
+            echo json_encode(array('success' => false, 'message' => 'Reformulação não encontrada.'));
+            return;
+        }
+
+        $this->Ai_model->update_reformulation($reformulation_id, array(
+            'status'      => $action,
             'approved_by' => $this->session->userdata('admin_id'),
             'approved_at' => date('Y-m-d H:i:s'),
         ));
 
+        // Ao aprovar: atualiza o texto da pergunta original
+        if ($action === 'approved') {
+            $this->load->model('Question_model');
+            $this->Question_model->update($reformulation->question_id, array(
+                'question_text' => $reformulation->reformulated_text,
+            ));
+        }
+
+        echo json_encode(array('success' => true, 'action' => $action));
+    }
+
+    public function generate_reformulations_batch() {
         header('Content-Type: application/json');
-        echo json_encode(array('success' => true));
+
+        $questionnaire_id = (int) $this->input->post('questionnaire_id');
+        $objective        = $this->input->post('objective') ?: 'clareza';
+
+        if (!$questionnaire_id) {
+            echo json_encode(array('success' => false, 'message' => 'Selecione um questionário.'));
+            return;
+        }
+
+        $this->load->model('Question_model');
+        $questions = $this->Question_model->get_by_questionnaire($questionnaire_id);
+
+        if (empty($questions)) {
+            echo json_encode(array('success' => false, 'message' => 'Nenhuma pergunta encontrada.'));
+            return;
+        }
+
+        $generated = 0;
+        $errors    = 0;
+
+        foreach ($questions as $question) {
+            $q_id    = is_array($question) ? $question['id'] : $question->id;
+            $context = $this->ai_prompt_service->prepare_reformulation_data($q_id, $objective);
+            if (!$context) { $errors++; continue; }
+
+            $messages_result = $this->ai_prompt_service->build_messages('question_reformulation', $context);
+            if (!$messages_result['success']) { $errors++; continue; }
+
+            $result = $this->ai_service->chat_completion_json('question_reformulation', $messages_result['messages'], array(
+                'prompt_id'     => $messages_result['prompt_id'],
+                'resource_type' => 'question',
+                'resource_id'   => $q_id,
+            ));
+
+            if ($result['success'] && !empty($result['parsed']['reformulated_text'])) {
+                $this->Ai_model->create_reformulation(array(
+                    'question_id'       => $q_id,
+                    'original_text'     => $context['original_question'],
+                    'reformulated_text' => $result['parsed']['reformulated_text'],
+                    'objective'         => $objective,
+                    'execution_log_id'  => $result['log_id'],
+                ));
+                $generated++;
+            } else {
+                $errors++;
+            }
+        }
+
+        echo json_encode(array(
+            'success'   => $generated > 0,
+            'generated' => $generated,
+            'errors'    => $errors,
+            'message'   => "{$generated} reformulação(ões) gerada(s)." . ($errors > 0 ? " {$errors} falha(s)." : ''),
+        ));
     }
 
     // ============================================================
