@@ -38,6 +38,7 @@ $route['ai/generate_reformulations_batch'] = 'ai/generate_reformulations_batch';
 $route['admin/ai/reformulations'] = 'ai/reformulations';
 $route['admin/ai/adaptive'] = 'ai/adaptive';
 $route['ai/generate_adaptive_rules'] = 'ai/generate_adaptive_rules';
+$route['ai/clear_adaptive_rules'] = 'ai/clear_adaptive_rules';
 $route['admin/ai/followup'] = 'ai/followup';
 $route['admin/ai/analysis'] = 'ai/analysis';
 $route['admin/ai/view_analysis/(:num)'] = 'ai/view_analysis/$1';

@@ -786,6 +786,17 @@ class Ai extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
+    public function clear_adaptive_rules() {
+        header('Content-Type: application/json');
+        $questionnaire_id = $this->input->post('questionnaire_id');
+        if (!$questionnaire_id) {
+            echo json_encode(array('success' => false, 'message' => 'Questionário não informado.'));
+            return;
+        }
+        $this->db->where('questionnaire_id', $questionnaire_id)->delete('ai_adaptive_rules');
+        echo json_encode(array('success' => true));
+    }
+
     public function generate_adaptive_rules() {
         ob_start();
         $questionnaire_id = $this->input->post('questionnaire_id');

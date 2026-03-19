@@ -134,9 +134,13 @@
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-secondary"><?= count($rules) ?> regra(s)</span>
             <?php if ($is_enabled): ?>
-            <button class="btn btn-sm btn-ai-primary" id="btnGenerateRules"
-                    data-questionnaire="<?= $selected_questionnaire_id ?>">
+            <button class="btn btn-sm btn-ai-primary" id="btnGenerateRules">
                 <i class="fas fa-robot me-1"></i>Gerar com IA
+            </button>
+            <?php endif; ?>
+            <?php if (!empty($rules)): ?>
+            <button class="btn btn-sm btn-outline-danger" id="btnClearRules">
+                <i class="fas fa-trash me-1"></i>Limpar Todas
             </button>
             <?php endif; ?>
         </div>
@@ -286,6 +290,26 @@
 document.getElementById('questionnaire_id').addEventListener('change', function() {
     if (this.value) this.closest('form').submit();
 });
+
+<?php if (!empty($rules)): ?>
+document.getElementById('btnClearRules').addEventListener('click', function() {
+    if (!confirm('Excluir todas as regras deste questionário? Esta ação não pode ser desfeita.')) return;
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Limpando...';
+    $.ajax({
+        url: '<?= base_url("ai/clear_adaptive_rules") ?>',
+        type: 'POST',
+        data: { questionnaire_id: <?= $selected_questionnaire_id ?> },
+        dataType: 'json',
+        success: function(data) {
+            if (data.success) location.reload();
+            else { alert(data.message || 'Erro.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>Limpar Todas'; }
+        },
+        error: function() { alert('Erro de comunicação.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>Limpar Todas'; }
+    });
+});
+<?php endif; ?>
 
 <?php if (!empty($selected_questionnaire_id) && $is_enabled): ?>
 document.getElementById('btnGenerateRules').addEventListener('click', function() {
