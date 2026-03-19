@@ -112,7 +112,7 @@
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th style="width: 110px;">ID Resposta</th>
+                            <th style="width: 120px;">Questionário</th>
                             <th>Pergunta</th>
                             <th>Valor Sugerido</th>
                             <th style="width: 160px;">Confiança</th>
@@ -124,10 +124,8 @@
                         <?php foreach ($suggestions as $s): ?>
                         <tr id="suggestion-row-<?= $s['id'] ?>">
                             <td>
-                                <?php if (!empty($s['form_response_id'])): ?>
-                                    <a href="<?= base_url('responses/view/' . $s['form_response_id']) ?>" target="_blank" title="Ver resposta">
-                                        #<?= $s['form_response_id'] ?>
-                                    </a>
+                                <?php if (!empty($s['questionnaire_id'])): ?>
+                                    <span class="badge bg-secondary">#<?= $s['questionnaire_id'] ?></span>
                                 <?php else: ?>
                                     <span class="text-muted">—</span>
                                 <?php endif; ?>
