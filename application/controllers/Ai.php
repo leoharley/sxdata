@@ -435,6 +435,10 @@ class Ai extends CI_Controller {
             $items = is_array($result['parsed']) && isset($result['parsed'][0]) ? $result['parsed'] : array($result['parsed']);
 
             foreach ($items as $item) {
+                if (empty($item['suggested_value'])) continue;
+                // Ignora sugestões idênticas ao valor original
+                if (isset($item['original_value']) && trim((string)$item['original_value']) === trim((string)$item['suggested_value'])) continue;
+
                 $this->Ai_model->create_correction(array(
                     'form_response_id' => $form_response_id,
                     'question_id' => $item['question_id'] ?? null,
@@ -1081,6 +1085,11 @@ class Ai extends CI_Controller {
                     // Validação por tipo: inconsistências exigem 'description', correções exigem 'suggested_value'
                     if ($type === 'inconsistencies' && empty($item['description'])) continue;
                     if ($type !== 'inconsistencies' && empty($item['suggested_value'])) continue;
+
+                    // Ignora correções onde o valor sugerido é idêntico ao original
+                    if ($type !== 'inconsistencies' && isset($item['original_value']) && isset($item['suggested_value'])) {
+                        if (trim((string)$item['original_value']) === trim((string)$item['suggested_value'])) continue;
+                    }
 
                     if ($type === 'inconsistencies') {
                         $this->Ai_model->create_inconsistency(array(
