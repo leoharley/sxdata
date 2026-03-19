@@ -719,15 +719,15 @@ class Ai extends CI_Controller {
         $data['questionnaires'] = $this->Questionnaire_model->get_active();
         $data['is_enabled'] = $this->Ai_model->is_feature_enabled('adaptive_routing');
 
-        $questionnaire_id = $this->input->get('questionnaire_id');
+        $questionnaire_id = (int) $this->input->get('questionnaire_id');
+        $data['selected_questionnaire_id'] = $questionnaire_id;
+
         if ($questionnaire_id) {
-            $data['rules'] = $this->Ai_model->get_adaptive_rules($questionnaire_id);
-            $data['selected_questionnaire'] = $this->Questionnaire_model->get_by_id($questionnaire_id);
+            $data['rules']     = $this->Ai_model->get_adaptive_rules($questionnaire_id);
             $this->load->model('Question_model');
             $data['questions'] = $this->Question_model->get_by_questionnaire($questionnaire_id);
         } else {
-            $data['rules'] = array();
-            $data['selected_questionnaire'] = null;
+            $data['rules']     = array();
             $data['questions'] = array();
         }
 
@@ -827,17 +827,23 @@ class Ai extends CI_Controller {
 
         if ($result['success'] && $result['parsed']) {
             $parsed = $result['parsed'];
+
+            $summary = $parsed['summary'] ?? '';
+            if (is_array($summary)) {
+                $summary = implode("\n", $summary);
+            }
+
             $this->Ai_model->create_statistical_analysis(array(
                 'questionnaire_id' => $questionnaire_id,
-                'analysis_type' => 'general',
-                'filters_applied' => json_encode($filters),
-                'summary_text' => $parsed['summary'] ?? '',
-                'patterns' => json_encode($parsed['patterns'] ?? array()),
-                'outliers' => json_encode($parsed['outliers'] ?? array()),
-                'trends' => json_encode($parsed['trends'] ?? array()),
-                'insights' => json_encode($parsed['insights'] ?? array()),
-                'chart_suggestions' => json_encode($parsed['chart_suggestions'] ?? array()),
-                'generated_by' => $this->session->userdata('admin_id'),
+                'analysis_type'    => 'general',
+                'filters_applied'  => json_encode($filters),
+                'summary_text'     => $summary,
+                'patterns'         => json_encode(is_array($parsed['patterns']        ?? null) ? $parsed['patterns']        : array()),
+                'outliers'         => json_encode(is_array($parsed['outliers']        ?? null) ? $parsed['outliers']        : array()),
+                'trends'           => json_encode(is_array($parsed['trends']          ?? null) ? $parsed['trends']          : array()),
+                'insights'         => json_encode(is_array($parsed['insights']        ?? null) ? $parsed['insights']        : array()),
+                'chart_suggestions'=> json_encode(is_array($parsed['chart_suggestions']?? null) ? $parsed['chart_suggestions'] : array()),
+                'generated_by'     => $this->session->userdata('admin_id'),
                 'execution_log_id' => $result['log_id'],
             ));
         }

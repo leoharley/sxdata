@@ -106,9 +106,12 @@
                     <label for="questionnaire_id" class="form-label fw-bold" style="color: var(--secondary-color);">Questionário</label>
                     <select class="form-select" id="questionnaire_id" name="questionnaire_id">
                         <option value="">Selecione um questionário...</option>
-                        <?php foreach ($questionnaires as $q): ?>
-                            <option value="<?= $q->id ?>" <?= (!empty($selected_questionnaire) && $selected_questionnaire == $q->id) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($q->title ?? $q->name ?? 'Questionário #' . $q->id) ?>
+                        <?php foreach ($questionnaires as $q):
+                            $qid   = is_array($q) ? $q['id']    : $q->id;
+                            $qtitle = is_array($q) ? $q['title'] : ($q->title ?? $q->name ?? 'Questionário #' . $q->id);
+                        ?>
+                            <option value="<?= $qid ?>" <?= $selected_questionnaire_id == $qid ? 'selected' : '' ?>>
+                                #<?= $qid ?> — <?= htmlspecialchars($qtitle) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -124,7 +127,7 @@
 </div>
 
 <!-- Regras de Roteamento -->
-<?php if (!empty($selected_questionnaire)): ?>
+<?php if (!empty($selected_questionnaire_id)): ?>
 <div class="ai-page-card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5><i class="fas fa-project-diagram me-2"></i>Regras de Roteamento</h5>
@@ -265,7 +268,7 @@
         <div class="empty-state">
             <i class="fas fa-hand-pointer d-block"></i>
             <h5>Selecione um questionário</h5>
-            <p>Escolha um questionário acima para visualizar as regras de roteamento adaptativo.</p>
+            <p>Escolha um questionário e clique em <strong>Carregar Regras</strong> para visualizar as regras de roteamento adaptativo.</p>
         </div>
     </div>
 </div>
