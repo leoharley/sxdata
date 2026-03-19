@@ -31,11 +31,37 @@
 </style>
 
 <?php
-    $patterns = is_string($analysis->patterns ?? '') ? json_decode($analysis->patterns, true) : ($analysis->patterns ?? []);
-    $outliers = is_string($analysis->outliers ?? '') ? json_decode($analysis->outliers, true) : ($analysis->outliers ?? []);
-    $trends = is_string($analysis->trends ?? '') ? json_decode($analysis->trends, true) : ($analysis->trends ?? []);
-    $insights = is_string($analysis->insights ?? '') ? json_decode($analysis->insights, true) : ($analysis->insights ?? []);
+    $patterns        = is_string($analysis->patterns        ?? '') ? json_decode($analysis->patterns,        true) : ($analysis->patterns        ?? []);
+    $outliers        = is_string($analysis->outliers        ?? '') ? json_decode($analysis->outliers,        true) : ($analysis->outliers        ?? []);
+    $trends          = is_string($analysis->trends          ?? '') ? json_decode($analysis->trends,          true) : ($analysis->trends          ?? []);
+    $insights        = is_string($analysis->insights        ?? '') ? json_decode($analysis->insights,        true) : ($analysis->insights        ?? []);
     $chart_suggestions = is_string($analysis->chart_suggestions ?? '') ? json_decode($analysis->chart_suggestions, true) : ($analysis->chart_suggestions ?? []);
+
+    // Função para renderizar um item de lista (string ou array com chaves variadas)
+    function render_list_item($item, $icon_class, $icon_color = '') {
+        if (is_string($item)) {
+            echo '<p class="mb-0"><i class="' . $icon_class . ' me-2" style="' . $icon_color . '"></i>' . htmlspecialchars($item) . '</p>';
+            return;
+        }
+        if (is_array($item)) {
+            // Tenta chaves padrão de título
+            $title = $item['title'] ?? $item['name'] ?? $item['pattern'] ?? $item['trend'] ?? $item['outlier'] ?? $item['insight'] ?? null;
+            // Tenta chaves padrão de descrição
+            $desc  = $item['description'] ?? $item['text'] ?? $item['detail'] ?? $item['details'] ?? $item['observation'] ?? null;
+
+            if ($title === null && $desc === null) {
+                // Nenhuma chave conhecida — renderiza todos os valores string do array
+                $parts = [];
+                foreach ($item as $k => $v) {
+                    if (is_scalar($v) && $v !== '') $parts[] = htmlspecialchars($v);
+                }
+                echo '<p class="mb-0"><i class="' . $icon_class . ' me-2" style="' . $icon_color . '"></i>' . implode(' — ', $parts) . '</p>';
+            } else {
+                if ($title) echo '<strong style="color: var(--secondary-color);">' . htmlspecialchars($title) . '</strong>';
+                if ($desc)  echo '<p class="mb-0 text-muted small">' . htmlspecialchars($desc) . '</p>';
+            }
+        }
+    }
 ?>
 
 <div class="d-flex justify-content-between align-items-start mb-4">
@@ -117,12 +143,7 @@
             <div class="card-body p-3">
                 <?php foreach ($patterns as $item): ?>
                 <div class="analysis-list-item">
-                    <?php if (is_array($item)): ?>
-                        <strong style="color: var(--secondary-color);"><?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?></strong>
-                        <p class="mb-0 text-muted small"><?= htmlspecialchars($item['description'] ?? $item['text'] ?? '') ?></p>
-                    <?php else: ?>
-                        <p class="mb-0"><i class="fas fa-check-circle me-2" style="color: var(--primary-color);"></i><?= htmlspecialchars($item) ?></p>
-                    <?php endif; ?>
+                    <?php render_list_item($item, 'fas fa-check-circle', 'color: var(--primary-color);'); ?>
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -145,12 +166,7 @@
             <div class="card-body p-3">
                 <?php foreach ($outliers as $item): ?>
                 <div class="analysis-list-item">
-                    <?php if (is_array($item)): ?>
-                        <strong style="color: var(--secondary-color);"><?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?></strong>
-                        <p class="mb-0 text-muted small"><?= htmlspecialchars($item['description'] ?? $item['text'] ?? '') ?></p>
-                    <?php else: ?>
-                        <p class="mb-0"><i class="fas fa-exclamation me-2 text-warning"></i><?= htmlspecialchars($item) ?></p>
-                    <?php endif; ?>
+                    <?php render_list_item($item, 'fas fa-exclamation', 'color: #f0ad4e;'); ?>
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -173,12 +189,7 @@
             <div class="card-body p-3">
                 <?php foreach ($trends as $item): ?>
                 <div class="analysis-list-item">
-                    <?php if (is_array($item)): ?>
-                        <strong style="color: var(--secondary-color);"><?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?></strong>
-                        <p class="mb-0 text-muted small"><?= htmlspecialchars($item['description'] ?? $item['text'] ?? '') ?></p>
-                    <?php else: ?>
-                        <p class="mb-0"><i class="fas fa-arrow-trend-up me-2 text-info"></i><?= htmlspecialchars($item) ?></p>
-                    <?php endif; ?>
+                    <?php render_list_item($item, 'fas fa-arrow-trend-up', 'color: #5bc0de;'); ?>
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -201,12 +212,7 @@
             <div class="card-body p-3">
                 <?php foreach ($insights as $item): ?>
                 <div class="analysis-list-item">
-                    <?php if (is_array($item)): ?>
-                        <strong style="color: var(--secondary-color);"><?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?></strong>
-                        <p class="mb-0 text-muted small"><?= htmlspecialchars($item['description'] ?? $item['text'] ?? '') ?></p>
-                    <?php else: ?>
-                        <p class="mb-0"><i class="fas fa-lightbulb me-2" style="color: var(--primary-color);"></i><?= htmlspecialchars($item) ?></p>
-                    <?php endif; ?>
+                    <?php render_list_item($item, 'fas fa-lightbulb', 'color: var(--primary-color);'); ?>
                 </div>
                 <?php endforeach; ?>
             </div>
