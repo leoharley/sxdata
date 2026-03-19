@@ -804,50 +804,59 @@ class Ai extends CI_Controller {
     }
 
     public function generate_analysis() {
+        // Buffer para capturar eventuais notices PHP antes de enviar JSON limpo
+        ob_start();
+
         $questionnaire_id = $this->input->post('questionnaire_id');
         $filters = array(
             'date_from' => $this->input->post('date_from'),
-            'date_to' => $this->input->post('date_to'),
+            'date_to'   => $this->input->post('date_to'),
         );
 
-        $context = $this->ai_prompt_service->prepare_statistical_data($questionnaire_id, $filters);
+        $context         = $this->ai_prompt_service->prepare_statistical_data($questionnaire_id, $filters);
         $messages_result = $this->ai_prompt_service->build_messages('statistical_analysis', $context);
 
         if (!$messages_result['success']) {
+            ob_end_clean();
             header('Content-Type: application/json');
             echo json_encode($messages_result);
             return;
         }
 
         $result = $this->ai_service->chat_completion_json('statistical_analysis', $messages_result['messages'], array(
-            'prompt_id' => $messages_result['prompt_id'],
+            'prompt_id'     => $messages_result['prompt_id'],
             'resource_type' => 'questionnaire',
-            'resource_id' => $questionnaire_id,
+            'resource_id'   => $questionnaire_id,
         ));
+
+        $analysis_id = null;
 
         if ($result['success'] && $result['parsed']) {
             $parsed = $result['parsed'];
 
             $summary = $parsed['summary'] ?? '';
             if (is_array($summary)) {
-                $summary = implode("\n", $summary);
+                $summary = json_encode($summary, JSON_UNESCAPED_UNICODE);
             }
 
-            $this->Ai_model->create_statistical_analysis(array(
-                'questionnaire_id' => $questionnaire_id,
-                'analysis_type'    => 'general',
-                'filters_applied'  => json_encode($filters),
-                'summary_text'     => $summary,
-                'patterns'         => json_encode(is_array($parsed['patterns']        ?? null) ? $parsed['patterns']        : array()),
-                'outliers'         => json_encode(is_array($parsed['outliers']        ?? null) ? $parsed['outliers']        : array()),
-                'trends'           => json_encode(is_array($parsed['trends']          ?? null) ? $parsed['trends']          : array()),
-                'insights'         => json_encode(is_array($parsed['insights']        ?? null) ? $parsed['insights']        : array()),
-                'chart_suggestions'=> json_encode(is_array($parsed['chart_suggestions']?? null) ? $parsed['chart_suggestions'] : array()),
-                'generated_by'     => $this->session->userdata('admin_id'),
-                'execution_log_id' => $result['log_id'],
+            $analysis_id = $this->Ai_model->create_statistical_analysis(array(
+                'questionnaire_id'  => $questionnaire_id,
+                'analysis_type'     => 'general',
+                'filters_applied'   => json_encode($filters),
+                'summary_text'      => (string) $summary,
+                'patterns'          => json_encode(is_array($parsed['patterns']          ?? null) ? $parsed['patterns']          : array()),
+                'outliers'          => json_encode(is_array($parsed['outliers']          ?? null) ? $parsed['outliers']          : array()),
+                'trends'            => json_encode(is_array($parsed['trends']            ?? null) ? $parsed['trends']            : array()),
+                'insights'          => json_encode(is_array($parsed['insights']          ?? null) ? $parsed['insights']          : array()),
+                'chart_suggestions' => json_encode(is_array($parsed['chart_suggestions'] ?? null) ? $parsed['chart_suggestions'] : array()),
+                'generated_by'      => $this->session->userdata('admin_id'),
+                'execution_log_id'  => $result['log_id'],
             ));
+
+            $result['analysis_id'] = $analysis_id;
         }
 
+        ob_end_clean();
         header('Content-Type: application/json');
         echo json_encode($result);
     }

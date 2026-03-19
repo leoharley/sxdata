@@ -171,18 +171,28 @@ document.getElementById('btnGenerate').addEventListener('click', function() {
             date_from: document.getElementById('date_from').value,
             date_to: document.getElementById('date_to').value
         },
-        dataType: 'json',
+        dataType: 'text',
         timeout: 120000,
-        success: function(data) {
+        success: function(raw) {
+            var data;
+            try {
+                // Extrai apenas o JSON da resposta, ignorando eventuais prefixos HTML
+                var jsonStart = raw.indexOf('{');
+                data = JSON.parse(jsonStart >= 0 ? raw.substring(jsonStart) : raw);
+            } catch(e) {
+                showToast('Erro ao processar resposta do servidor.', 'danger');
+                return;
+            }
+
             if (data.success) {
                 showToast('Análise gerada com sucesso!', 'success');
-                if (data.analysis_id) {
-                    setTimeout(function() {
+                setTimeout(function() {
+                    if (data.analysis_id) {
                         window.location.href = '<?= base_url("ai/view_analysis/") ?>' + data.analysis_id;
-                    }, 1000);
-                } else {
-                    setTimeout(function() { location.reload(); }, 1000);
-                }
+                    } else {
+                        location.reload();
+                    }
+                }, 1000);
             } else {
                 showToast(data.message || 'Erro ao gerar análise.', 'danger');
             }
