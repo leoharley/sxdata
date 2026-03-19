@@ -125,7 +125,9 @@
                         <tr id="suggestion-row-<?= $s['id'] ?>">
                             <td>
                                 <?php if (!empty($s['questionnaire_id'])): ?>
-                                    <span class="badge bg-secondary">#<?= $s['questionnaire_id'] ?></span>
+                                    <a href="<?= base_url('questionnaires/edit/' . $s['questionnaire_id']) ?>" target="_blank" title="Abrir questionário">
+                                        #<?= $s['questionnaire_id'] ?>
+                                    </a>
                                 <?php else: ?>
                                     <span class="text-muted">—</span>
                                 <?php endif; ?>
