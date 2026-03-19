@@ -462,20 +462,36 @@ class Ai extends CI_Controller {
     }
 
     public function review_correction() {
-        $id = $this->input->post('id');
+        $id     = $this->input->post('id');
         $action = $this->input->post('action'); // accepted, rejected, edited
 
-        $data = array(
-            'status' => $action,
-            'reviewed_by' => $this->session->userdata('admin_id'),
-            'reviewed_at' => date('Y-m-d H:i:s'),
-        );
-
-        if ($action === 'accepted' || $action === 'edited') {
-            $data['applied_value'] = $this->input->post('applied_value');
+        $correction = $this->Ai_model->get_correction($id);
+        if (!$correction) {
+            header('Content-Type: application/json');
+            echo json_encode(array('success' => false, 'message' => 'Correção não encontrada.'));
+            return;
         }
 
+        $applied_value = $this->input->post('applied_value');
+        $new_value     = ($action === 'edited' && $applied_value !== null)
+                         ? $applied_value
+                         : $correction->suggested_value;
+
+        $data = array(
+            'status'       => $action,
+            'reviewed_by'  => $this->session->userdata('admin_id'),
+            'reviewed_at'  => date('Y-m-d H:i:s'),
+            'applied_value'=> ($action !== 'rejected') ? $new_value : null,
+        );
+
         $this->Ai_model->update_correction($id, $data);
+
+        // Aplica a correção na resposta original (apenas para aceito/editado)
+        if ($action !== 'rejected' && $correction->form_response_id && $correction->question_id) {
+            $this->db->where('form_response_id', $correction->form_response_id)
+                     ->where('question_id', $correction->question_id)
+                     ->update('question_responses', array('response_text' => $new_value));
+        }
 
         header('Content-Type: application/json');
         echo json_encode(array('success' => true));

@@ -305,6 +305,10 @@ class Ai_model extends CI_Model {
                         ->result_array();
     }
 
+    public function get_correction($id) {
+        return $this->db->where('id', $id)->get('ai_corrections')->row();
+    }
+
     public function update_correction($id, $data) {
         $data['updated_at'] = date('Y-m-d H:i:s');
         $this->db->where('id', $id);
