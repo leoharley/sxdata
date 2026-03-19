@@ -69,9 +69,36 @@
     <h5 style="color: var(--secondary-color); font-weight: 600;">
         <i class="fas fa-file-alt me-2" style="color: var(--primary-color);"></i>Resumo
     </h5>
-    <p class="mb-0" style="font-size: 1.05rem; line-height: 1.7; color: #333;">
-        <?= nl2br(htmlspecialchars($analysis->summary_text ?? '')) ?>
-    </p>
+    <?php
+        $summary_raw = $analysis->summary_text ?? '';
+        $summary_decoded = json_decode($summary_raw, true);
+    ?>
+    <?php if (is_array($summary_decoded)): ?>
+        <div class="row g-3 mt-1">
+        <?php foreach ($summary_decoded as $key => $value): ?>
+            <div class="col-md-4">
+                <div class="p-3 bg-white rounded border">
+                    <small class="text-muted d-block mb-1" style="text-transform: capitalize;">
+                        <?= htmlspecialchars(str_replace('_', ' ', $key)) ?>
+                    </small>
+                    <?php if (is_array($value)): ?>
+                        <ul class="mb-0 ps-3 small">
+                        <?php foreach ($value as $k => $v): ?>
+                            <li><?= htmlspecialchars(is_string($k) ? str_replace('_', ' ', $k) . ': ' : '') ?><strong><?= htmlspecialchars(is_scalar($v) ? $v : json_encode($v)) ?></strong></li>
+                        <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        <strong style="font-size: 1.4rem; color: var(--secondary-color);"><?= htmlspecialchars($value) ?></strong>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <p class="mb-0" style="font-size: 1.05rem; line-height: 1.7; color: #333;">
+            <?= nl2br(htmlspecialchars($summary_raw)) ?>
+        </p>
+    <?php endif; ?>
 </div>
 
 <div class="row">
