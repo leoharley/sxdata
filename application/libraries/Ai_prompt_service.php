@@ -88,27 +88,78 @@ class Ai_prompt_service {
 
     /**
      * Prepara dados para correção e padronização
+     *
+     * Campos de texto livre (text/textarea/number/date): enviados como corrigíveis.
+     * Campos de opção (radio/checkbox/select): enviados com o texto de exibição (option_text)
+     * marcados como NÃO corrigíveis — o valor armazenado afeta regras de condicionalidade.
      */
     public function prepare_correction_data($form_response_id) {
         $this->CI->load->model('Response_model');
         $this->CI->load->model('Questionnaire_model');
+        $this->CI->load->model('Question_model');
 
         $response = $this->CI->Response_model->get_by_id($form_response_id);
         if (!$response) {
             return null;
         }
 
-        $answers = $this->CI->Response_model->get_answers($form_response_id);
+        $answers  = $this->CI->Response_model->get_answers($form_response_id);
         $questionnaire = $this->CI->Questionnaire_model->get_by_id($response->questionnaire_id);
 
-        $field_data = array();
+        $option_types = array('radio', 'checkbox', 'select');
+        $field_data   = array();
+
         foreach ($answers as $answer) {
-            $field_data[] = array(
-                'question_id' => $answer->question_id,
-                'question' => $answer->question_text ?? '',
-                'type' => $answer->question_type ?? 'text',
-                'value' => $this->extract_answer_value($answer),
-            );
+            $type = $answer->question_type ?? 'text';
+
+            if (in_array($type, $option_types)) {
+                // Busca o texto de exibição das opções selecionadas
+                $selected_raw = json_decode($answer->selected_options ?? '[]', true);
+                if (!is_array($selected_raw)) {
+                    $selected_raw = array();
+                }
+
+                $display_texts = array();
+                if (!empty($selected_raw)) {
+                    $options = $this->CI->Question_model->get_options($answer->question_id);
+                    foreach ($options as $opt) {
+                        foreach ($selected_raw as $sel) {
+                            if ((string)$sel === (string)$opt->option_text
+                                || (string)$sel === (string)$opt->option_value
+                                || (string)$sel === (string)$opt->id) {
+                                $display_texts[] = $opt->option_text;
+                                break;
+                            }
+                        }
+                    }
+                    // Fallback: usa os valores brutos se não encontrou nenhum label
+                    if (empty($display_texts)) {
+                        $display_texts = array_map('strval', $selected_raw);
+                    }
+                }
+
+                $field_data[] = array(
+                    'question_id'   => $answer->question_id,
+                    'question'      => $answer->question_text ?? '',
+                    'type'          => $type,
+                    'display_value' => implode(', ', $display_texts),
+                    'correctable'   => false,
+                );
+            } else {
+                // Campo de texto livre — corrigível
+                $value = $this->extract_answer_value($answer);
+                if ($value === '' || $value === null) {
+                    continue; // ignora vazios
+                }
+
+                $field_data[] = array(
+                    'question_id'   => $answer->question_id,
+                    'question'      => $answer->question_text ?? '',
+                    'type'          => $type,
+                    'display_value' => (string) $value,
+                    'correctable'   => true,
+                );
+            }
         }
 
         return array(
