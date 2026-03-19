@@ -523,6 +523,42 @@ class Ai extends CI_Controller {
         echo json_encode($result);
     }
 
+    public function approve_suggestion() {
+        header('Content-Type: application/json');
+        $suggestion_id = (int) $this->input->post('suggestion_id');
+
+        if (!$suggestion_id) {
+            echo json_encode(array('success' => false, 'message' => 'ID inválido.'));
+            return;
+        }
+
+        $result = $this->Ai_model->update_field_suggestion($suggestion_id, array(
+            'status'      => 'approved',
+            'reviewed_by' => $this->session->userdata('admin_id'),
+            'reviewed_at' => date('Y-m-d H:i:s'),
+        ));
+
+        echo json_encode(array('success' => (bool) $result));
+    }
+
+    public function reject_suggestion() {
+        header('Content-Type: application/json');
+        $suggestion_id = (int) $this->input->post('suggestion_id');
+
+        if (!$suggestion_id) {
+            echo json_encode(array('success' => false, 'message' => 'ID inválido.'));
+            return;
+        }
+
+        $result = $this->Ai_model->update_field_suggestion($suggestion_id, array(
+            'status'      => 'rejected',
+            'reviewed_by' => $this->session->userdata('admin_id'),
+            'reviewed_at' => date('Y-m-d H:i:s'),
+        ));
+
+        echo json_encode(array('success' => (bool) $result));
+    }
+
     // ============================================================
     // REFORMULAÇÃO DE PERGUNTAS
     // ============================================================
