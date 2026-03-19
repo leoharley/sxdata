@@ -131,7 +131,15 @@
 <div class="ai-page-card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5><i class="fas fa-project-diagram me-2"></i>Regras de Roteamento</h5>
-        <span class="badge bg-secondary"><?= count($rules) ?> regra(s)</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary"><?= count($rules) ?> regra(s)</span>
+            <?php if ($is_enabled): ?>
+            <button class="btn btn-sm btn-ai-primary" id="btnGenerateRules"
+                    data-questionnaire="<?= $selected_questionnaire_id ?>">
+                <i class="fas fa-robot me-1"></i>Gerar com IA
+            </button>
+            <?php endif; ?>
+        </div>
     </div>
     <div class="card-body p-3">
         <?php if (empty($rules)): ?>
@@ -275,10 +283,42 @@
 <?php endif; ?>
 
 <script>
-// Auto-submit on questionnaire change
 document.getElementById('questionnaire_id').addEventListener('change', function() {
-    if (this.value) {
-        this.closest('form').submit();
-    }
+    if (this.value) this.closest('form').submit();
 });
+
+<?php if (!empty($selected_questionnaire_id) && $is_enabled): ?>
+document.getElementById('btnGenerateRules').addEventListener('click', function() {
+    if (!confirm('Gerar regras adaptativas com IA para este questionário? Regras existentes serão mantidas.')) return;
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Gerando...';
+
+    $.ajax({
+        url: '<?= base_url("ai/generate_adaptive_rules") ?>',
+        type: 'POST',
+        data: { questionnaire_id: <?= $selected_questionnaire_id ?> },
+        dataType: 'text',
+        timeout: 60000,
+        success: function(raw) {
+            var data;
+            try { var s = raw.indexOf('{'); data = JSON.parse(s >= 0 ? raw.substring(s) : raw); }
+            catch(e) { alert('Erro ao processar resposta.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot me-1"></i>Gerar com IA'; return; }
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert(data.message || 'Erro ao gerar regras.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-robot me-1"></i>Gerar com IA';
+            }
+        },
+        error: function() {
+            alert('Erro de comunicação.');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-robot me-1"></i>Gerar com IA';
+        }
+    });
+});
+<?php endif; ?>
 </script>

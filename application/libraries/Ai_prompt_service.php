@@ -231,6 +231,40 @@ class Ai_prompt_service {
     }
 
     /**
+     * Prepara dados para geração de regras adaptativas
+     */
+    public function prepare_adaptive_data($questionnaire_id) {
+        $this->CI->load->model('Questionnaire_model');
+        $this->CI->load->model('Question_model');
+
+        $questionnaire = $this->CI->Questionnaire_model->get_by_id($questionnaire_id);
+        $questions     = $this->CI->Question_model->get_by_questionnaire($questionnaire_id);
+
+        $questions_data = array();
+        foreach ($questions as $q) {
+            $entry = array(
+                'id'          => $q->id,
+                'text'        => $q->question_text,
+                'type'        => $q->question_type,
+                'order_index' => $q->order_index ?? 0,
+            );
+            if (!empty($q->options)) {
+                $entry['options'] = array_map(function($o) {
+                    return array('text' => $o->option_text, 'value' => $o->option_value ?? $o->option_text);
+                }, $q->options);
+            }
+            $questions_data[] = $entry;
+        }
+
+        return array(
+            'questionnaire_title' => $questionnaire ? $questionnaire->title : 'Questionário',
+            'questionnaire_description' => $questionnaire ? ($questionnaire->description ?? '') : '',
+            'questions_data' => json_encode($questions_data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            'questionnaire_id' => $questionnaire_id,
+        );
+    }
+
+    /**
      * Prepara dados para sugestões de follow-up
      */
     public function prepare_followup_data($questionnaire_id) {

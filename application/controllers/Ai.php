@@ -786,6 +786,73 @@ class Ai extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
+    public function generate_adaptive_rules() {
+        ob_start();
+        $questionnaire_id = $this->input->post('questionnaire_id');
+
+        if (!$questionnaire_id) {
+            ob_end_clean();
+            header('Content-Type: application/json');
+            echo json_encode(array('success' => false, 'message' => 'Selecione um questionário.'));
+            return;
+        }
+
+        $context = $this->ai_prompt_service->prepare_adaptive_data($questionnaire_id);
+        $messages_result = $this->ai_prompt_service->build_messages('adaptive_routing', $context);
+
+        if (!$messages_result['success']) {
+            ob_end_clean();
+            header('Content-Type: application/json');
+            echo json_encode($messages_result);
+            return;
+        }
+
+        $result = $this->ai_service->chat_completion_json('adaptive_routing', $messages_result['messages'], array(
+            'prompt_id'     => $messages_result['prompt_id'],
+            'resource_type' => 'questionnaire',
+            'resource_id'   => $questionnaire_id,
+        ));
+
+        ob_end_clean();
+
+        if (!$result['success']) {
+            header('Content-Type: application/json');
+            echo json_encode($result);
+            return;
+        }
+
+        $rules = $result['parsed'] ?? [];
+        if (isset($rules['rules']) && is_array($rules['rules'])) {
+            $rules = $rules['rules'];
+        }
+        if (!is_array($rules)) {
+            $rules = [];
+        }
+
+        $count = 0;
+        foreach ($rules as $rule) {
+            if (empty($rule['source_question_id']) || empty($rule['target_question_id'])) continue;
+            $this->Ai_model->create_adaptive_rule(array(
+                'questionnaire_id'   => $questionnaire_id,
+                'source_question_id' => $rule['source_question_id'],
+                'target_question_id' => $rule['target_question_id'],
+                'condition_logic'    => is_array($rule['condition_logic'] ?? null)
+                                        ? json_encode($rule['condition_logic'])
+                                        : ($rule['condition_logic'] ?? '{}'),
+                'fallback_target_id' => $rule['fallback_target_id'] ?? null,
+                'priority'           => $rule['priority'] ?? $count,
+                'ai_generated'       => true,
+                'is_active'          => true,
+                'execution_log_id'   => $result['log_id'],
+            ));
+            $count++;
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode(array('success' => true, 'count' => $count,
+            'message' => "{$count} regra(s) gerada(s) com sucesso."));
+    }
+
     // ============================================================
     // SUGESTÕES DE FOLLOW-UP
     // ============================================================
