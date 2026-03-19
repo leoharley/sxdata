@@ -44,10 +44,10 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-2">
                 <li class="breadcrumb-item"><a href="<?= base_url('ai') ?>"><i class="fas fa-brain me-1"></i>Inteligência Artificial</a></li>
-                <li class="breadcrumb-item active">Preenchimento Inteligente</li>
+                <li class="breadcrumb-item active">Preenchimento Inteligente de Dicas</li>
             </ol>
         </nav>
-        <h2 class="mb-0"><i class="fas fa-magic me-2" style="color: var(--primary-color);"></i>Preenchimento Inteligente</h2>
+        <h2 class="mb-0"><i class="fas fa-magic me-2" style="color: var(--primary-color);"></i>Preenchimento Inteligente de Dicas</h2>
     </div>
     <a href="<?= base_url('ai') ?>" class="btn btn-outline-secondary">
         <i class="fas fa-arrow-left me-1"></i>Voltar

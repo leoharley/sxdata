@@ -155,6 +155,29 @@ class Ai extends CI_Controller {
         $data['status_counts'] = $this->Ai_model->count_transcriptions_by_status();
         $data['is_enabled'] = $this->Ai_model->is_feature_enabled('transcription');
 
+        // Reseta transcrições presas em "processing" há mais de 5 minutos
+        $this->db->where('status', 'processing')
+                 ->where('updated_at <', date('Y-m-d H:i:s', strtotime('-5 minutes')))
+                 ->update('ai_transcriptions', array(
+                     'status' => 'error',
+                     'error_message' => 'Timeout: o processamento excedeu o tempo limite.',
+                 ));
+
+        // Passa form_responses e questions para os dropdowns do upload
+        $data['form_responses'] = $this->db
+            ->select("fr.id, '#' || fr.id || ' - ' || q.title AS label")
+            ->from('form_responses fr')
+            ->join('questionnaires q', 'q.id = fr.questionnaire_id', 'left')
+            ->order_by('fr.id', 'DESC')
+            ->limit(100)
+            ->get()->result();
+        $data['questions'] = $this->db
+            ->select("questions.id, q.title || ' > ' || questions.question_text AS label")
+            ->from('questions')
+            ->join('questionnaires q', 'q.id = questions.questionnaire_id', 'left')
+            ->order_by('q.title', 'ASC')
+            ->get()->result();
+
         $this->load->view('admin/header', $data);
         $this->load->view('admin/ai/transcriptions', $data);
         $this->load->view('admin/footer');
