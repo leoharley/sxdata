@@ -16,14 +16,14 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('category', 'ASC')
                         ->order_by('feature_name', 'ASC')
                         ->get('ai_settings')
-                        ->result();
+                        ->result_array();
     }
 
     public function get_settings_by_category() {
         $settings = $this->get_all_settings();
         $grouped = array();
         foreach ($settings as $setting) {
-            $grouped[$setting->category][] = $setting;
+            $grouped[$setting['category']][] = $setting;
         }
         return $grouped;
     }
@@ -62,7 +62,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('feature_key', 'ASC')
                         ->order_by('version', 'DESC')
                         ->get('ai_prompts')
-                        ->result();
+                        ->result_array();
     }
 
     public function get_active_prompt($feature_key) {
@@ -122,7 +122,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_execution_logs')
-                        ->result();
+                        ->result_array();
     }
 
     public function count_execution_logs($filters = array()) {
@@ -173,14 +173,14 @@ class Ai_model extends CI_Model {
                           ->where('created_at >=', date('Y-m-d', strtotime('-30 days')))
                           ->group_by('feature_key')
                           ->get('ai_execution_logs');
-        $stats['by_feature'] = $query->result();
+        $stats['by_feature'] = $query->result_array();
 
         // Erros recentes
         $stats['recent_errors'] = $this->db->where('status', 'error')
                                            ->order_by('created_at', 'DESC')
                                            ->limit(10)
                                            ->get('ai_execution_logs')
-                                           ->result();
+                                           ->result_array();
 
         return $stats;
     }
@@ -203,7 +203,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_transcriptions.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_transcriptions')
-                        ->result();
+                        ->result_array();
     }
 
     public function get_transcription($id) {
@@ -252,7 +252,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_inconsistencies.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_inconsistencies')
-                        ->result();
+                        ->result_array();
     }
 
     public function get_inconsistency($id) {
@@ -302,7 +302,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_corrections.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_corrections')
-                        ->result();
+                        ->result_array();
     }
 
     public function update_correction($id, $data) {
@@ -336,7 +336,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_field_suggestions.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_field_suggestions')
-                        ->result();
+                        ->result_array();
     }
 
     public function create_field_suggestion($data) {
@@ -368,7 +368,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_reformulations.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_reformulations')
-                        ->result();
+                        ->result_array();
     }
 
     public function create_reformulation($data) {
@@ -392,7 +392,7 @@ class Ai_model extends CI_Model {
         }
         return $this->db->order_by('priority', 'ASC')
                         ->get('ai_adaptive_rules')
-                        ->result();
+                        ->result_array();
     }
 
     public function create_adaptive_rule($data) {
@@ -426,7 +426,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_followup_suggestions.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_followup_suggestions')
-                        ->result();
+                        ->result_array();
     }
 
     public function create_followup_suggestion($data) {
@@ -459,7 +459,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_statistical_analyses.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_statistical_analyses')
-                        ->result();
+                        ->result_array();
     }
 
     public function get_statistical_analysis($id) {
@@ -493,7 +493,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('ai_reports.created_at', 'DESC')
                         ->limit($limit, $offset)
                         ->get('ai_reports')
-                        ->result();
+                        ->result_array();
     }
 
     public function get_report($id) {

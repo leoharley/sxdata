@@ -992,7 +992,23 @@ class Ai extends CI_Controller {
                     $steps[] = 'Step 6: build_messages = ' . ($messages_result['success'] ? 'OK' : 'FAIL: ' . (isset($messages_result['error']) ? $messages_result['error'] : 'unknown'));
 
                     if ($messages_result['success'] && $enabled && $configured) {
-                        $steps[] = 'Step 7: Pronto para chamar OpenAI (não vou chamar neste diagnóstico)';
+                        $test_ai = $this->input->post('test_ai');
+                        if ($test_ai) {
+                            $result = $this->ai_service->chat_completion_json('inconsistency_detection', $messages_result['messages'], array(
+                                'prompt_id' => $messages_result['prompt_id'],
+                                'resource_type' => 'form_response',
+                                'resource_id' => $form_response_id,
+                            ));
+                            $steps[] = 'Step 7: OpenAI result success=' . var_export($result['success'], true);
+                            if (!$result['success']) {
+                                $steps[] = 'Step 7 ERROR: ' . (isset($result['error']) ? $result['error'] : 'unknown');
+                            } else {
+                                $steps[] = 'Step 7 parsed=' . var_export(isset($result['parsed']) && $result['parsed'] !== null, true);
+                                $steps[] = 'Step 7 tokens=' . (isset($result['tokens_input']) ? $result['tokens_input'] : 0) . '+' . (isset($result['tokens_output']) ? $result['tokens_output'] : 0);
+                            }
+                        } else {
+                            $steps[] = 'Step 7: Pronto para OpenAI. Envie test_ai=1 para testar a chamada real.';
+                        }
                     }
                 }
             }
