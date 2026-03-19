@@ -140,9 +140,12 @@
                             <td><small class="text-muted"><?= htmlspecialchars($a['generated_by_name'] ?? 'Sistema') ?></small></td>
                             <td><small class="text-muted"><?= date('d/m/Y H:i', strtotime($a['created_at'])) ?></small></td>
                             <td>
-                                <a href="<?= base_url('ai/view_analysis/' . $a['id']) ?>" class="btn btn-sm btn-outline-primary">
+                                <a href="<?= base_url('ai/view_analysis/' . $a['id']) ?>" class="btn btn-sm btn-outline-primary me-1">
                                     <i class="fas fa-eye me-1"></i>Ver
                                 </a>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteAnalysis(<?= $a['id'] ?>)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -211,6 +214,25 @@ document.getElementById('btnGenerate').addEventListener('click', function() {
         }
     });
 });
+
+function deleteAnalysis(id) {
+    if (!confirm('Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita.')) return;
+    $.ajax({
+        url: '<?= base_url("ai/delete_analysis") ?>',
+        type: 'POST',
+        data: { id: id },
+        dataType: 'json',
+        success: function(data) {
+            if (data.success) {
+                showToast('Análise excluída com sucesso.', 'success');
+                setTimeout(function() { location.reload(); }, 1000);
+            } else {
+                showToast(data.message || 'Erro ao excluir.', 'danger');
+            }
+        },
+        error: function() { showToast('Erro de rede. Tente novamente.', 'danger'); }
+    });
+}
 
 function showToast(message, type) {
     var existing = document.getElementById('aiToast');

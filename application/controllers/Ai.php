@@ -861,6 +861,16 @@ class Ai extends CI_Controller {
         echo json_encode($result);
     }
 
+    public function delete_analysis() {
+        $id = $this->input->post('id');
+        if (!$id) {
+            echo json_encode(['success' => false, 'message' => 'ID inválido.']);
+            return;
+        }
+        $this->db->delete('ai_statistical_analyses', ['id' => $id]);
+        echo json_encode(['success' => true]);
+    }
+
     public function view_analysis($id) {
         $data['title'] = 'Análise Estatística - SXData';
         $data['analysis'] = $this->Ai_model->get_statistical_analysis($id);
