@@ -1050,7 +1050,7 @@ class Ai extends CI_Controller {
     // ============================================================
 
     public function followup() {
-        $data['title'] = 'Sugestões de Follow-up - SXData';
+        $data['title'] = 'Sugestões de Dicas - SXData';
         $data['suggestions'] = $this->Ai_model->get_followup_suggestions();
         $data['questionnaires'] = $this->Questionnaire_model->get_active();
         $data['is_enabled'] = $this->Ai_model->is_feature_enabled('followup_suggestions');

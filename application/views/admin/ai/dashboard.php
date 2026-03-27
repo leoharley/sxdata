@@ -186,9 +186,9 @@
                 <a href="<?= base_url('ai/followup') ?>" class="text-decoration-none">
                     <div class="ai-feature-card">
                         <div>
-                            <i class="fas fa-comments text-primary me-2"></i>
-                            <strong>Sugestões de Follow-up</strong>
-                            <br><small class="text-muted">Perguntas complementares</small>
+                            <i class="fas fa-lightbulb text-primary me-2"></i>
+                            <strong>Sugestões de Dicas</strong>
+                            <br><small class="text-muted">Dicas de follow-up para perguntas</small>
                         </div>
                         <i class="fas fa-chevron-right text-muted"></i>
                     </div>
