@@ -23,17 +23,41 @@
     .loading-overlay.active { display: block; }
     .chart-wrapper {
         background: white; border: 1px solid #e9ecef; border-radius: 0.75rem;
-        padding: 1.25rem; margin-bottom: 1.5rem;
+        overflow: hidden; margin-bottom: 1.5rem;
     }
     .chart-wrapper .chart-title {
-        font-weight: 600; color: var(--secondary-color); margin-bottom: 0.75rem;
+        font-weight: 600; color: var(--secondary-color);
+        padding: 1rem 1.25rem; border-bottom: 1px solid #f0f0f0;
         display: flex; justify-content: space-between; align-items: center;
     }
-    .chart-container { position: relative; height: 350px; }
-    .chart-type-selector {
+    .chart-container { position: relative; height: 350px; padding: 1rem; }
+    .chart-controls {
+        display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+    }
+    .chart-type-selector, .chart-display-selector {
         font-size: 0.8rem; padding: 0.2rem 0.5rem;
         border: 1px solid #dee2e6; border-radius: 0.25rem;
         background: white; color: var(--secondary-color);
+    }
+    .chart-description {
+        padding: 1rem 1.25rem;
+        background: linear-gradient(135deg, rgba(143,174,93,0.06), rgba(35,52,95,0.03));
+        border-top: 1px solid #f0f0f0;
+    }
+    .chart-description .desc-text {
+        color: #444; font-size: 0.9rem; line-height: 1.6; margin: 0;
+    }
+    .question-ref-link {
+        color: var(--primary-color); text-decoration: none;
+        border-bottom: 1px dashed var(--primary-color); cursor: pointer;
+    }
+    .question-ref-link:hover {
+        color: var(--secondary-color); border-bottom-color: var(--secondary-color);
+    }
+    .question-modal-options .opt-item {
+        display: inline-block; background: #e9ecef;
+        padding: 0.25rem 0.6rem; border-radius: 0.25rem;
+        font-size: 0.85rem; margin: 0.2rem;
     }
 </style>
 
@@ -109,8 +133,30 @@
     </div>
 </div>
 
+<!-- Modal: Detalhes da Pergunta -->
+<div class="modal fade" id="questionDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), #1a2847); color: white;">
+                <h5 class="modal-title" id="questionModalTitle"><i class="fas fa-question-circle me-2"></i>Pergunta</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="questionModalBody">
+                <div class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+(function waitForJQuery() {
+    if (typeof jQuery === 'undefined') return setTimeout(waitForJQuery, 50);
+    jQuery(function($) {
+
+var BASE = '<?= base_url() ?>';
 var chartInstances = [];
+var chartDataStore = [];
+var questionCache = {};
 
 var colorPalette = [
     'rgba(143, 174, 93, 0.7)', 'rgba(35, 52, 95, 0.7)', 'rgba(91, 192, 222, 0.7)',
@@ -125,59 +171,59 @@ var borderPalette = [
     'rgba(13, 110, 253, 1)'
 ];
 
-document.getElementById('btnGenerate').addEventListener('click', function() {
-    var qId = document.getElementById('questionnaire_id').value;
+$('#btnGenerate').on('click', function() {
+    var qId = $('#questionnaire_id').val();
     if (!qId) { showToast('Selecione um questionário.', 'warning'); return; }
 
     var btn = this;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Gerando...';
-    document.getElementById('loadingIndicator').classList.add('active');
-    document.getElementById('emptyState').style.display = 'none';
+    $('#loadingIndicator').addClass('active');
+    $('#emptyState').hide();
 
-    // Destroy existing charts
-    chartInstances.forEach(function(c) { c.destroy(); });
+    chartInstances.forEach(function(c) { if (c) c.destroy(); });
     chartInstances = [];
+    chartDataStore = [];
 
     $.ajax({
-        url: '<?= base_url("ai/generate_charts") ?>',
+        url: BASE + 'ai/generate_charts',
         type: 'POST',
         data: {
             questionnaire_id: qId,
-            date_from: document.getElementById('date_from').value,
-            date_to: document.getElementById('date_to').value
+            date_from: $('#date_from').val(),
+            date_to: $('#date_to').val()
         },
         dataType: 'json',
         timeout: 120000,
         success: function(data) {
             if (data.success && data.charts && data.charts.length > 0) {
-                renderCharts(data.charts);
+                renderCharts(data.charts, qId);
                 showToast('Gráficos gerados com sucesso!', 'success');
             } else if (data.success && (!data.charts || data.charts.length === 0)) {
-                document.getElementById('emptyState').style.display = 'block';
+                $('#emptyState').show();
                 showToast('Nenhum gráfico sugerido para estes dados.', 'warning');
             } else {
-                document.getElementById('emptyState').style.display = 'block';
+                $('#emptyState').show();
                 showToast(data.message || 'Erro ao gerar gráficos.', 'danger');
             }
         },
         error: function(xhr) {
-            document.getElementById('emptyState').style.display = 'block';
-            if (xhr.statusText === 'timeout') {
-                showToast('A geração está demorando mais que o esperado.', 'warning');
-            } else {
-                showToast('Erro de rede. Tente novamente.', 'danger');
-            }
+            $('#emptyState').show();
+            showToast(xhr.statusText === 'timeout' ? 'Tempo esgotado.' : 'Erro de rede.', 'danger');
         },
         complete: function() {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-bolt me-1"></i>Gerar';
-            document.getElementById('loadingIndicator').classList.remove('active');
+            $('#loadingIndicator').removeClass('active');
         }
     });
 });
 
-function renderCharts(charts) {
+function linkifyQuestions(text) {
+    return escapeHtml(text).replace(/\bq_(\d+)\b/g, '<a href="javascript:void(0)" class="question-ref-link" data-question-id="$1"><strong>q_$1</strong></a>');
+}
+
+function renderCharts(charts, questionnaireId) {
     var container = document.getElementById('chartsContainer');
     container.innerHTML = '<div class="row" id="chartsRow"></div>';
     var row = document.getElementById('chartsRow');
@@ -187,14 +233,21 @@ function renderCharts(charts) {
         var chartType = chart.chart_type || config.type || 'bar';
         var title = chart.title || 'Gráfico ' + (index + 1);
         var labels = config.labels || [];
+        var rawData = config.data || null;
         var datasets = config.datasets || [];
 
-        if (datasets.length === 0 && config.data) {
+        // Handle distribution objects
+        if (!rawData && !datasets.length && chart.distribution && typeof chart.distribution === 'object') {
+            labels = Object.keys(chart.distribution);
+            rawData = Object.values(chart.distribution);
+        }
+
+        if (datasets.length === 0 && rawData) {
             datasets = [{
                 label: title,
-                data: config.data,
-                backgroundColor: colorPalette.slice(0, (config.data || []).length),
-                borderColor: borderPalette.slice(0, (config.data || []).length),
+                data: rawData,
+                backgroundColor: colorPalette.slice(0, rawData.length),
+                borderColor: borderPalette.slice(0, rawData.length),
                 borderWidth: 1
             }];
         }
@@ -212,56 +265,71 @@ function renderCharts(charts) {
             }
         });
 
+        // Store data for toggling
+        chartDataStore[index] = {
+            labels: labels,
+            datasets: JSON.parse(JSON.stringify(datasets)),
+            chartType: chartType,
+            title: title,
+            questionnaireId: questionnaireId
+        };
+
         var colSize = charts.length === 1 ? 'col-12' : 'col-md-6';
         var wrapper = document.createElement('div');
         wrapper.className = colSize;
         wrapper.innerHTML =
             '<div class="chart-wrapper">' +
                 '<div class="chart-title">' +
-                    '<span><i class="fas fa-chart-bar me-2" style="color: var(--primary-color);"></i>' + escapeHtml(title) + '</span>' +
-                    '<select class="chart-type-selector" data-chart-index="' + index + '" onchange="changeChartType(' + index + ', this.value)">' +
-                        '<option value="bar"' + (chartType === 'bar' ? ' selected' : '') + '>Barras</option>' +
-                        '<option value="line"' + (chartType === 'line' ? ' selected' : '') + '>Linha</option>' +
-                        '<option value="pie"' + (chartType === 'pie' ? ' selected' : '') + '>Pizza</option>' +
-                        '<option value="doughnut"' + (chartType === 'doughnut' ? ' selected' : '') + '>Rosca</option>' +
-                        '<option value="radar"' + (chartType === 'radar' ? ' selected' : '') + '>Radar</option>' +
-                    '</select>' +
+                    '<span>' + linkifyQuestions(title) + '</span>' +
+                    '<div class="chart-controls">' +
+                        '<select class="chart-display-selector" data-idx="' + index + '">' +
+                            '<option value="absolute">Absoluto</option>' +
+                            '<option value="percent">Percentual</option>' +
+                        '</select>' +
+                        '<select class="chart-type-selector" data-idx="' + index + '">' +
+                            '<option value="bar"' + (chartType === 'bar' ? ' selected' : '') + '>Barras</option>' +
+                            '<option value="line"' + (chartType === 'line' ? ' selected' : '') + '>Linha</option>' +
+                            '<option value="pie"' + (chartType === 'pie' ? ' selected' : '') + '>Pizza</option>' +
+                            '<option value="doughnut"' + (chartType === 'doughnut' ? ' selected' : '') + '>Rosca</option>' +
+                            '<option value="radar"' + (chartType === 'radar' ? ' selected' : '') + '>Radar</option>' +
+                        '</select>' +
+                    '</div>' +
                 '</div>' +
-                '<div class="chart-container">' +
-                    '<canvas id="ai-chart-' + index + '"></canvas>' +
+                '<div class="chart-container"><canvas id="ai-chart-' + index + '"></canvas></div>' +
+                '<div class="chart-description" id="chart-desc-' + index + '">' +
+                    '<p class="desc-text mb-0 text-muted"><i class="fas fa-robot me-2" style="color: var(--primary-color);"></i>' +
+                    '<span class="spinner-border spinner-border-sm me-1"></span>Gerando descrição...</p>' +
                 '</div>' +
             '</div>';
         row.appendChild(wrapper);
 
-        var canvas = document.getElementById('ai-chart-' + index);
-        var instance = new Chart(canvas, {
-            type: chartType,
-            data: { labels: labels, datasets: JSON.parse(JSON.stringify(datasets)) },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } }
-            }
-        });
-
-        chartInstances[index] = instance;
-        // Store original data for chart type switching
-        canvas.dataset.originalLabels = JSON.stringify(labels);
-        canvas.dataset.originalDatasets = JSON.stringify(datasets);
+        var isPercent = false;
+        buildChart(index, chartType, labels, datasets, isPercent);
+        generateDescription(index, title, labels, datasets[0] ? datasets[0].data : [], questionnaireId);
     });
 }
 
-function changeChartType(index, newType) {
-    var instance = chartInstances[index];
-    if (!instance) return;
-
+function buildChart(index, type, labels, datasets, asPercent) {
     var canvas = document.getElementById('ai-chart-' + index);
-    var labels = JSON.parse(canvas.dataset.originalLabels);
-    var datasets = JSON.parse(canvas.dataset.originalDatasets);
+    if (!canvas) return;
 
-    // Update colors based on chart type
-    datasets.forEach(function(ds, i) {
-        if (['pie', 'doughnut'].indexOf(newType) >= 0) {
+    if (chartInstances[index]) chartInstances[index].destroy();
+
+    var displayDatasets = JSON.parse(JSON.stringify(datasets));
+
+    if (asPercent) {
+        displayDatasets.forEach(function(ds) {
+            var total = 0;
+            (ds.data || []).forEach(function(v) { total += (parseFloat(v) || 0); });
+            if (total > 0) {
+                ds.data = ds.data.map(function(v) { return parseFloat(((parseFloat(v) || 0) / total * 100).toFixed(1)); });
+            }
+        });
+    }
+
+    // Adjust colors for pie/doughnut
+    displayDatasets.forEach(function(ds, i) {
+        if (['pie', 'doughnut'].indexOf(type) >= 0) {
             ds.backgroundColor = colorPalette.slice(0, (ds.data || []).length);
             ds.borderColor = borderPalette.slice(0, (ds.data || []).length);
         } else {
@@ -270,19 +338,152 @@ function changeChartType(index, newType) {
         }
     });
 
-    instance.destroy();
+    var options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+    };
+
+    if (asPercent && ['bar', 'line', 'radar'].indexOf(type) >= 0) {
+        options.scales = { y: { ticks: { callback: function(v) { return v + '%'; } } } };
+    }
+    if (asPercent && ['pie', 'doughnut'].indexOf(type) >= 0) {
+        options.plugins.tooltip = {
+            callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; } }
+        };
+    }
+
     chartInstances[index] = new Chart(canvas, {
-        type: newType,
-        data: { labels: labels, datasets: datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-        }
+        type: type,
+        data: { labels: labels, datasets: displayDatasets },
+        options: options
     });
 }
 
+// Chart type change
+$(document).on('change', '.chart-type-selector', function() {
+    var idx = $(this).data('idx');
+    var newType = $(this).val();
+    var store = chartDataStore[idx];
+    if (!store) return;
+    store.chartType = newType;
+    var isPercent = $('[data-idx="' + idx + '"].chart-display-selector').val() === 'percent';
+    buildChart(idx, newType, store.labels, store.datasets, isPercent);
+});
+
+// Display mode change (absolute/percent)
+$(document).on('change', '.chart-display-selector', function() {
+    var idx = $(this).data('idx');
+    var mode = $(this).val();
+    var store = chartDataStore[idx];
+    if (!store) return;
+    var type = $('[data-idx="' + idx + '"].chart-type-selector').val() || store.chartType;
+    buildChart(idx, type, store.labels, store.datasets, mode === 'percent');
+});
+
+// Generate AI description
+function generateDescription(index, title, labels, data, questionnaireId) {
+    var chartData = {};
+    if (labels && data) {
+        for (var i = 0; i < labels.length; i++) {
+            chartData[labels[i]] = data[i] || 0;
+        }
+    }
+
+    $.ajax({
+        url: BASE + 'client/generate_chart_description',
+        type: 'POST',
+        data: {
+            chart_title: title,
+            chart_data: JSON.stringify(chartData),
+            questionnaire_id: questionnaireId
+        },
+        dataType: 'json',
+        timeout: 30000,
+        success: function(res) {
+            var el = document.getElementById('chart-desc-' + index);
+            if (res.success && res.description) {
+                el.innerHTML = '<p class="desc-text mb-0"><i class="fas fa-robot me-2" style="color: var(--primary-color);"></i>' +
+                    linkifyQuestions(res.description) + '</p>';
+            } else {
+                showFallbackDesc(index, title, labels, data);
+            }
+        },
+        error: function() { showFallbackDesc(index, title, labels, data); }
+    });
+}
+
+function showFallbackDesc(index, title, labels, data) {
+    var el = document.getElementById('chart-desc-' + index);
+    var total = 0;
+    if (data) data.forEach(function(v) { total += (parseFloat(v) || 0); });
+
+    var desc = 'Distribuição de respostas para ' + title.replace(/q_(\d+)/g, 'pergunta #$1') + '.';
+    if (labels && labels.length > 0 && data && total > 0) {
+        var maxIdx = 0;
+        for (var i = 1; i < data.length; i++) {
+            if ((parseFloat(data[i]) || 0) > (parseFloat(data[maxIdx]) || 0)) maxIdx = i;
+        }
+        var pct = ((parseFloat(data[maxIdx]) || 0) / total * 100).toFixed(1);
+        desc += ' A resposta mais frequente foi "' + labels[maxIdx] + '" com ' + pct + '% do total.';
+    }
+    el.innerHTML = '<p class="desc-text mb-0"><i class="fas fa-info-circle me-2" style="color: var(--primary-color);"></i>' + escapeHtml(desc) + '</p>';
+}
+
+// Question ref modal
+$(document).on('click', '.question-ref-link', function(e) {
+    e.preventDefault();
+    var qId = $(this).data('question-id');
+    var modal = new bootstrap.Modal(document.getElementById('questionDetailModal'));
+
+    $('#questionModalTitle').html('<i class="fas fa-question-circle me-2"></i>Pergunta #' + qId);
+    $('#questionModalBody').html('<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>');
+    modal.show();
+
+    if (questionCache[qId]) { renderQuestion(questionCache[qId]); return; }
+
+    $.ajax({
+        url: BASE + 'ai/get_question_detail',
+        type: 'GET',
+        data: { id: qId },
+        dataType: 'json',
+        success: function(res) {
+            if (res.success) { questionCache[qId] = res.question; renderQuestion(res.question); }
+            else $('#questionModalBody').html('<div class="alert alert-warning mb-0">Pergunta não encontrada.</div>');
+        },
+        error: function() { $('#questionModalBody').html('<div class="alert alert-danger mb-0">Erro ao buscar.</div>'); }
+    });
+});
+
+function renderQuestion(q) {
+    var typeLabels = {
+        'text': 'Texto', 'textarea': 'Texto Longo', 'number': 'Número',
+        'email': 'E-mail', 'date': 'Data', 'datetime': 'Data/Hora',
+        'radio': 'Escolha Única', 'checkbox': 'Múltipla Escolha', 'select': 'Seleção'
+    };
+    var html = '<div class="mb-3">' +
+        '<span class="badge bg-secondary me-2">ID: ' + q.id + '</span>' +
+        '<span class="badge bg-info">' + (typeLabels[q.question_type] || q.question_type) + '</span>' +
+        (q.is_required == 1 ? '<span class="badge bg-danger ms-1">Obrigatória</span>' : '') +
+        '</div>' +
+        '<div class="p-3 rounded mb-3" style="background: #f8f9fa; border-left: 4px solid var(--primary-color);">' +
+        '<h6 class="mb-0" style="color: var(--secondary-color);">' + escapeHtml(q.question_text) + '</h6></div>';
+    if (q.questionnaire_title) {
+        html += '<p class="small text-muted mb-2"><i class="fas fa-clipboard-list me-1"></i>Questionário: <strong>' + escapeHtml(q.questionnaire_title) + '</strong></p>';
+    }
+    if (q.options && q.options.length > 0) {
+        html += '<p class="small text-muted mb-1"><i class="fas fa-list me-1"></i>Opções:</p><div class="question-modal-options">';
+        q.options.forEach(function(opt) { html += '<span class="opt-item">' + escapeHtml(opt.option_text || opt) + '</span>'; });
+        html += '</div>';
+    }
+    if (q.order_index !== undefined && q.order_index !== null) {
+        html += '<p class="small text-muted mt-3 mb-0"><i class="fas fa-sort-numeric-down me-1"></i>Posição: <strong>#' + q.order_index + '</strong></p>';
+    }
+    $('#questionModalBody').html(html);
+}
+
 function escapeHtml(text) {
+    if (!text) return '';
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(text));
     return div.innerHTML;
@@ -300,4 +501,7 @@ function showToast(message, type) {
     document.body.appendChild(toast);
     setTimeout(function() { if (toast.parentNode) toast.remove(); }, 4000);
 }
+
+    });
+})();
 </script>
