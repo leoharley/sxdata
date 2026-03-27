@@ -215,10 +215,11 @@ class Ai extends CI_Controller {
         // Dropdowns para filtros
         $data['filter_questionnaires'] = $this->db->select('id, title')
             ->from('questionnaires')->order_by('title')->get()->result();
-        $data['filter_applicators'] = $this->db->select('DISTINCT applicator_id as id, applicator_name')
+        $data['filter_applicators'] = $this->db->select('applicator_id as id, applicator_name')
             ->from('ai_transcriptions')
             ->where('applicator_id IS NOT NULL')
             ->where('applicator_name IS NOT NULL')
+            ->group_by('applicator_id, applicator_name')
             ->order_by('applicator_name')->get()->result();
 
         $data['filter_questionnaire_id'] = $filter_questionnaire_id;
