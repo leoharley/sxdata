@@ -190,7 +190,7 @@ class Ai extends CI_Controller {
         }
 
         $total = $this->db->count_all_results('', false);
-        $this->db->order_by('COALESCE(t.timestamp_app, t.created_at)', 'DESC')
+        $this->db->order_by('COALESCE(t.timestamp_app, t.created_at) DESC', '', FALSE)
                  ->limit($per_page, $offset);
         $data['transcriptions'] = $this->db->get()->result();
 
