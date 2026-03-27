@@ -1,73 +1,41 @@
 <style>
     .trans-stat-card {
-        background: white;
-        border-radius: 0.75rem;
-        padding: 1.25rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: transform 0.2s;
-        height: 100%;
+        background: white; border-radius: 0.75rem; padding: 1.25rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08); height: 100%;
     }
-    .trans-stat-card:hover { transform: translateY(-2px); }
     .trans-stat-icon {
         width: 50px; height: 50px; border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
         font-size: 1.3rem; color: white;
     }
     .trans-section-title {
-        color: var(--secondary-color);
-        font-weight: 600;
+        color: var(--secondary-color); font-weight: 600;
         border-bottom: 2px solid var(--primary-color);
-        padding-bottom: 0.5rem;
-        margin-bottom: 1.25rem;
+        padding-bottom: 0.5rem; margin-bottom: 1.25rem;
     }
     .trans-table th {
-        background: var(--secondary-color);
-        color: white;
-        font-weight: 600;
-        font-size: 0.85rem;
-        white-space: nowrap;
-        border: none;
+        background: var(--secondary-color); color: white;
+        font-weight: 600; font-size: 0.8rem; white-space: nowrap; border: none;
     }
-    .trans-table td {
-        vertical-align: middle;
-        font-size: 0.875rem;
-    }
-    .trans-table tbody tr {
-        transition: background 0.15s;
-    }
-    .trans-table tbody tr:hover {
-        background: #f8f9fa;
-    }
-    .badge-status-pending { background: #6c757d; color: white; }
-    .badge-status-processing { background: #0d6efd; color: white; }
-    .badge-status-completed { background: #8fae5d; color: white; }
-    .badge-status-error { background: #dc3545; color: white; }
-    .trans-detail-row {
-        display: none;
-        background: #fafbfc;
-    }
-    .trans-detail-row td {
-        padding: 1rem 1.25rem !important;
-    }
-    .trans-detail-row .detail-inner {
-        border-left: 3px solid var(--primary-color);
-        padding-left: 1rem;
+    .trans-table td { vertical-align: middle; font-size: 0.85rem; }
+    .trans-table tbody tr:hover { background: #f8f9fa; }
+    .badge-conf-high { background: #8fae5d; color: white; }
+    .badge-conf-med { background: #f0ad4e; color: white; }
+    .badge-conf-low { background: #dc3545; color: white; }
+    .badge-edited { background: #fd7e14; color: white; }
+    .badge-source-app { background: #0dcaf0; color: #333; }
+    .badge-source-upload { background: #6c757d; color: white; }
+    .filter-bar {
+        background: white; border-radius: 0.5rem; padding: 1rem 1.25rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1.25rem;
     }
     .upload-area {
-        background: white;
-        border: 2px dashed #ccc;
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        transition: border-color 0.2s;
+        background: white; border: 2px dashed #ccc; border-radius: 0.75rem;
+        padding: 1.5rem; margin-bottom: 1.5rem;
     }
-    .upload-area:hover {
-        border-color: var(--primary-color);
-    }
-    .btn-action {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.8rem;
-    }
+    .upload-area:hover { border-color: var(--primary-color); }
+    .text-preview { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pagination-sm .page-link { font-size: 0.8rem; padding: 0.25rem 0.5rem; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -80,46 +48,29 @@
 <?php if (!$is_enabled): ?>
 <div class="alert alert-info border-0 mb-4">
     <i class="fas fa-info-circle me-2"></i>
-    <strong>Recurso desabilitado.</strong> A transcrição de áudio está desativada. Ative-a nas
-    <a href="<?= base_url('ai/settings') ?>" class="alert-link">configurações de IA</a> para utilizar esta funcionalidade.
+    <strong>Recurso desabilitado.</strong> Ative nas <a href="<?= base_url('ai/settings') ?>" class="alert-link">configurações de IA</a>.
 </div>
 <?php endif; ?>
 
-<!-- Status Summary Cards -->
+<!-- Stats Cards -->
 <?php
-    $counts = ['pending' => 0, 'processing' => 0, 'completed' => 0, 'error' => 0];
-    if (!empty($status_counts)) {
-        foreach ($status_counts as $sc) {
-            $sc = (object)$sc;
-            if (isset($counts[$sc->status])) {
-                $counts[$sc->status] = (int)$sc->count;
-            }
-        }
-    }
+    $st = $stats ?? (object)array('total' => 0, 'avg_confidence' => 0, 'edited_count' => 0, 'total_seconds' => 0);
+    $totalSecs = (int)($st->total_seconds ?? 0);
+    $hours = floor($totalSecs / 3600);
+    $mins = floor(($totalSecs % 3600) / 60);
+    $editedPct = ($st->total > 0) ? round(($st->edited_count / $st->total) * 100) : 0;
+    $avgConf = round(($st->avg_confidence ?? 0) * 100);
 ?>
 <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
         <div class="trans-stat-card">
             <div class="d-flex align-items-center">
-                <div class="trans-stat-icon" style="background: linear-gradient(135deg, #6c757d, #5a6268);">
-                    <i class="fas fa-clock"></i>
+                <div class="trans-stat-icon" style="background: linear-gradient(135deg, var(--primary-color), #1a2847);">
+                    <i class="fas fa-file-audio"></i>
                 </div>
                 <div class="ms-3">
-                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $counts['pending'] ?></h3>
-                    <small class="text-muted">Pendentes</small>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="trans-stat-card">
-            <div class="d-flex align-items-center">
-                <div class="trans-stat-icon" style="background: linear-gradient(135deg, #0d6efd, #0a58ca);">
-                    <i class="fas fa-spinner fa-spin"></i>
-                </div>
-                <div class="ms-3">
-                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $counts['processing'] ?></h3>
-                    <small class="text-muted">Processando</small>
+                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $st->total ?></h3>
+                    <small class="text-muted">Total de Transcrições</small>
                 </div>
             </div>
         </div>
@@ -131,8 +82,8 @@
                     <i class="fas fa-check-circle"></i>
                 </div>
                 <div class="ms-3">
-                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $counts['completed'] ?></h3>
-                    <small class="text-muted">Concluídas</small>
+                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $avgConf ?>%</h3>
+                    <small class="text-muted">Confiança Média</small>
                 </div>
             </div>
         </div>
@@ -140,12 +91,25 @@
     <div class="col-xl-3 col-md-6">
         <div class="trans-stat-card">
             <div class="d-flex align-items-center">
-                <div class="trans-stat-icon" style="background: linear-gradient(135deg, #dc3545, #b02a37);">
-                    <i class="fas fa-exclamation-triangle"></i>
+                <div class="trans-stat-icon" style="background: linear-gradient(135deg, #fd7e14, #d66a10);">
+                    <i class="fas fa-pen"></i>
                 </div>
                 <div class="ms-3">
-                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $counts['error'] ?></h3>
-                    <small class="text-muted">Erros</small>
+                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $editedPct ?>%</h3>
+                    <small class="text-muted">Editadas pelo Entrevistador</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="trans-stat-card">
+            <div class="d-flex align-items-center">
+                <div class="trans-stat-icon" style="background: linear-gradient(135deg, #0d6efd, #0a58ca);">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="ms-3">
+                    <h3 class="mb-0" style="color: var(--secondary-color);"><?= $hours ?>h <?= $mins ?>m</h3>
+                    <small class="text-muted">Tempo Total de Áudio</small>
                 </div>
             </div>
         </div>
@@ -166,26 +130,18 @@
                 <label class="form-label mb-1 small fw-bold">Resposta do Formulário</label>
                 <select name="form_response_id" class="form-select form-select-sm">
                     <option value="">-- Opcional --</option>
-                    <?php if (!empty($form_responses)): ?>
-                        <?php foreach ($form_responses as $fr): ?>
-                            <option value="<?= (int)($fr->id ?? $fr['id'] ?? 0) ?>">
-                                <?= htmlspecialchars($fr->label ?? $fr['label'] ?? '#' . ($fr->id ?? $fr['id'] ?? '')) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                    <?php if (!empty($form_responses)): foreach ($form_responses as $fr): ?>
+                        <option value="<?= (int)$fr->id ?>"><?= htmlspecialchars($fr->label) ?></option>
+                    <?php endforeach; endif; ?>
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label mb-1 small fw-bold">Pergunta</label>
                 <select name="question_id" class="form-select form-select-sm">
                     <option value="">-- Opcional --</option>
-                    <?php if (!empty($questions)): ?>
-                        <?php foreach ($questions as $q): ?>
-                            <option value="<?= (int)($q->id ?? $q['id'] ?? 0) ?>">
-                                <?= htmlspecialchars($q->label ?? $q['label'] ?? $q->question_text ?? $q['question_text'] ?? '#' . ($q->id ?? $q['id'] ?? '')) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                    <?php if (!empty($questions)): foreach ($questions as $q): ?>
+                        <option value="<?= (int)$q->id ?>"><?= htmlspecialchars($q->label) ?></option>
+                    <?php endforeach; endif; ?>
                 </select>
             </div>
             <div class="col-md-2">
@@ -198,6 +154,53 @@
 </div>
 <?php endif; ?>
 
+<!-- Filters -->
+<div class="filter-bar">
+    <form method="get" action="<?= base_url('ai/transcriptions') ?>">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small mb-1">Questionário</label>
+                <select name="questionnaire_id" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <?php if (!empty($filter_questionnaires)): foreach ($filter_questionnaires as $q): ?>
+                        <option value="<?= $q->id ?>" <?= ($q->id == $filter_questionnaire_id) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($q->title) ?>
+                        </option>
+                    <?php endforeach; endif; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Aplicador</label>
+                <select name="applicator_id" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <?php if (!empty($filter_applicators)): foreach ($filter_applicators as $a): ?>
+                        <option value="<?= $a->id ?>" <?= ($a->id == $filter_applicator_id) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($a->applicator_name) ?>
+                        </option>
+                    <?php endforeach; endif; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Data Início</label>
+                <input type="date" name="date_from" class="form-control form-control-sm" value="<?= htmlspecialchars($filter_date_from ?? '') ?>">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Data Fim</label>
+                <input type="date" name="date_to" class="form-control form-control-sm" value="<?= htmlspecialchars($filter_date_to ?? '') ?>">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small mb-1">Buscar</label>
+                <input type="text" name="search" class="form-control form-control-sm" placeholder="Texto..." value="<?= htmlspecialchars($filter_search ?? '') ?>">
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-sm btn-primary w-100">
+                    <i class="fas fa-filter"></i>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
 <!-- Transcriptions Table -->
 <div class="card shadow-sm">
     <div class="card-body p-0">
@@ -205,236 +208,177 @@
             <div class="text-center py-5">
                 <i class="fas fa-microphone-slash fa-3x text-muted mb-3"></i>
                 <p class="text-muted mb-1">Nenhuma transcrição encontrada.</p>
-                <?php if ($is_enabled): ?>
-                    <small class="text-muted">Envie um arquivo de áudio acima para começar.</small>
-                <?php else: ?>
-                    <small class="text-muted">Ative o recurso nas configurações para começar.</small>
-                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="table-responsive">
                 <table class="table table-hover mb-0 trans-table">
                     <thead>
                         <tr>
-                            <th class="ps-3">ID</th>
-                            <th>Arquivo</th>
-                            <th>Duração</th>
-                            <th class="text-center">Status</th>
-                            <th>Data</th>
-                            <th class="text-center">Ações</th>
+                            <th class="ps-3">Data/Hora</th>
+                            <th>Questionário</th>
+                            <th>Pergunta</th>
+                            <th>Texto Transcrito (IA)</th>
+                            <th>Texto Editado</th>
+                            <th class="text-center">Confiança</th>
+                            <th>Aplicador</th>
+                            <th class="text-center">Duração</th>
+                            <th class="text-center">Origem</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($transcriptions as $t):
                             $t = (object)$t;
-                            $status = $t->status ?? 'pending';
-                            $duration = (int)($t->audio_duration_seconds ?? 0);
-                            $dur_min = floor($duration / 60);
-                            $dur_sec = $duration % 60;
-                            $dur_display = $dur_min > 0
-                                ? $dur_min . 'min ' . str_pad($dur_sec, 2, '0', STR_PAD_LEFT) . 's'
-                                : $dur_sec . 's';
-                            $filename = basename($t->audio_file_path ?? 'N/A');
-
-                            $status_labels = [
-                                'pending' => 'Pendente',
-                                'processing' => 'Processando',
-                                'completed' => 'Concluída',
-                                'error' => 'Erro',
-                            ];
-                            $status_icons = [
-                                'pending' => 'fa-clock',
-                                'processing' => 'fa-spinner fa-spin',
-                                'completed' => 'fa-check-circle',
-                                'error' => 'fa-times-circle',
-                            ];
+                            $conf = $t->confidence_score !== null ? round((float)$t->confidence_score * 100) : null;
+                            $confClass = $conf === null ? '' : ($conf >= 85 ? 'badge-conf-high' : ($conf >= 70 ? 'badge-conf-med' : 'badge-conf-low'));
+                            $wasEdited = !empty($t->edited_text) && $t->edited_text !== $t->transcription_text;
+                            $displayDate = !empty($t->timestamp_app) ? $t->timestamp_app : $t->created_at;
+                            $source = $t->source ?? 'upload';
+                            $durSecs = (int)($t->recording_duration_secs ?? $t->audio_duration_seconds ?? 0);
                         ?>
-                        <tr class="trans-row-clickable" data-trans-id="<?= (int)$t->id ?>" style="cursor: pointer;" title="Clique para expandir detalhes">
-                            <td class="ps-3 fw-semibold">#<?= (int)$t->id ?></td>
-                            <td>
-                                <i class="fas fa-file-audio text-muted me-1"></i>
-                                <span title="<?= htmlspecialchars($t->audio_file_path ?? '') ?>"><?= htmlspecialchars($filename) ?></span>
+                        <tr style="cursor:pointer" onclick="showDetail(this)" data-transcription='<?= htmlspecialchars(json_encode($t), ENT_QUOTES) ?>'>
+                            <td class="ps-3">
+                                <span class="text-nowrap"><?= date('d/m/Y', strtotime($displayDate)) ?></span>
+                                <br><small class="text-muted"><?= date('H:i', strtotime($displayDate)) ?></small>
                             </td>
                             <td>
-                                <?php if ($duration > 0): ?>
-                                    <i class="fas fa-stopwatch text-muted me-1"></i><?= $dur_display ?>
-                                <?php else: ?>
-                                    <span class="text-muted">--</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge badge-status-<?= $status ?> px-2 py-1">
-                                    <i class="fas <?= $status_icons[$status] ?? 'fa-circle' ?> me-1"></i><?= $status_labels[$status] ?? ucfirst($status) ?>
+                                <span class="text-preview" title="<?= htmlspecialchars($t->questionnaire_title ?? '') ?>">
+                                    <?= htmlspecialchars(mb_strimwidth($t->questionnaire_title ?? 'N/A', 0, 25, '...')) ?>
                                 </span>
-                                <?php if ($status === 'error' && !empty($t->error_message)): ?>
-                                    <br><small class="text-danger" title="<?= htmlspecialchars($t->error_message) ?>"><?= htmlspecialchars(mb_substr($t->error_message, 0, 40)) ?>...</small>
-                                <?php endif; ?>
                             </td>
                             <td>
-                                <span class="text-nowrap"><?= date('d/m/Y', strtotime($t->created_at)) ?></span>
-                                <br><small class="text-muted"><?= date('H:i:s', strtotime($t->created_at)) ?></small>
-                                <?php if (!empty($t->processed_at)): ?>
-                                    <br><small class="text-muted" title="Processado em <?= date('d/m/Y H:i:s', strtotime($t->processed_at)) ?>">
-                                        <i class="fas fa-cog me-1"></i><?= date('H:i:s', strtotime($t->processed_at)) ?>
-                                    </small>
+                                <span class="text-preview" title="<?= htmlspecialchars($t->question_text ?? '') ?>">
+                                    <?= htmlspecialchars(mb_strimwidth($t->question_text ?? '-', 0, 30, '...')) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="text-preview" title="<?= htmlspecialchars($t->transcription_text ?? '') ?>">
+                                    <?= htmlspecialchars(mb_strimwidth($t->transcription_text ?? '-', 0, 40, '...')) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($wasEdited): ?>
+                                    <span class="badge badge-edited me-1">Editado</span>
+                                    <span class="text-preview" title="<?= htmlspecialchars($t->edited_text) ?>">
+                                        <?= htmlspecialchars(mb_strimwidth($t->edited_text, 0, 30, '...')) ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="text-muted">-</span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-secondary btn-action toggle-detail-btn" data-trans-id="<?= (int)$t->id ?>" title="Expandir detalhes" onclick="event.stopPropagation();">
-                                    <i class="fas fa-chevron-down" id="chevron-<?= (int)$t->id ?>"></i>
-                                </button>
-                                <?php if ($status !== 'processing'): ?>
-                                <button class="btn btn-sm btn-outline-primary btn-action btn-reprocess" data-id="<?= (int)$t->id ?>" title="Reprocessar" onclick="event.stopPropagation();">
-                                    <i class="fas fa-redo"></i>
-                                </button>
+                                <?php if ($conf !== null): ?>
+                                    <span class="badge <?= $confClass ?>"><?= $conf ?>%</span>
+                                <?php else: ?>
+                                    <span class="text-muted">N/A</span>
                                 <?php endif; ?>
                             </td>
-                        </tr>
-                        <!-- Detail Row -->
-                        <tr class="trans-detail-row" id="detail-<?= (int)$t->id ?>">
-                            <td colspan="6">
-                                <div class="detail-inner">
-                                    <div class="row g-3">
-                                        <div class="col-12">
-                                            <div class="d-flex gap-3 mb-2">
-                                                <?php if (!empty($t->language)): ?>
-                                                    <small><strong>Idioma:</strong> <?= htmlspecialchars($t->language) ?></small>
-                                                <?php endif; ?>
-                                                <?php if (!empty($t->confidence_score)): ?>
-                                                    <small><strong>Confiança:</strong> <?= number_format((float)$t->confidence_score * 100, 1) ?>%</small>
-                                                <?php endif; ?>
-                                                <?php if (!empty($t->processed_by_name)): ?>
-                                                    <small><strong>Processado por:</strong> <?= htmlspecialchars($t->processed_by_name) ?></small>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label small fw-bold mb-1">
-                                                <i class="fas fa-robot me-1"></i>Transcrição Original
-                                            </label>
-                                            <div class="form-control form-control-sm bg-light" style="min-height: 100px; max-height: 200px; overflow-y: auto; font-size: 0.85rem; white-space: pre-wrap;">
-                                                <?= htmlspecialchars($t->transcription_text ?? 'Aguardando processamento...') ?>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label small fw-bold mb-1">
-                                                <i class="fas fa-pen me-1"></i>Transcrição Editada
-                                            </label>
-                                            <textarea class="form-control form-control-sm edited-text" id="edited-<?= (int)$t->id ?>"
-                                                      style="min-height: 100px; max-height: 200px; font-size: 0.85rem;"
-                                                      placeholder="Edite a transcrição aqui..."><?= htmlspecialchars($t->transcription_edited ?? $t->transcription_text ?? '') ?></textarea>
-                                        </div>
-                                        <div class="col-12 d-flex justify-content-end gap-2">
-                                            <button class="btn btn-sm btn-success btn-save-edit" data-id="<?= (int)$t->id ?>">
-                                                <i class="fas fa-save me-1"></i>Salvar Edição
-                                            </button>
-                                            <?php if ($status !== 'processing'): ?>
-                                            <button class="btn btn-sm btn-outline-primary btn-reprocess" data-id="<?= (int)$t->id ?>">
-                                                <i class="fas fa-redo me-1"></i>Reprocessar
-                                            </button>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </div>
+                            <td><?= htmlspecialchars($t->applicator_name ?? 'N/A') ?></td>
+                            <td class="text-center"><?= $durSecs > 0 ? $durSecs . 's' : '-' ?></td>
+                            <td class="text-center">
+                                <span class="badge badge-source-<?= $source ?>"><?= $source === 'app' ? 'App' : 'Upload' ?></span>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
+
+            <!-- Paginação -->
+            <?php if ($pagination['total_pages'] > 1): ?>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <small class="text-muted"><?= $pagination['total'] ?> transcrições encontradas</small>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <?php
+                            $queryParams = array_filter(array(
+                                'questionnaire_id' => $filter_questionnaire_id,
+                                'applicator_id' => $filter_applicator_id,
+                                'date_from' => $filter_date_from,
+                                'date_to' => $filter_date_to,
+                                'search' => $filter_search,
+                            ));
+                            $totalPages = $pagination['total_pages'];
+                            $currentPage = $pagination['page'];
+                        ?>
+                        <?php if ($currentPage > 1): ?>
+                        <li class="page-item"><a class="page-link" href="?page=<?= $currentPage - 1 ?>&<?= http_build_query($queryParams) ?>">&laquo;</a></li>
+                        <?php endif; ?>
+                        <?php
+                            $start = max(1, $currentPage - 2);
+                            $end = min($totalPages, $currentPage + 2);
+                        ?>
+                        <?php for ($p = $start; $p <= $end; $p++): ?>
+                        <li class="page-item <?= ($p == $currentPage) ? 'active' : '' ?>">
+                            <a class="page-link" href="?page=<?= $p ?>&<?= http_build_query($queryParams) ?>"><?= $p ?></a>
+                        </li>
+                        <?php endfor; ?>
+                        <?php if ($currentPage < $totalPages): ?>
+                        <li class="page-item"><a class="page-link" href="?page=<?= $currentPage + 1 ?>&<?= http_build_query($queryParams) ?>">&raquo;</a></li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+            </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
 
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="transcriptionDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), #1a2847); color: white;">
+                <h5 class="modal-title"><i class="fas fa-microphone me-2"></i>Detalhe da Transcrição</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="transcriptionDetailBody"></div>
+        </div>
+    </div>
+</div>
+
 <script>
-$(document).ready(function() {
+function showDetail(row) {
+    var t = JSON.parse(row.getAttribute('data-transcription'));
+    var conf = t.confidence_score ? (parseFloat(t.confidence_score) * 100).toFixed(0) + '%' : 'N/A';
+    var wasEdited = t.edited_text && t.edited_text !== t.transcription_text;
 
-    // Toggle detail rows
-    $('.trans-row-clickable').on('click', function() {
-        var id = $(this).data('trans-id');
-        toggleDetail(id);
-    });
+    var html = '<div class="row g-4">';
 
-    $('.toggle-detail-btn').on('click', function() {
-        var id = $(this).data('trans-id');
-        toggleDetail(id);
-    });
+    // Info
+    html += '<div class="col-md-5">';
+    html += '<h6 style="color: var(--secondary-color);"><i class="fas fa-info-circle me-1"></i>Informações</h6>';
+    html += '<table class="table table-sm mb-0">';
+    html += '<tr><th class="text-muted" style="width:40%">Questionário</th><td>' + escapeHtml(t.questionnaire_title || 'N/A') + '</td></tr>';
+    html += '<tr><th class="text-muted">Pergunta</th><td>' + escapeHtml(t.question_text || 'N/A') + '</td></tr>';
+    html += '<tr><th class="text-muted">Aplicador</th><td>' + escapeHtml(t.applicator_name || 'N/A') + '</td></tr>';
+    html += '<tr><th class="text-muted">Data/Hora</th><td>' + escapeHtml(t.timestamp_app || t.created_at || '') + '</td></tr>';
+    html += '<tr><th class="text-muted">Confiança</th><td>' + conf + '</td></tr>';
+    html += '<tr><th class="text-muted">Idioma</th><td>' + escapeHtml(t.language || 'N/A') + '</td></tr>';
+    html += '<tr><th class="text-muted">Duração</th><td>' + (t.recording_duration_secs || t.audio_duration_seconds || 0) + 's</td></tr>';
+    html += '<tr><th class="text-muted">Origem</th><td>' + (t.source === 'app' ? '<span class="badge badge-source-app">App</span>' : '<span class="badge badge-source-upload">Upload</span>') + '</td></tr>';
+    html += '</table>';
+    html += '</div>';
 
-    function toggleDetail(id) {
-        var $detail = $('#detail-' + id);
-        var $chevron = $('#chevron-' + id);
-        $detail.slideToggle(200);
-        $chevron.toggleClass('fa-chevron-down fa-chevron-up');
+    // Textos
+    html += '<div class="col-md-7">';
+    html += '<h6 style="color: var(--secondary-color);"><i class="fas fa-robot me-1"></i>Texto Original (IA)</h6>';
+    html += '<div class="p-3 rounded mb-3" style="background: #f8f9fa; white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-size: 0.9rem;">' + escapeHtml(t.transcription_text || 'Sem texto.') + '</div>';
+
+    if (wasEdited) {
+        html += '<h6 style="color: var(--secondary-color);"><i class="fas fa-pen me-1"></i>Texto Editado <span class="badge badge-edited">Modificado</span></h6>';
+        html += '<div class="p-3 rounded" style="background: #fff8f0; border: 1px solid #fd7e14; white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-size: 0.9rem;">' + escapeHtml(t.edited_text) + '</div>';
     }
 
-    // Save edited transcription
-    $(document).on('click', '.btn-save-edit', function() {
-        var $btn = $(this);
-        var id = $btn.data('id');
-        var editedText = $('#edited-' + id).val();
-        var originalHtml = $btn.html();
+    html += '</div></div>';
 
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Salvando...');
+    document.getElementById('transcriptionDetailBody').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('transcriptionDetailModal')).show();
+}
 
-        $.ajax({
-            url: '<?= base_url('ai/save_transcription_edit') ?>',
-            method: 'POST',
-            data: {
-                id: id,
-                transcription_edited: editedText
-            },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    $btn.html('<i class="fas fa-check me-1"></i>Salvo!').removeClass('btn-success').addClass('btn-outline-success');
-                    setTimeout(function() {
-                        $btn.html(originalHtml).removeClass('btn-outline-success').addClass('btn-success');
-                    }, 2000);
-                } else {
-                    alert('Erro ao salvar: ' + (response.message || 'Erro desconhecido'));
-                }
-            },
-            error: function() {
-                alert('Erro de rede ao salvar a edição.');
-            },
-            complete: function() {
-                $btn.prop('disabled', false);
-            }
-        });
-    });
-
-    // Reprocess transcription
-    $(document).on('click', '.btn-reprocess', function() {
-        var $btn = $(this);
-        var id = $btn.data('id');
-        var originalHtml = $btn.html();
-
-        if (!confirm('Deseja reprocessar a transcrição #' + id + '?')) return;
-
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Processando...');
-
-        $.ajax({
-            url: '<?= base_url('ai/process_transcription') ?>',
-            method: 'POST',
-            data: { id: id },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    $btn.html('<i class="fas fa-check me-1"></i>Enviado!');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1500);
-                } else {
-                    alert('Erro ao reprocessar: ' + (response.message || 'Erro desconhecido'));
-                    $btn.html(originalHtml).prop('disabled', false);
-                }
-            },
-            error: function() {
-                alert('Erro de rede ao reprocessar.');
-                $btn.html(originalHtml).prop('disabled', false);
-            }
-        });
-    });
-
-});
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
 </script>

@@ -58,6 +58,70 @@ class Ai extends CI_Controller {
     }
 
     /**
+     * POST /api/ai/transcriptions/sync
+     * Recebe batch de transcrições do app
+     */
+    public function transcriptions_sync() {
+        $user = $this->verify_auth();
+        if (!$user) return;
+
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (empty($data['transcriptions']) || !is_array($data['transcriptions'])) {
+            echo json_encode(array('success' => false, 'message' => 'Nenhuma transcrição enviada.'));
+            return;
+        }
+
+        $received = 0;
+        $duplicates = 0;
+
+        foreach ($data['transcriptions'] as $t) {
+            if (empty($t['id'])) continue;
+
+            // Verificar duplicata pelo app_id
+            $exists = $this->db->where('app_id', $t['id'])->count_all_results('ai_transcriptions');
+            if ($exists > 0) {
+                $duplicates++;
+                continue;
+            }
+
+            $insert = array(
+                'app_id'                  => $t['id'],
+                'questionnaire_id'        => isset($t['questionnaire_id']) ? (int)$t['questionnaire_id'] : null,
+                'question_id'             => isset($t['question_id']) ? (int)$t['question_id'] : null,
+                'question_text'           => $t['question_text'] ?? null,
+                'transcription_text'      => $t['transcribed_text'] ?? '',
+                'edited_text'             => $t['edited_text'] ?? null,
+                'transcription_edited'    => $t['edited_text'] ?? null,
+                'confidence_score'        => isset($t['confidence']) ? (float)$t['confidence'] : null,
+                'language'                => $t['language'] ?? 'pt-BR',
+                'duration_ms'             => isset($t['duration_ms']) ? (int)$t['duration_ms'] : null,
+                'recording_duration_secs' => (int)($t['recording_duration_secs'] ?? 0),
+                'audio_duration_seconds'  => isset($t['recording_duration_secs']) ? (float)$t['recording_duration_secs'] : null,
+                'applicator_name'         => $t['applicator_name'] ?? null,
+                'applicator_id'           => isset($t['applicator_id']) ? (int)$t['applicator_id'] : null,
+                'timestamp_app'           => !empty($t['timestamp']) ? date('Y-m-d H:i:s', strtotime($t['timestamp'])) : date('Y-m-d H:i:s'),
+                'audio_file_path'         => 'app_audio',
+                'status'                  => 'completed',
+                'source'                  => 'app',
+                'processed_at'            => date('Y-m-d H:i:s'),
+            );
+
+            $this->db->insert('ai_transcriptions', $insert);
+            $received++;
+        }
+
+        echo json_encode(array(
+            'success' => true,
+            'message' => $received . ' transcrições recebidas com sucesso.',
+            'data' => array(
+                'received' => $received,
+                'duplicates_skipped' => $duplicates,
+            ),
+        ));
+    }
+
+    /**
      * POST /api/ai/transcribe
      * Transcreve áudio enviado pelo app
      */

@@ -151,8 +151,6 @@ class Ai extends CI_Controller {
 
     public function transcriptions() {
         $data['title'] = 'Transcrições de Áudio - SXData';
-        $data['transcriptions'] = $this->Ai_model->get_transcriptions();
-        $data['status_counts'] = $this->Ai_model->count_transcriptions_by_status();
         $data['is_enabled'] = $this->Ai_model->is_feature_enabled('transcription');
 
         // Reseta transcrições presas em "processing" há mais de 5 minutos
@@ -162,6 +160,72 @@ class Ai extends CI_Controller {
                      'status' => 'error',
                      'error_message' => 'Timeout: o processamento excedeu o tempo limite.',
                  ));
+
+        // Filtros
+        $filter_questionnaire_id = $this->input->get('questionnaire_id');
+        $filter_applicator_id    = $this->input->get('applicator_id');
+        $filter_date_from        = $this->input->get('date_from');
+        $filter_date_to          = $this->input->get('date_to');
+        $filter_search           = $this->input->get('search');
+        $page                    = max(1, (int)$this->input->get('page'));
+        $per_page                = 20;
+        $offset                  = ($page - 1) * $per_page;
+
+        // Query base
+        $this->db->select('t.*, q.title as questionnaire_title')
+                 ->from('ai_transcriptions t')
+                 ->join('questionnaires q', 'q.id = t.questionnaire_id', 'left');
+
+        if ($filter_questionnaire_id) $this->db->where('t.questionnaire_id', $filter_questionnaire_id);
+        if ($filter_applicator_id)    $this->db->where('t.applicator_id', $filter_applicator_id);
+        if ($filter_date_from)        $this->db->where('COALESCE(t.timestamp_app, t.created_at) >=', $filter_date_from);
+        if ($filter_date_to)          $this->db->where('COALESCE(t.timestamp_app, t.created_at) <=', $filter_date_to . ' 23:59:59');
+        if ($filter_search) {
+            $this->db->group_start()
+                     ->like('t.transcription_text', $filter_search)
+                     ->or_like('t.edited_text', $filter_search)
+                     ->or_like('t.question_text', $filter_search)
+                     ->or_like('t.applicator_name', $filter_search)
+                     ->group_end();
+        }
+
+        $total = $this->db->count_all_results('', false);
+        $this->db->order_by('COALESCE(t.timestamp_app, t.created_at)', 'DESC')
+                 ->limit($per_page, $offset);
+        $data['transcriptions'] = $this->db->get()->result();
+
+        // Estatísticas gerais
+        $data['stats'] = $this->db->select("
+            COUNT(*) as total,
+            AVG(confidence_score) as avg_confidence,
+            SUM(CASE WHEN edited_text IS NOT NULL AND edited_text != transcription_text THEN 1 ELSE 0 END) as edited_count,
+            SUM(COALESCE(recording_duration_secs, 0)) as total_seconds
+        ")->from('ai_transcriptions')->get()->row();
+
+        $data['status_counts'] = $this->Ai_model->count_transcriptions_by_status();
+
+        // Paginação
+        $data['pagination'] = array(
+            'page'        => $page,
+            'per_page'    => $per_page,
+            'total'       => $total,
+            'total_pages' => max(1, ceil($total / $per_page)),
+        );
+
+        // Dropdowns para filtros
+        $data['filter_questionnaires'] = $this->db->select('id, title')
+            ->from('questionnaires')->order_by('title')->get()->result();
+        $data['filter_applicators'] = $this->db->select('DISTINCT applicator_id as id, applicator_name')
+            ->from('ai_transcriptions')
+            ->where('applicator_id IS NOT NULL')
+            ->where('applicator_name IS NOT NULL')
+            ->order_by('applicator_name')->get()->result();
+
+        $data['filter_questionnaire_id'] = $filter_questionnaire_id;
+        $data['filter_applicator_id']    = $filter_applicator_id;
+        $data['filter_date_from']        = $filter_date_from;
+        $data['filter_date_to']          = $filter_date_to;
+        $data['filter_search']           = $filter_search;
 
         // Passa form_responses e questions para os dropdowns do upload
         $data['form_responses'] = $this->db
