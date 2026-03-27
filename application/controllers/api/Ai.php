@@ -215,13 +215,41 @@ class Ai extends CI_Controller {
 
             $form_response_id = $this->input->post('form_response_id');
             $question_id = $this->input->post('question_id');
+            $questionnaire_id = $this->input->post('questionnaire_id');
+            $applicator_id = $this->input->post('applicator_id');
+            $applicator_name = $this->input->post('applicator_name');
+            $question_text = $this->input->post('question_text');
+            $recording_duration = $this->input->post('recording_duration_secs');
+
+            // Resolver dados faltantes via banco
+            if ($question_id && empty($question_text)) {
+                $q = $this->db->select('question_text, questionnaire_id')->where('id', $question_id)->get('questions')->row();
+                if ($q) {
+                    $question_text = $q->question_text;
+                    if (empty($questionnaire_id)) $questionnaire_id = $q->questionnaire_id;
+                }
+            }
+            if ($applicator_id && empty($applicator_name)) {
+                $u = $this->db->select('full_name')->where('id', $applicator_id)->get('users')->row();
+                if ($u) $applicator_name = $u->full_name;
+            }
+            if (empty($applicator_id) && !empty($user)) {
+                $applicator_id = $user->id;
+                if (empty($applicator_name)) $applicator_name = $user->full_name;
+            }
 
             $transcription_id = $this->Ai_model->create_transcription(array(
                 'form_response_id' => $form_response_id ?: null,
                 'question_id' => $question_id ?: null,
+                'questionnaire_id' => $questionnaire_id ?: null,
+                'question_text' => $question_text ?: null,
+                'applicator_id' => $applicator_id ?: null,
+                'applicator_name' => $applicator_name ?: null,
+                'recording_duration_secs' => $recording_duration ? (int)$recording_duration : null,
                 'audio_file_path' => 'uploads/audio/' . $upload_data['file_name'],
                 'status' => 'processing',
                 'source' => 'app',
+                'timestamp_app' => date('Y-m-d H:i:s'),
             ));
 
             $result = $this->ai_service->transcribe_audio($file_path, array(
@@ -243,7 +271,7 @@ class Ai extends CI_Controller {
 
                 $duration_secs = isset($result['duration']) ? (float)$result['duration'] : 0;
 
-                $this->Ai_model->update_transcription($transcription_id, array(
+                $update_data = array(
                     'transcription_text' => $result['text'],
                     'audio_duration_seconds' => $duration_secs,
                     'language' => $result['language'] ?? 'pt',
@@ -251,7 +279,12 @@ class Ai extends CI_Controller {
                     'status' => 'completed',
                     'model_used' => 'whisper-1',
                     'processed_at' => date('Y-m-d H:i:s'),
-                ));
+                );
+                // Preencher recording_duration_secs se não veio do app
+                if (empty($recording_duration) && $duration_secs > 0) {
+                    $update_data['recording_duration_secs'] = (int)ceil($duration_secs);
+                }
+                $this->Ai_model->update_transcription($transcription_id, $update_data);
 
                 echo json_encode(array(
                     'success' => true,
