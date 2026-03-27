@@ -1305,6 +1305,32 @@ class Ai extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
+    public function get_report_data() {
+        header('Content-Type: application/json');
+        $id = $this->input->get('id');
+        $report = $this->Ai_model->get_report($id);
+        if ($report) {
+            echo json_encode(array('success' => true, 'narrative_text' => $report->narrative_text ?? ''));
+        } else {
+            echo json_encode(array('success' => false, 'message' => 'Relatório não encontrado.'));
+        }
+    }
+
+    public function update_report() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+        $data = array('updated_at' => date('Y-m-d H:i:s'));
+
+        $title = $this->input->post('title');
+        if ($title) $data['title'] = $title;
+
+        $narrative = $this->input->post('narrative_text');
+        if ($narrative !== null && $narrative !== '') $data['narrative_text'] = $narrative;
+
+        $this->db->where('id', $id)->update('ai_reports', $data);
+        echo json_encode(array('success' => true));
+    }
+
     // ============================================================
     // PROCESSAMENTO EM LOTE
     // ============================================================

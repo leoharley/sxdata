@@ -79,7 +79,10 @@
             <?= htmlspecialchars($report->title ?? 'Relatório #' . $report->id) ?>
         </h2>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 no-print">
+        <button type="button" class="btn-ai-action" id="btnEditReport" title="Editar relatório">
+            <i class="fas fa-pen me-1"></i>Editar
+        </button>
         <button type="button" class="btn-ai-action" onclick="copyToClipboard()" title="Copiar para área de transferência">
             <i class="fas fa-copy me-1"></i>Copiar
         </button>
@@ -164,7 +167,69 @@
     </div>
 </div>
 
+<!-- Modal: Editar Relatório -->
+<div class="modal fade" id="editReportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), #1a2847); color: white;">
+                <h5 class="modal-title"><i class="fas fa-pen me-2"></i>Editar Relatório</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold" style="color: var(--secondary-color);">Título</label>
+                    <input type="text" class="form-control" id="editTitle" value="<?= htmlspecialchars($report->title ?? '') ?>" maxlength="300">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold" style="color: var(--secondary-color);">Texto Narrativo</label>
+                    <textarea class="form-control" id="editNarrative" rows="15" style="font-size: 0.9rem; line-height: 1.6;"><?= htmlspecialchars($report->narrative_text ?? '') ?></textarea>
+                    <small class="text-muted">Suporta HTML. Edite o texto gerado pela IA conforme necessário.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSaveReport">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+(function waitForJQuery() {
+    if (typeof jQuery === 'undefined') return setTimeout(waitForJQuery, 50);
+    jQuery(function($) {
+        var BASE = '<?= base_url() ?>';
+        var reportId = <?= (int)$report->id ?>;
+
+        $('#btnEditReport').on('click', function() {
+            new bootstrap.Modal(document.getElementById('editReportModal')).show();
+        });
+
+        $('#btnSaveReport').on('click', function() {
+            var title = $('#editTitle').val().trim();
+            if (!title) { alert('Informe o título.'); return; }
+
+            var $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Salvando...');
+
+            $.ajax({
+                url: BASE + 'ai/update_report',
+                type: 'POST',
+                data: { id: reportId, title: title, narrative_text: $('#editNarrative').val() },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.success) location.reload();
+                    else alert(res.message || 'Erro ao salvar.');
+                },
+                error: function() { alert('Erro de comunicação.'); },
+                complete: function() { $btn.prop('disabled', false).html('<i class="fas fa-save me-1"></i>Salvar'); }
+            });
+        });
+    });
+})();
+
 function copyToClipboard() {
     var content = document.getElementById('reportContent');
     var textContent = content.innerText || content.textContent;

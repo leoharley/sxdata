@@ -38,6 +38,8 @@ $route['admin/ai/inconsistencies'] = 'ai/inconsistencies';
 $route['ai/clear_inconsistencies'] = 'ai/clear_inconsistencies';
 $route['ai/clear_followups'] = 'ai/clear_followups';
 $route['ai/get_question_detail'] = 'ai/get_question_detail';
+$route['ai/get_report_data'] = 'ai/get_report_data';
+$route['ai/update_report'] = 'ai/update_report';
 
 // Client routes
 $route['client/dashboard'] = 'client/dashboard';
