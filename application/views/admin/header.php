@@ -211,6 +211,15 @@
         </div>
         
         <ul class="sidebar-nav nav flex-column">
+            <?php $user_role = $this->session->userdata('admin_role'); ?>
+            <?php if ($user_role === 'cliente'): ?>
+            <li class="nav-item">
+                <a class="nav-link <?= $this->uri->segment(1) == 'client' ? 'active' : '' ?>" href="<?= base_url('client/dashboard') ?>">
+                    <i class="fas fa-chart-pie"></i>
+                    Painel de Análises
+                </a>
+            </li>
+            <?php else: ?>
             <li class="nav-item">
                 <a class="nav-link <?= $this->uri->segment(1) == 'dashboard' ? 'active' : '' ?>" href="<?= base_url('dashboard') ?>">
                     <i class="fas fa-tachometer-alt"></i>
@@ -259,6 +268,7 @@
                     Configurações
                 </a>
             </li>
+            <?php endif; ?>
             <li class="nav-item mt-auto">
                 <a class="nav-link" href="<?= base_url('auth/logout') ?>">
                     <i class="fas fa-sign-out-alt"></i>

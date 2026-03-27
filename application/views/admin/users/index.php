@@ -11,8 +11,8 @@
 </div>
 
 <!-- Estatísticas dos Usuários -->
-<div class="row mb-4">
-    <div class="col-md-3">
+<div class="row mb-4 g-3">
+    <div class="col">
         <div class="stat-card">
             <div class="stat-icon" style="background: linear-gradient(45deg, #007bff, #0056b3);">
                 <i class="fas fa-users"></i>
@@ -21,7 +21,7 @@
             <p class="stat-label">Total de Usuários</p>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="stat-card">
             <div class="stat-icon" style="background: linear-gradient(45deg, #8fae5d, #a8c46a);">
                 <i class="fas fa-user-check"></i>
@@ -30,7 +30,7 @@
             <p class="stat-label">Aplicadores</p>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="stat-card">
             <div class="stat-icon" style="background: linear-gradient(45deg, #ffc107, #e0a800);">
                 <i class="fas fa-user-tie"></i>
@@ -39,13 +39,22 @@
             <p class="stat-label">Supervisores</p>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="stat-card">
             <div class="stat-icon" style="background: linear-gradient(45deg, #dc3545, #bd2130);">
                 <i class="fas fa-user-cog"></i>
             </div>
             <h3 class="stat-number"><?= $stats['administradores'] ?? 0 ?></h3>
             <p class="stat-label">Administradores</p>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(45deg, #0dcaf0, #0aa2c0);">
+                <i class="fas fa-user-tag"></i>
+            </div>
+            <h3 class="stat-number"><?= $stats['clientes'] ?? 0 ?></h3>
+            <p class="stat-label">Clientes</p>
         </div>
     </div>
 </div>
@@ -85,7 +94,8 @@
                             $role_colors = [
                                 'administrador' => 'danger',
                                 'supervisor' => 'warning',
-                                'aplicador' => 'success'
+                                'aplicador' => 'success',
+                                'cliente' => 'info'
                             ];
                             $color = $role_colors[$user->role] ?? 'secondary';
                             ?>
@@ -176,6 +186,7 @@
                         <option value="aplicador">Aplicador</option>
                         <option value="supervisor">Supervisor</option>
                         <option value="administrador">Administrador</option>
+                        <option value="cliente">Cliente</option>
                     </select>
                 </div>
                 

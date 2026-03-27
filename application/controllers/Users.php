@@ -25,7 +25,7 @@ class Users extends CI_Controller {
         $this->form_validation->set_rules('full_name', 'Nome Completo', 'required|max_length[100]');
         $this->form_validation->set_rules('username', 'Usuário', 'required|max_length[50]|is_unique[users.username]');
         $this->form_validation->set_rules('email', 'Email', 'required|valid_email|is_unique[users.email]');
-        $this->form_validation->set_rules('role', 'Função', 'required|in_list[aplicador,supervisor,administrador]');
+        $this->form_validation->set_rules('role', 'Função', 'required|in_list[aplicador,supervisor,administrador,cliente]');
         $this->form_validation->set_rules('password', 'Senha', 'required|min_length[6]');
         $this->form_validation->set_rules('password_confirm', 'Confirmação de Senha', 'required|matches[password]');
 
@@ -100,7 +100,7 @@ class Users extends CI_Controller {
         }
         $this->form_validation->set_rules('email', 'Email', $email_rule);
         
-        $this->form_validation->set_rules('role', 'Função', 'required|in_list[aplicador,supervisor,administrador]');
+        $this->form_validation->set_rules('role', 'Função', 'required|in_list[aplicador,supervisor,administrador,cliente]');
         
         // Senha é opcional na edição
         if ($this->input->post('password')) {

@@ -87,6 +87,7 @@ class User_model extends CI_Model {
             'aplicadores' => 0,
             'supervisores' => 0,
             'administradores' => 0,
+            'clientes' => 0,
             'ativos' => 0,
             'inativos' => 0
         );
@@ -109,6 +110,9 @@ class User_model extends CI_Model {
                     break;
                 case 'administrador':
                     $stats['administradores'] = $role->count;
+                    break;
+                case 'cliente':
+                    $stats['clientes'] = $role->count;
                     break;
             }
         }

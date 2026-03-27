@@ -25,7 +25,7 @@ class Auth extends CI_Controller {
 
                 $user = $this->User_model->authenticate($username, $password);
 
-                if ($user && in_array($user->role, ['administrador', 'supervisor'])) {
+                if ($user && in_array($user->role, ['administrador', 'supervisor', 'cliente'])) {
                     $this->session->set_userdata(array(
                         'admin_logged_in' => TRUE,
                         'admin_id' => $user->id,
@@ -33,7 +33,7 @@ class Auth extends CI_Controller {
                         'admin_name' => $user->full_name,
                         'admin_role' => $user->role
                     ));
-                    redirect('dashboard');
+                    redirect($user->role === 'cliente' ? 'client/dashboard' : 'dashboard');
                 } else {
                     $data['error'] = 'Credenciais inválidas ou sem permissão de acesso.';
                 }
