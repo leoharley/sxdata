@@ -302,7 +302,14 @@
 </div>
 
 <!-- Inconsistencies List -->
-<h5 class="inc-section-title"><i class="fas fa-list me-2"></i>Inconsistências Detectadas (<?= $total ?>)</h5>
+<div class="d-flex justify-content-between align-items-center">
+    <h5 class="inc-section-title mb-0"><i class="fas fa-list me-2"></i>Inconsistências Detectadas (<?= $total ?>)</h5>
+    <?php if (!empty($inconsistencies)): ?>
+    <button class="btn btn-sm btn-outline-danger mb-2" id="btnClearInconsistencies">
+        <i class="fas fa-trash me-1"></i>Limpar Todas
+    </button>
+    <?php endif; ?>
+</div>
 
 <?php if (empty($inconsistencies)): ?>
     <div class="inc-empty-state">
@@ -578,6 +585,23 @@
                 alert('Erro ao comunicar com o servidor.');
                 $btn.prop('disabled', false).find('.spinner-border').remove();
             }
+        });
+    });
+
+    // Clear All Inconsistencies
+    $('#btnClearInconsistencies').on('click', function() {
+        if (!confirm('Excluir todas as inconsistências? Esta ação não pode ser desfeita.')) return;
+        var $btn = $(this);
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Limpando...');
+        $.ajax({
+            url: BASE + 'ai/clear_inconsistencies',
+            type: 'POST',
+            dataType: 'json',
+            success: function(res) {
+                if (res.success) location.reload();
+                else { alert(res.message || 'Erro.'); $btn.prop('disabled', false).html('<i class="fas fa-trash me-1"></i>Limpar Todas'); }
+            },
+            error: function() { alert('Erro de comunicação.'); $btn.prop('disabled', false).html('<i class="fas fa-trash me-1"></i>Limpar Todas'); }
         });
     });
 

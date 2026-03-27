@@ -394,6 +394,12 @@ class Ai extends CI_Controller {
         }
     }
 
+    public function clear_inconsistencies() {
+        header('Content-Type: application/json');
+        $this->db->truncate('ai_inconsistencies');
+        echo json_encode(array('success' => true));
+    }
+
     public function resolve_inconsistency() {
         $id = $this->input->post('id');
         $action = $this->input->post('action'); // confirmed, dismissed, resolved
