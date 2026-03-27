@@ -213,15 +213,16 @@ class Ai extends CI_Controller {
             $upload_data = $this->upload->data();
             $file_path = $upload_data['full_path'];
 
-            $form_response_id = $this->input->post('form_response_id');
-            $question_id = $this->input->post('question_id');
-            $questionnaire_id = $this->input->post('questionnaire_id');
-            $applicator_id = $this->input->post('applicator_id');
-            $applicator_name = $this->input->post('applicator_name');
-            $question_text = $this->input->post('question_text');
-            $recording_duration = $this->input->post('recording_duration_secs');
+            // Aceitar snake_case e camelCase
+            $form_response_id = $this->input->post('form_response_id') ?: $this->input->post('formResponseId');
+            $question_id = $this->input->post('question_id') ?: $this->input->post('questionId');
+            $questionnaire_id = $this->input->post('questionnaire_id') ?: $this->input->post('questionnaireId');
+            $applicator_id = $this->input->post('applicator_id') ?: $this->input->post('applicatorId');
+            $applicator_name = $this->input->post('applicator_name') ?: $this->input->post('applicatorName');
+            $question_text = $this->input->post('question_text') ?: $this->input->post('questionText');
+            $recording_duration = $this->input->post('recording_duration_secs') ?: $this->input->post('recordingDurationSecs') ?: $this->input->post('duration');
 
-            // Resolver dados faltantes via banco
+            // Resolver dados faltantes via question_id
             if ($question_id && empty($question_text)) {
                 $q = $this->db->select('question_text, questionnaire_id')->where('id', $question_id)->get('questions')->row();
                 if ($q) {
@@ -229,6 +230,14 @@ class Ai extends CI_Controller {
                     if (empty($questionnaire_id)) $questionnaire_id = $q->questionnaire_id;
                 }
             }
+
+            // Resolver via form_response_id se ainda falta questionnaire_id
+            if (empty($questionnaire_id) && $form_response_id) {
+                $fr = $this->db->select('questionnaire_id')->where('id', $form_response_id)->get('form_responses')->row();
+                if ($fr) $questionnaire_id = $fr->questionnaire_id;
+            }
+
+            // Resolver applicator
             if ($applicator_id && empty($applicator_name)) {
                 $u = $this->db->select('full_name')->where('id', $applicator_id)->get('users')->row();
                 if ($u) $applicator_name = $u->full_name;
