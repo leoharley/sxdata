@@ -338,6 +338,9 @@ function buildChart(index, type, labels, datasets, asPercent) {
         }
     });
 
+    // Check if labels contain q_XXX patterns
+    var hasQuestionLabels = labels.some(function(l) { return /^q_\d+$/.test(l); });
+
     var options = {
         responsive: true,
         maintainAspectRatio: false,
@@ -353,10 +356,110 @@ function buildChart(index, type, labels, datasets, asPercent) {
         };
     }
 
+    // Style q_XXX labels as clickable links on X axis
+    if (hasQuestionLabels && ['bar', 'line'].indexOf(type) >= 0) {
+        if (!options.scales) options.scales = {};
+        options.scales.x = options.scales.x || {};
+        options.scales.x.ticks = options.scales.x.ticks || {};
+        options.scales.x.ticks.color = function(ctx) {
+            var label = labels[ctx.index] || '';
+            return /^q_\d+$/.test(label) ? '#8fae5d' : '#666';
+        };
+        options.scales.x.ticks.font = function(ctx) {
+            var label = labels[ctx.index] || '';
+            return /^q_\d+$/.test(label) ? { weight: 'bold', size: 12 } : {};
+        };
+        // Cursor pointer on hover over labels
+        options.onHover = function(event, elements, chart) {
+            var labelClicked = getLabelAtEvent(chart, event);
+            canvas.style.cursor = labelClicked ? 'pointer' : 'default';
+        };
+    }
+
+    // For pie/doughnut, style legend labels
+    if (hasQuestionLabels && ['pie', 'doughnut'].indexOf(type) >= 0) {
+        options.plugins.legend.labels = {
+            color: function(ctx) {
+                var label = labels[ctx.index] || '';
+                return /^q_\d+$/.test(label) ? '#8fae5d' : '#666';
+            },
+            font: { weight: 'bold' }
+        };
+    }
+
     chartInstances[index] = new Chart(canvas, {
         type: type,
         data: { labels: labels, datasets: displayDatasets },
         options: options
+    });
+
+    // Click handler for axis labels & legend
+    canvas.onclick = function(evt) {
+        var chart = chartInstances[index];
+        if (!chart) return;
+
+        // Check axis label click (bar/line)
+        var labelValue = getLabelAtEvent(chart, evt);
+        if (labelValue && /^q_(\d+)$/.test(labelValue)) {
+            var qId = labelValue.match(/^q_(\d+)$/)[1];
+            openQuestionModal(qId);
+            return;
+        }
+
+        // Check legend click (pie/doughnut) — handled via plugin below
+        // Check tooltip data click
+        var points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+        if (points.length > 0) {
+            var clickedLabel = labels[points[0].index];
+            if (clickedLabel && /^q_(\d+)$/.test(clickedLabel)) {
+                openQuestionModal(clickedLabel.match(/^q_(\d+)$/)[1]);
+            }
+        }
+    };
+}
+
+// Helper: detect if click is on an axis label
+function getLabelAtEvent(chart, event) {
+    var scales = chart.scales;
+    if (!scales || !scales.x) return null;
+    var xScale = scales.x;
+    var rect = chart.canvas.getBoundingClientRect();
+    var y = event.y !== undefined ? event.y : (event.native ? event.native.clientY - rect.top : null);
+    var x = event.x !== undefined ? event.x : (event.native ? event.native.clientX - rect.left : null);
+    if (y === null || x === null) return null;
+
+    // Only respond if click is in the label area (below the chart area)
+    if (y < xScale.top || y > xScale.bottom + 20) return null;
+
+    // Find which label was clicked
+    for (var i = 0; i < xScale.ticks.length; i++) {
+        var pos = xScale.getPixelForTick(i);
+        var halfStep = (xScale.width / xScale.ticks.length) / 2;
+        if (x >= pos - halfStep && x <= pos + halfStep) {
+            return chart.data.labels[i] || null;
+        }
+    }
+    return null;
+}
+
+function openQuestionModal(qId) {
+    var modal = new bootstrap.Modal(document.getElementById('questionDetailModal'));
+    $('#questionModalTitle').html('<i class="fas fa-question-circle me-2"></i>Pergunta #' + qId);
+    $('#questionModalBody').html('<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>');
+    modal.show();
+
+    if (questionCache[qId]) { renderQuestion(questionCache[qId]); return; }
+
+    $.ajax({
+        url: BASE + 'ai/get_question_detail',
+        type: 'GET',
+        data: { id: qId },
+        dataType: 'json',
+        success: function(res) {
+            if (res.success) { questionCache[qId] = res.question; renderQuestion(res.question); }
+            else $('#questionModalBody').html('<div class="alert alert-warning mb-0">Pergunta não encontrada.</div>');
+        },
+        error: function() { $('#questionModalBody').html('<div class="alert alert-danger mb-0">Erro ao buscar.</div>'); }
     });
 }
 
@@ -430,29 +533,10 @@ function showFallbackDesc(index, title, labels, data) {
     el.innerHTML = '<p class="desc-text mb-0"><i class="fas fa-info-circle me-2" style="color: var(--primary-color);"></i>' + escapeHtml(desc) + '</p>';
 }
 
-// Question ref modal
+// Question ref modal (titles & descriptions)
 $(document).on('click', '.question-ref-link', function(e) {
     e.preventDefault();
-    var qId = $(this).data('question-id');
-    var modal = new bootstrap.Modal(document.getElementById('questionDetailModal'));
-
-    $('#questionModalTitle').html('<i class="fas fa-question-circle me-2"></i>Pergunta #' + qId);
-    $('#questionModalBody').html('<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>');
-    modal.show();
-
-    if (questionCache[qId]) { renderQuestion(questionCache[qId]); return; }
-
-    $.ajax({
-        url: BASE + 'ai/get_question_detail',
-        type: 'GET',
-        data: { id: qId },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) { questionCache[qId] = res.question; renderQuestion(res.question); }
-            else $('#questionModalBody').html('<div class="alert alert-warning mb-0">Pergunta não encontrada.</div>');
-        },
-        error: function() { $('#questionModalBody').html('<div class="alert alert-danger mb-0">Erro ao buscar.</div>'); }
-    });
+    openQuestionModal($(this).data('question-id'));
 });
 
 function renderQuestion(q) {
