@@ -233,9 +233,12 @@ class Ai extends CI_Controller {
                 $u = $this->db->select('full_name')->where('id', $applicator_id)->get('users')->row();
                 if ($u) $applicator_name = $u->full_name;
             }
-            if (empty($applicator_id) && !empty($user)) {
-                $applicator_id = $user->id;
-                if (empty($applicator_name)) $applicator_name = $user->full_name;
+            if (empty($applicator_id) && $user) {
+                $applicator_id = is_object($user) ? $user->id : (int)$user;
+                if (empty($applicator_name)) {
+                    $auth_user = $this->db->select('full_name')->where('id', $applicator_id)->get('users')->row();
+                    if ($auth_user) $applicator_name = $auth_user->full_name;
+                }
             }
 
             $transcription_id = $this->Ai_model->create_transcription(array(
