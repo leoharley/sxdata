@@ -160,82 +160,132 @@ class Ai extends CI_Controller {
      * Transcreve áudio enviado pelo app
      */
     public function transcribe() {
-        $user = $this->verify_auth();
-        if (!$user) return;
+        // Capturar qualquer erro PHP para retornar JSON
+        set_error_handler(function($severity, $message, $file, $line) {
+            throw new ErrorException($message, 0, $severity, $file, $line);
+        });
 
-        if ($this->input->method() !== 'post') {
-            $this->output->set_status_header(405);
-            echo json_encode(array('success' => false, 'message' => 'Method not allowed'));
-            return;
-        }
+        try {
+            $user = $this->verify_auth();
+            if (!$user) return;
 
-        if (!$this->Ai_model->is_feature_enabled('transcription')) {
-            echo json_encode(array('success' => false, 'message' => 'Transcrição não está habilitada'));
-            return;
-        }
+            if ($this->input->method() !== 'post') {
+                $this->output->set_status_header(405);
+                echo json_encode(array('success' => false, 'message' => 'Method not allowed'));
+                return;
+            }
 
-        // Recebe áudio como upload
-        $upload_path = FCPATH . 'uploads/audio/';
-        if (!is_dir($upload_path)) {
-            mkdir($upload_path, 0755, true);
-        }
+            if (!$this->Ai_model->is_feature_enabled('transcription')) {
+                echo json_encode(array('success' => false, 'message' => 'Transcrição não está habilitada'));
+                return;
+            }
 
-        $config = array(
-            'upload_path' => $upload_path,
-            'allowed_types' => 'mp3|wav|m4a|ogg|webm|mp4',
-            'max_size' => 25600,
-        );
+            // Verificar se o arquivo foi enviado
+            if (empty($_FILES['audio']) && empty($_FILES['file'])) {
+                echo json_encode(array('success' => false, 'message' => 'Nenhum arquivo de áudio enviado. Use o campo "audio" ou "file".'));
+                return;
+            }
 
-        $this->load->library('upload', $config);
+            // Detectar nome do campo (app pode enviar como "audio" ou "file")
+            $field_name = !empty($_FILES['audio']) ? 'audio' : 'file';
 
-        if (!$this->upload->do_upload('audio')) {
-            echo json_encode(array('success' => false, 'message' => $this->upload->display_errors('', '')));
-            return;
-        }
+            // Recebe áudio como upload
+            $upload_path = FCPATH . 'uploads/audio/';
+            if (!is_dir($upload_path)) {
+                mkdir($upload_path, 0755, true);
+            }
 
-        $upload_data = $this->upload->data();
-        $file_path = $upload_data['full_path'];
+            $config = array(
+                'upload_path' => $upload_path,
+                'allowed_types' => 'mp3|wav|m4a|ogg|webm|mp4|aac|flac|3gp',
+                'max_size' => 25600,
+                'file_name' => 'audio_' . time() . '_' . rand(1000, 9999),
+            );
 
-        $form_response_id = $this->input->post('form_response_id');
-        $question_id = $this->input->post('question_id');
+            $this->load->library('upload', $config);
 
-        $transcription_id = $this->Ai_model->create_transcription(array(
-            'form_response_id' => $form_response_id,
-            'question_id' => $question_id,
-            'audio_file_path' => 'uploads/audio/' . $upload_data['file_name'],
-            'status' => 'processing',
-        ));
+            if (!$this->upload->do_upload($field_name)) {
+                echo json_encode(array('success' => false, 'message' => 'Erro no upload: ' . strip_tags($this->upload->display_errors('', ''))));
+                return;
+            }
 
-        $result = $this->ai_service->transcribe_audio($file_path, array(
-            'resource_type' => 'transcription',
-            'resource_id' => $transcription_id,
-        ));
+            $upload_data = $this->upload->data();
+            $file_path = $upload_data['full_path'];
 
-        if ($result['success']) {
-            $this->Ai_model->update_transcription($transcription_id, array(
-                'transcription_text' => $result['text'],
-                'audio_duration_seconds' => $result['duration'],
-                'language' => $result['language'],
-                'status' => 'completed',
-                'model_used' => 'whisper-1',
-                'processed_at' => date('Y-m-d H:i:s'),
+            $form_response_id = $this->input->post('form_response_id');
+            $question_id = $this->input->post('question_id');
+
+            $transcription_id = $this->Ai_model->create_transcription(array(
+                'form_response_id' => $form_response_id ?: null,
+                'question_id' => $question_id ?: null,
+                'audio_file_path' => 'uploads/audio/' . $upload_data['file_name'],
+                'status' => 'processing',
+                'source' => 'app',
             ));
 
-            echo json_encode(array(
-                'success' => true,
-                'transcription_id' => $transcription_id,
-                'text' => $result['text'],
-                'duration' => $result['duration'],
-                'language' => $result['language'],
-            ));
-        } else {
-            $this->Ai_model->update_transcription($transcription_id, array(
-                'status' => 'error',
-                'error_message' => $result['error'],
+            $result = $this->ai_service->transcribe_audio($file_path, array(
+                'resource_type' => 'transcription',
+                'resource_id' => $transcription_id,
             ));
 
-            echo json_encode(array('success' => false, 'message' => $result['error']));
+            // Limpar arquivo após transcrição
+            @unlink($file_path);
+
+            if ($result['success']) {
+                // Calcular confiança média dos segmentos
+                $confidence = null;
+                if (!empty($result['segments'])) {
+                    $logprobs = array_map(function($seg) { return $seg['avg_logprob'] ?? -1; }, $result['segments']);
+                    $avgLogProb = array_sum($logprobs) / count($logprobs);
+                    $confidence = max(0, min(1, round(exp($avgLogProb), 3)));
+                }
+
+                $duration_secs = isset($result['duration']) ? (float)$result['duration'] : 0;
+
+                $this->Ai_model->update_transcription($transcription_id, array(
+                    'transcription_text' => $result['text'],
+                    'audio_duration_seconds' => $duration_secs,
+                    'language' => $result['language'] ?? 'pt',
+                    'confidence_score' => $confidence,
+                    'status' => 'completed',
+                    'model_used' => 'whisper-1',
+                    'processed_at' => date('Y-m-d H:i:s'),
+                ));
+
+                echo json_encode(array(
+                    'success' => true,
+                    'data' => array(
+                        'text' => $result['text'],
+                        'confidence' => $confidence,
+                        'language' => $result['language'] ?? 'pt',
+                        'duration_ms' => $duration_secs > 0 ? (int)($duration_secs * 1000) : null,
+                    ),
+                    // Manter compatibilidade com formato antigo
+                    'transcription_id' => $transcription_id,
+                    'text' => $result['text'],
+                    'duration' => $duration_secs,
+                    'language' => $result['language'] ?? 'pt',
+                ));
+            } else {
+                @unlink($file_path); // Garantir limpeza
+
+                $this->Ai_model->update_transcription($transcription_id, array(
+                    'status' => 'error',
+                    'error_message' => $result['error'] ?? 'Erro desconhecido',
+                ));
+
+                echo json_encode(array('success' => false, 'message' => $result['error'] ?? 'Erro na transcrição'));
+            }
+
+        } catch (Exception $e) {
+            log_message('error', 'Transcribe API error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            echo json_encode(array('success' => false, 'message' => 'Erro interno: ' . $e->getMessage()));
+        } catch (Error $e) {
+            log_message('error', 'Transcribe API fatal: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            echo json_encode(array('success' => false, 'message' => 'Erro fatal: ' . $e->getMessage()));
         }
+
+        restore_error_handler();
     }
 
     /**
