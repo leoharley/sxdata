@@ -460,8 +460,9 @@ class Ai_model extends CI_Model {
     // ============================================================
 
     public function get_followup_suggestions($filters = array(), $limit = 50, $offset = 0) {
-        $this->db->select('ai_followup_suggestions.*, q.title as questionnaire_title');
+        $this->db->select('ai_followup_suggestions.*, q.title as questionnaire_title, qst.question_text as question_text_ref');
         $this->db->join('questionnaires q', 'q.id = ai_followup_suggestions.questionnaire_id', 'left');
+        $this->db->join('questions qst', 'qst.id = ai_followup_suggestions.question_id', 'left');
 
         if (!empty($filters['questionnaire_id'])) {
             $this->db->where('ai_followup_suggestions.questionnaire_id', $filters['questionnaire_id']);

@@ -1084,7 +1084,8 @@ class Ai extends CI_Controller {
             foreach ($items as $item) {
                 $this->Ai_model->create_followup_suggestion(array(
                     'questionnaire_id' => $questionnaire_id,
-                    'suggested_question_text' => $item['question_text'] ?? '',
+                    'question_id' => !empty($item['question_id']) ? (int)$item['question_id'] : null,
+                    'suggested_question_text' => $item['tip'] ?? $item['question_text'] ?? '',
                     'question_type' => $item['question_type'] ?? 'text',
                     'suggested_options' => json_encode($item['options'] ?? array()),
                     'rationale' => $item['rationale'] ?? '',

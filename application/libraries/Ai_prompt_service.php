@@ -284,21 +284,25 @@ class Ai_prompt_service {
         $questions = $this->CI->Question_model->get_by_questionnaire($questionnaire_id);
         $response_count = $this->CI->Response_model->count_by_filters(array('questionnaire_id' => $questionnaire_id));
 
-        $questions_summary = array();
+        $questions_data = array();
         foreach ($questions as $q) {
-            $questions_summary[] = array(
+            $entry = array(
                 'id' => $q->id,
                 'text' => $q->question_text,
                 'type' => $q->question_type,
             );
+            if (!empty($q->options)) {
+                $entry['options'] = array_map(function($o) {
+                    return $o->option_text;
+                }, $q->options);
+            }
+            $questions_data[] = $entry;
         }
 
         return array(
             'questionnaire_title' => $questionnaire ? $questionnaire->title : 'Questionário',
-            'responses_summary' => json_encode(array(
-                'total_responses' => $response_count,
-                'questions' => $questions_summary,
-            ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            'questions_data' => json_encode($questions_data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            'total_responses' => $response_count,
             'questionnaire_id' => $questionnaire_id,
         );
     }

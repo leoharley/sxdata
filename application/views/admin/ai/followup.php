@@ -132,21 +132,23 @@
                 <div class="card-top">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div class="flex-grow-1">
-                            <h6 class="mb-1" style="color: var(--secondary-color);"><?= htmlspecialchars($s['suggested_question_text']) ?></h6>
-                            <div class="d-flex align-items-center gap-2">
-                                <?php
-                                    $typeLabels = [
-                                        'multiple_choice' => 'Múltipla Escolha',
-                                        'text' => 'Texto Livre',
-                                        'scale' => 'Escala',
-                                        'yes_no' => 'Sim/Não',
-                                        'rating' => 'Avaliação',
-                                    ];
-                                    $typeLabel = $typeLabels[$s['question_type']] ?? ucfirst($s['question_type']);
-                                ?>
-                                <span class="badge type-badge bg-info"><?= $typeLabel ?></span>
+                            <h6 class="mb-1" style="color: var(--secondary-color);">
+                                <i class="fas fa-lightbulb me-1" style="color: var(--primary-color);"></i>
+                                <?= htmlspecialchars($s['suggested_question_text']) ?>
+                            </h6>
+                            <?php if (!empty($s['question_id'])): ?>
+                            <div class="mb-1">
+                                <small class="text-muted">
+                                    <i class="fas fa-link me-1"></i>Pergunta #<?= $s['question_id'] ?>
+                                    <?php if (!empty($s['question_text_ref'])): ?>
+                                        — <?= htmlspecialchars(mb_strimwidth($s['question_text_ref'], 0, 60, '...')) ?>
+                                    <?php endif; ?>
+                                </small>
+                            </div>
+                            <?php endif; ?>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
                                 <?php if (!empty($s['questionnaire_title'])): ?>
-                                    <small class="text-muted"><?= htmlspecialchars($s['questionnaire_title']) ?></small>
+                                    <small class="text-muted"><i class="fas fa-clipboard-list me-1"></i><?= htmlspecialchars($s['questionnaire_title']) ?></small>
                                 <?php endif; ?>
                                 <?php
                                     $statusClass = 'status-pending';
