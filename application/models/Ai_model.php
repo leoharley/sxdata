@@ -52,6 +52,36 @@ class Ai_model extends CI_Model {
     }
 
     // ============================================================
+    // DIRETRIZES
+    // ============================================================
+
+    public function get_directives($active_only = false) {
+        if ($active_only) {
+            $this->db->where('is_active', true);
+        }
+        return $this->db->order_by('priority', 'DESC')
+                        ->order_by('created_at', 'DESC')
+                        ->get('ai_directives')
+                        ->result_array();
+    }
+
+    public function get_active_directives_for_feature($feature_key) {
+        $directives = $this->db->where('is_active', true)
+                               ->order_by('priority', 'DESC')
+                               ->get('ai_directives')
+                               ->result_array();
+
+        $applicable = array();
+        foreach ($directives as $d) {
+            $applies_to = json_decode($d['applies_to'] ?? '[]', true);
+            if (empty($applies_to) || in_array($feature_key, $applies_to)) {
+                $applicable[] = $d;
+            }
+        }
+        return $applicable;
+    }
+
+    // ============================================================
     // PROMPTS
     // ============================================================
 

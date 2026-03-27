@@ -35,6 +35,7 @@
         <?php else: ?>
             <span class="badge bg-danger px-3 py-2"><i class="fas fa-exclamation-triangle me-1"></i>API Não Configurada</span>
         <?php endif; ?>
+        <a href="<?= base_url('ai/directives') ?>" class="btn btn-outline-primary ms-2"><i class="fas fa-shield-alt me-1"></i>Diretrizes</a>
         <a href="<?= base_url('ai/settings') ?>" class="btn btn-primary ms-2"><i class="fas fa-cog me-1"></i>Configurações</a>
     </div>
 </div>

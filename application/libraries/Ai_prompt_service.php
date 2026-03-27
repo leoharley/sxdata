@@ -35,9 +35,17 @@ class Ai_prompt_service {
         $messages = array();
 
         if (!empty($prompt->system_prompt)) {
+            $system_content = $this->interpolate($prompt->system_prompt, $variables);
+
+            // Injetar diretrizes ativas para esta feature
+            $directives_text = $this->build_directives_block($feature_key);
+            if ($directives_text) {
+                $system_content .= "\n\n" . $directives_text;
+            }
+
             $messages[] = array(
                 'role' => 'system',
-                'content' => $this->interpolate($prompt->system_prompt, $variables),
+                'content' => $system_content,
             );
         }
 
@@ -351,6 +359,45 @@ class Ai_prompt_service {
     // ============================================================
     // MÉTODOS AUXILIARES
     // ============================================================
+
+    /**
+     * Monta bloco de diretrizes do admin para injetar no system prompt
+     */
+    private function build_directives_block($feature_key) {
+        $directives = $this->CI->Ai_model->get_active_directives_for_feature($feature_key);
+        if (empty($directives)) {
+            return '';
+        }
+
+        $type_headers = array(
+            'instruction' => 'INSTRUÇÕES DO ADMINISTRADOR',
+            'restriction' => 'RESTRIÇÕES E LIMITES (NUNCA VIOLAR)',
+            'persona' => 'COMPORTAMENTO E PERSONA',
+            'format' => 'FORMATO DE RESPOSTA',
+            'context' => 'CONTEXTO ADICIONAL',
+        );
+
+        $grouped = array();
+        foreach ($directives as $d) {
+            $type = $d['directive_type'] ?? 'instruction';
+            $grouped[$type][] = $d['content'];
+        }
+
+        $blocks = array();
+        // Prioridade de tipo: restrições primeiro
+        $type_order = array('restriction', 'instruction', 'persona', 'format', 'context');
+        foreach ($type_order as $type) {
+            if (!isset($grouped[$type])) continue;
+            $header = $type_headers[$type] ?? strtoupper($type);
+            $items = array();
+            foreach ($grouped[$type] as $i => $content) {
+                $items[] = ($i + 1) . '. ' . $content;
+            }
+            $blocks[] = "=== {$header} ===\n" . implode("\n", $items);
+        }
+
+        return "--- DIRETRIZES DO ADMINISTRADOR ---\nAs diretrizes abaixo foram definidas pelo administrador do sistema e devem ser seguidas rigorosamente.\n\n" . implode("\n\n", $blocks);
+    }
 
     /**
      * Interpola variáveis no template de prompt

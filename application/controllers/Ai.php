@@ -1324,6 +1324,80 @@ class Ai extends CI_Controller {
     }
 
     // ============================================================
+    // DIRETRIZES DA IA
+    // ============================================================
+
+    public function directives() {
+        $data['title'] = 'Diretrizes da IA - SXData';
+        $data['directives'] = $this->Ai_model->get_directives();
+
+        $this->load->view('admin/header', $data);
+        $this->load->view('admin/ai/directives', $data);
+        $this->load->view('admin/footer');
+    }
+
+    public function save_directive() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+
+        $data = array(
+            'title' => $this->input->post('title'),
+            'content' => $this->input->post('content'),
+            'directive_type' => $this->input->post('directive_type'),
+            'category' => $this->input->post('category'),
+            'priority' => (int) $this->input->post('priority'),
+            'is_active' => (int) $this->input->post('is_active'),
+            'applies_to' => $this->input->post('applies_to'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        );
+
+        if ($id) {
+            $this->db->where('id', $id)->update('ai_directives', $data);
+        } else {
+            $data['created_by'] = $this->session->userdata('admin_id');
+            $data['created_at'] = date('Y-m-d H:i:s');
+            $this->db->insert('ai_directives', $data);
+        }
+
+        echo json_encode(array('success' => true));
+    }
+
+    public function get_directive() {
+        header('Content-Type: application/json');
+        $id = $this->input->get('id');
+        $directive = $this->db->where('id', $id)->get('ai_directives')->row();
+        if ($directive) {
+            echo json_encode(array('success' => true, 'directive' => $directive));
+        } else {
+            echo json_encode(array('success' => false, 'message' => 'Diretriz não encontrada.'));
+        }
+    }
+
+    public function toggle_directive() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+        $active = (int) $this->input->post('is_active');
+        $this->db->where('id', $id)->update('ai_directives', array(
+            'is_active' => $active,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ));
+        echo json_encode(array('success' => true));
+    }
+
+    public function delete_directive() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+        $this->db->where('id', $id)->delete('ai_directives');
+        echo json_encode(array('success' => true));
+    }
+
+    public function clear_directives() {
+        header('Content-Type: application/json');
+        $this->db->truncate('ai_directives');
+        echo json_encode(array('success' => true));
+    }
+
+    // ============================================================
     // AUTH
     // ============================================================
 
