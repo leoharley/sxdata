@@ -267,7 +267,7 @@
             <div class="col-md-6 mb-3">
                 <div class="border rounded p-3">
                     <h6 class="mb-3" style="color: var(--secondary-color);">
-                        <?= htmlspecialchars($chart['title'] ?? 'Gráfico ' . ($index + 1)) ?>
+                        <?= linkify_questions($chart['title'] ?? 'Gráfico ' . ($index + 1)) ?>
                     </h6>
                     <div class="chart-container">
                         <canvas id="chart-<?= $index ?>"></canvas>
