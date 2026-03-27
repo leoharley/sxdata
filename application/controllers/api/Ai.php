@@ -9,6 +9,7 @@ class Ai extends CI_Controller {
 
     public function __construct() {
         parent::__construct();
+        $this->load->library('session');
         $this->load->model('Ai_model');
         $this->load->model('Response_model');
         $this->load->model('Questionnaire_model');
