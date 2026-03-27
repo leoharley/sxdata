@@ -559,13 +559,45 @@ function is_checkbox_checked($value) {
                                     </button>
                                 </div>
                                 
+                                <!-- Dicas de Follow-up -->
+                                <div class="mt-3">
+                                    <label class="form-label small fw-bold">
+                                        <i class="fas fa-lightbulb me-1" style="color: var(--primary-color);"></i>Dicas de Follow-up
+                                        <small class="text-muted fw-normal">(exibidas no app ao tocar no ícone ?)</small>
+                                    </label>
+                                    <div id="tipsContainer-<?= $index ?>">
+                                        <?php
+                                            $tips = isset($question_tips[$question->id]) ? $question_tips[$question->id] : array();
+                                        ?>
+                                        <?php foreach ($tips as $ti => $tip): ?>
+                                        <div class="input-group input-group-sm mb-2 tip-item">
+                                            <span class="input-group-text">
+                                                <?= $ti + 1 ?>.
+                                                <?php if ($tip->source === 'ai_approved'): ?>
+                                                    <i class="fas fa-robot ms-1 text-info" title="Aprovado da IA"></i>
+                                                <?php endif; ?>
+                                            </span>
+                                            <input type="text" name="questions[<?= $index ?>][tips][]" class="form-control"
+                                                   value="<?= htmlspecialchars($tip->tip) ?>"
+                                                   placeholder="Ex: Se mencionar X, pergunte sobre Y...">
+                                            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.tip-item').remove();">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addTip(<?= $index ?>)">
+                                        <i class="fas fa-plus me-1"></i>Adicionar dica
+                                    </button>
+                                </div>
+
                                 <!-- Lógica Condicional -->
                                 <div id="conditionalLogic-<?= $index ?>" class="conditional-rules" style="display: none;">
                                     <h6 class="mb-3">
                                         <i class="fas fa-project-diagram me-2"></i>
                                         Lógica Condicional
                                     </h6>
-                                    
+
                                     <!-- Seletor de Tipo de Lógica -->
                                     <div class="logic-type-selector">
                                         <div class="logic-type-btn" onclick="selectLogicType(<?= $index ?>, 'visibility')">
@@ -1512,13 +1544,25 @@ function addQuestion() {
                     </button>
                 </div>
                 
+                <!-- Dicas de Follow-up -->
+                <div class="mt-3">
+                    <label class="form-label small fw-bold">
+                        <i class="fas fa-lightbulb me-1" style="color: var(--primary-color);"></i>Dicas de Follow-up
+                        <small class="text-muted fw-normal">(exibidas no app ao tocar no ícone ?)</small>
+                    </label>
+                    <div id="tipsContainer-${questionIndex}"></div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addTip(${questionIndex})">
+                        <i class="fas fa-plus me-1"></i>Adicionar dica
+                    </button>
+                </div>
+
                 <!-- Lógica Condicional -->
                 <div id="conditionalLogic-${questionIndex}" class="conditional-rules" style="display: none;">
                     <h6 class="mb-3">
                         <i class="fas fa-project-diagram me-2"></i>
                         Lógica Condicional
                     </h6>
-                    
+
                     <!-- Seletor de Tipo de Lógica -->
                     <div class="logic-type-selector">
                         <div class="logic-type-btn" onclick="selectLogicType(${questionIndex}, 'visibility')">
@@ -1686,6 +1730,19 @@ function updateOptionValue(textInput, questionIndex) {
 }
 
 // Função para adicionar opção
+function addTip(questionIndex) {
+    var container = document.getElementById('tipsContainer-' + questionIndex);
+    var count = container.querySelectorAll('.tip-item').length;
+    var div = document.createElement('div');
+    div.className = 'input-group input-group-sm mb-2 tip-item';
+    div.innerHTML = '<span class="input-group-text">' + (count + 1) + '.</span>' +
+        '<input type="text" name="questions[' + questionIndex + '][tips][]" class="form-control" ' +
+        'placeholder="Ex: Se mencionar X, pergunte sobre Y...">' +
+        '<button type="button" class="btn btn-outline-danger" onclick="this.closest(\'.tip-item\').remove();">' +
+        '<i class="fas fa-times"></i></button>';
+    container.appendChild(div);
+}
+
 function addOption(questionIndex) {
     const container = document.getElementById(`optionsContainer-${questionIndex}`);
     const optionIndex = container.children.length;

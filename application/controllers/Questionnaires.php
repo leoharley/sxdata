@@ -495,6 +495,12 @@ class Questionnaires extends CI_Controller {
                                         }
                                     }
                                 }
+
+                                // Salvar dicas de follow-up
+                                if ($question_id) {
+                                    $tips = isset($question['tips']) ? $question['tips'] : array();
+                                    $this->_save_followup_tips($question_id, $tips);
+                                }
                             }
 
                             // Remover perguntas que foram excluídas
@@ -544,6 +550,9 @@ class Questionnaires extends CI_Controller {
         $data['aplicadores'] = $this->User_model->get_aplicadores();
         $data['projects'] = $this->Project_model->get_for_select();
         
+        // Carregar dicas de follow-up agrupadas por question_id
+        $data['question_tips'] = $this->_get_all_question_tips($id);
+
         // Decodificar aplicadores selecionados
         $data['aplicadores_selecionados'] = array();
         if ($questionnaire->aplicadores) {
@@ -1655,6 +1664,45 @@ class Questionnaires extends CI_Controller {
     /**
      * Verificação de autenticação
      */
+    private function _save_followup_tips($question_id, $tips) {
+        // Remover tips manuais existentes
+        $this->db->where('question_id', $question_id)->delete('question_followup_tips');
+
+        if (empty($tips) || !is_array($tips)) return;
+
+        foreach ($tips as $tip_text) {
+            $tip_text = trim($tip_text);
+            if (empty($tip_text)) continue;
+
+            $this->db->insert('question_followup_tips', array(
+                'question_id' => $question_id,
+                'tip'         => $tip_text,
+                'source'      => 'manual',
+                'created_by'  => $this->session->userdata('admin_id'),
+            ));
+        }
+    }
+
+    private function _get_all_question_tips($questionnaire_id) {
+        $questions = $this->Question_model->get_by_questionnaire($questionnaire_id);
+        $qids = array();
+        foreach ($questions as $q) {
+            $qids[] = $q->id;
+        }
+        if (empty($qids)) return array();
+
+        $tips = $this->db->where_in('question_id', $qids)
+                         ->order_by('id', 'ASC')
+                         ->get('question_followup_tips')
+                         ->result();
+
+        $grouped = array();
+        foreach ($tips as $tip) {
+            $grouped[$tip->question_id][] = $tip;
+        }
+        return $grouped;
+    }
+
     private function check_auth() {
         if (!$this->session->userdata('admin_logged_in')) {
             redirect('auth/login');

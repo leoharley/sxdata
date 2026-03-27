@@ -121,6 +121,9 @@ $route['api/health'] = 'api/system/health';
 // API de IA (preparação para app móvel)
 $route['api/ai/status'] = 'api/ai/status';
 $route['api/ai/transcribe'] = 'api/ai/transcribe';
+$route['api/ai/followup-tips'] = 'api/ai/followup_tips';
+$route['ai/action_followup'] = 'ai/action_followup';
+$route['ai/edit_followup'] = 'ai/edit_followup';
 $route['api/ai/transcriptions/sync'] = 'api/ai/transcriptions_sync';
 $route['api/ai/check-inconsistencies'] = 'api/ai/check_inconsistencies';
 $route['api/ai/suggest-fill'] = 'api/ai/suggest_fill';

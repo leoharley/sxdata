@@ -1097,6 +1097,74 @@ class Ai extends CI_Controller {
         echo json_encode($result);
     }
 
+    public function action_followup() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('suggestion_id');
+        $action = $this->input->post('action');
+
+        $suggestion = $this->db->where('id', $id)->get('ai_followup_suggestions')->row();
+        if (!$suggestion) {
+            echo json_encode(array('success' => false, 'message' => 'Sugestão não encontrada.'));
+            return;
+        }
+
+        if ($action === 'approve') {
+            // Marcar como aprovada
+            $this->Ai_model->update_followup_suggestion($id, array(
+                'status' => 'approved',
+                'reviewed_by' => $this->session->userdata('admin_id'),
+                'reviewed_at' => date('Y-m-d H:i:s'),
+            ));
+
+            // Inserir como tip na pergunta (se tem question_id)
+            if (!empty($suggestion->question_id)) {
+                $exists = $this->db->where('question_id', $suggestion->question_id)
+                                   ->where('tip', $suggestion->suggested_question_text)
+                                   ->count_all_results('question_followup_tips');
+
+                if ($exists == 0) {
+                    $this->db->insert('question_followup_tips', array(
+                        'question_id'      => $suggestion->question_id,
+                        'tip'              => $suggestion->suggested_question_text,
+                        'source'           => 'ai_approved',
+                        'ai_suggestion_id' => $id,
+                        'created_by'       => $this->session->userdata('admin_id'),
+                    ));
+                }
+            }
+
+            echo json_encode(array('success' => true, 'message' => 'Sugestão aprovada e adicionada como dica.'));
+        } elseif ($action === 'discard') {
+            $this->Ai_model->update_followup_suggestion($id, array(
+                'status' => 'discarded',
+                'reviewed_by' => $this->session->userdata('admin_id'),
+                'reviewed_at' => date('Y-m-d H:i:s'),
+            ));
+            echo json_encode(array('success' => true));
+        } else {
+            echo json_encode(array('success' => false, 'message' => 'Ação inválida.'));
+        }
+    }
+
+    public function edit_followup() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('suggestion_id');
+        $text = $this->input->post('question_text');
+
+        if (empty($text)) {
+            echo json_encode(array('success' => false, 'message' => 'Texto é obrigatório.'));
+            return;
+        }
+
+        $this->Ai_model->update_followup_suggestion($id, array(
+            'suggested_question_text' => trim($text),
+            'status' => 'edited',
+            'reviewed_by' => $this->session->userdata('admin_id'),
+            'reviewed_at' => date('Y-m-d H:i:s'),
+        ));
+        echo json_encode(array('success' => true));
+    }
+
     public function clear_followups() {
         header('Content-Type: application/json');
         $this->db->truncate('ai_followup_suggestions');

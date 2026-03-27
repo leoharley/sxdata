@@ -122,6 +122,40 @@ class Ai extends CI_Controller {
     }
 
     /**
+     * GET /api/ai/followup-tips?questionnaire_id={id}
+     * Retorna dicas de follow-up para o app
+     */
+    public function followup_tips() {
+        $user = $this->verify_auth();
+        if (!$user) return;
+
+        $questionnaire_id = $this->input->get('questionnaire_id');
+        if (empty($questionnaire_id)) {
+            echo json_encode(array('success' => false, 'message' => 'questionnaire_id é obrigatório.'));
+            return;
+        }
+
+        $question_ids = $this->db->select('id')
+                                 ->where('questionnaire_id', $questionnaire_id)
+                                 ->get('questions')
+                                 ->result();
+        $qids = array_map(function($r) { return (int) $r->id; }, $question_ids);
+
+        if (empty($qids)) {
+            echo json_encode(array('success' => true, 'data' => array('tips' => array())));
+            return;
+        }
+
+        $tips = $this->db->select('question_id, tip')
+                         ->where_in('question_id', $qids)
+                         ->order_by('question_id, id')
+                         ->get('question_followup_tips')
+                         ->result();
+
+        echo json_encode(array('success' => true, 'data' => array('tips' => $tips)));
+    }
+
+    /**
      * POST /api/ai/transcribe
      * Transcreve áudio enviado pelo app
      */
