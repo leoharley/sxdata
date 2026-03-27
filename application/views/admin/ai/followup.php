@@ -110,7 +110,14 @@
 <div class="ai-page-card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5><i class="fas fa-lightbulb me-2"></i>Sugestões</h5>
-        <span class="badge bg-secondary"><?= count($suggestions) ?> sugestão(ões)</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary"><?= count($suggestions) ?> sugestão(ões)</span>
+            <?php if (!empty($suggestions)): ?>
+            <button class="btn btn-sm btn-outline-danger" id="btnClearFollowups">
+                <i class="fas fa-trash me-1"></i>Limpar Todas
+            </button>
+            <?php endif; ?>
+        </div>
     </div>
     <div class="card-body p-3">
         <?php if (empty($suggestions)): ?>
@@ -298,6 +305,23 @@ function saveEdit() {
         error: function() { showToast('Erro de rede.', 'danger'); }
     });
 }
+
+$('#btnClearFollowups').on('click', function() {
+    if (!confirm('Excluir todas as sugestões de follow-up? Esta ação não pode ser desfeita.')) return;
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Limpando...';
+    $.ajax({
+        url: '<?= base_url("ai/clear_followups") ?>',
+        type: 'POST',
+        dataType: 'json',
+        success: function(data) {
+            if (data.success) location.reload();
+            else { alert(data.message || 'Erro.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>Limpar Todas'; }
+        },
+        error: function() { alert('Erro de comunicação.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>Limpar Todas'; }
+    });
+});
 
 function showToast(message, type) {
     var existing = document.getElementById('aiToast');

@@ -1032,6 +1032,12 @@ class Ai extends CI_Controller {
         echo json_encode($result);
     }
 
+    public function clear_followups() {
+        header('Content-Type: application/json');
+        $this->db->truncate('ai_followup_suggestions');
+        echo json_encode(array('success' => true));
+    }
+
     // ============================================================
     // ANÁLISE ESTATÍSTICA
     // ============================================================
