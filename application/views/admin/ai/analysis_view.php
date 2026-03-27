@@ -28,6 +28,25 @@
         border: 1px solid rgba(143,174,93,0.2); border-radius: 0.75rem;
         padding: 1.5rem;
     }
+    .question-ref-link {
+        color: var(--primary-color);
+        text-decoration: none;
+        border-bottom: 1px dashed var(--primary-color);
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+    .question-ref-link:hover {
+        color: var(--secondary-color);
+        border-bottom-color: var(--secondary-color);
+    }
+    .question-modal-options .opt-item {
+        display: inline-block;
+        background: #e9ecef;
+        padding: 0.25rem 0.6rem;
+        border-radius: 0.25rem;
+        font-size: 0.85rem;
+        margin: 0.2rem;
+    }
 </style>
 
 <?php
@@ -37,10 +56,20 @@
     $insights        = is_string($analysis->insights        ?? '') ? json_decode($analysis->insights,        true) : ($analysis->insights        ?? []);
     $chart_suggestions = is_string($analysis->chart_suggestions ?? '') ? json_decode($analysis->chart_suggestions, true) : ($analysis->chart_suggestions ?? []);
 
+    // Converte referências q_XXX em links clicáveis
+    function linkify_questions($text) {
+        $escaped = htmlspecialchars($text);
+        return preg_replace(
+            '/\bq_(\d+)\b/',
+            '<a href="javascript:void(0)" class="question-ref-link" data-question-id="$1" title="Ver pergunta #$1"><strong>q_$1</strong></a>',
+            $escaped
+        );
+    }
+
     // Função para renderizar um item de lista (string ou array com chaves variadas)
     function render_list_item($item, $icon_class, $icon_color = '') {
         if (is_string($item)) {
-            echo '<p class="mb-0"><i class="' . $icon_class . ' me-2" style="' . $icon_color . '"></i>' . htmlspecialchars($item) . '</p>';
+            echo '<p class="mb-0"><i class="' . $icon_class . ' me-2" style="' . $icon_color . '"></i>' . linkify_questions($item) . '</p>';
             return;
         }
         if (is_array($item)) {
@@ -53,12 +82,12 @@
                 // Nenhuma chave conhecida — renderiza todos os valores string do array
                 $parts = [];
                 foreach ($item as $k => $v) {
-                    if (is_scalar($v) && $v !== '') $parts[] = htmlspecialchars($v);
+                    if (is_scalar($v) && $v !== '') $parts[] = linkify_questions((string)$v);
                 }
                 echo '<p class="mb-0"><i class="' . $icon_class . ' me-2" style="' . $icon_color . '"></i>' . implode(' — ', $parts) . '</p>';
             } else {
-                if ($title) echo '<strong style="color: var(--secondary-color);">' . htmlspecialchars($title) . '</strong>';
-                if ($desc)  echo '<p class="mb-0 text-muted small">' . htmlspecialchars($desc) . '</p>';
+                if ($title) echo '<strong style="color: var(--secondary-color);">' . linkify_questions($title) . '</strong>';
+                if ($desc)  echo '<p class="mb-0 text-muted small">' . linkify_questions($desc) . '</p>';
             }
         }
     }
@@ -110,7 +139,7 @@
                     <?php if (is_array($value)): ?>
                         <ul class="mb-0 ps-3 small">
                         <?php foreach ($value as $k => $v): ?>
-                            <li><?= htmlspecialchars(is_string($k) ? str_replace('_', ' ', $k) . ': ' : '') ?><strong><?= htmlspecialchars(is_scalar($v) ? $v : json_encode($v)) ?></strong></li>
+                            <li><?= htmlspecialchars(is_string($k) ? str_replace('_', ' ', $k) . ': ' : '') ?><strong><?= is_scalar($v) ? linkify_questions((string)$v) : htmlspecialchars(json_encode($v)) ?></strong></li>
                         <?php endforeach; ?>
                         </ul>
                     <?php else: ?>
@@ -122,7 +151,7 @@
         </div>
     <?php else: ?>
         <p class="mb-0" style="font-size: 1.05rem; line-height: 1.7; color: #333;">
-            <?= nl2br(htmlspecialchars($summary_raw)) ?>
+            <?= nl2br(linkify_questions($summary_raw)) ?>
         </p>
     <?php endif; ?>
 </div>
@@ -330,4 +359,118 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 <?php endif; ?>
+</script>
+
+<!-- Modal: Detalhes da Pergunta -->
+<div class="modal fade" id="questionDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), #1a2847); color: white;">
+                <h5 class="modal-title" id="questionModalTitle"><i class="fas fa-question-circle me-2"></i>Pergunta</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="questionModalBody">
+                <div class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="text-muted mt-2 mb-0">Carregando...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function waitForJQuery() {
+    if (typeof jQuery === 'undefined') return setTimeout(waitForJQuery, 50);
+    jQuery(function($) {
+        var BASE = '<?= base_url() ?>';
+        var questionCache = {};
+
+        $(document).on('click', '.question-ref-link', function(e) {
+            e.preventDefault();
+            var qId = $(this).data('question-id');
+            var modal = new bootstrap.Modal(document.getElementById('questionDetailModal'));
+
+            $('#questionModalTitle').html('<i class="fas fa-question-circle me-2"></i>Pergunta #' + qId);
+            $('#questionModalBody').html(
+                '<div class="text-center py-3">' +
+                '<div class="spinner-border text-primary" role="status"></div>' +
+                '<p class="text-muted mt-2 mb-0">Carregando...</p></div>'
+            );
+            modal.show();
+
+            if (questionCache[qId]) {
+                renderQuestion(questionCache[qId]);
+                return;
+            }
+
+            $.ajax({
+                url: BASE + 'ai/get_question_detail',
+                type: 'GET',
+                data: { id: qId },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.success) {
+                        questionCache[qId] = res.question;
+                        renderQuestion(res.question);
+                    } else {
+                        $('#questionModalBody').html(
+                            '<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle me-2"></i>' +
+                            (res.message || 'Pergunta não encontrada.') + '</div>'
+                        );
+                    }
+                },
+                error: function() {
+                    $('#questionModalBody').html(
+                        '<div class="alert alert-danger mb-0"><i class="fas fa-times-circle me-2"></i>Erro ao buscar pergunta.</div>'
+                    );
+                }
+            });
+        });
+
+        function renderQuestion(q) {
+            var typeLabels = {
+                'text': 'Texto', 'textarea': 'Texto Longo', 'number': 'Número',
+                'email': 'E-mail', 'date': 'Data', 'datetime': 'Data/Hora',
+                'radio': 'Escolha Única', 'checkbox': 'Múltipla Escolha', 'select': 'Seleção'
+            };
+            var typeLabel = typeLabels[q.question_type] || q.question_type;
+
+            var html = '<div class="mb-3">' +
+                '<span class="badge bg-secondary me-2">ID: ' + q.id + '</span>' +
+                '<span class="badge bg-info">' + typeLabel + '</span>' +
+                (q.is_required == 1 ? '<span class="badge bg-danger ms-1">Obrigatória</span>' : '') +
+                '</div>' +
+                '<div class="p-3 rounded mb-3" style="background: #f8f9fa; border-left: 4px solid var(--primary-color);">' +
+                '<h6 class="mb-0" style="color: var(--secondary-color);">' + escapeHtml(q.question_text) + '</h6>' +
+                '</div>';
+
+            if (q.questionnaire_title) {
+                html += '<p class="small text-muted mb-2"><i class="fas fa-clipboard-list me-1"></i>Questionário: <strong>' + escapeHtml(q.questionnaire_title) + '</strong></p>';
+            }
+
+            if (q.options && q.options.length > 0) {
+                html += '<p class="small text-muted mb-1"><i class="fas fa-list me-1"></i>Opções:</p>' +
+                    '<div class="question-modal-options">';
+                q.options.forEach(function(opt) {
+                    html += '<span class="opt-item">' + escapeHtml(opt.option_text || opt) + '</span>';
+                });
+                html += '</div>';
+            }
+
+            if (q.order_index !== undefined) {
+                html += '<p class="small text-muted mt-3 mb-0"><i class="fas fa-sort-numeric-down me-1"></i>Posição no questionário: <strong>#' + q.order_index + '</strong></p>';
+            }
+
+            $('#questionModalBody').html(html);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+    });
+})();
 </script>

@@ -37,6 +37,7 @@ $route['admin/ai/transcriptions'] = 'ai/transcriptions';
 $route['admin/ai/inconsistencies'] = 'ai/inconsistencies';
 $route['ai/clear_inconsistencies'] = 'ai/clear_inconsistencies';
 $route['ai/clear_followups'] = 'ai/clear_followups';
+$route['ai/get_question_detail'] = 'ai/get_question_detail';
 $route['admin/ai/corrections'] = 'ai/corrections';
 $route['admin/ai/smart_fill'] = 'ai/smart_fill';
 $route['ai/approve_suggestion'] = 'ai/approve_suggestion';

@@ -1136,6 +1136,46 @@ class Ai extends CI_Controller {
         $this->load->view('admin/footer');
     }
 
+    public function get_question_detail() {
+        header('Content-Type: application/json');
+        $id = $this->input->get('id');
+        $this->load->model('Question_model');
+
+        $question = $this->Question_model->get_by_id($id);
+        if (!$question) {
+            echo json_encode(array('success' => false, 'message' => 'Pergunta não encontrada.'));
+            return;
+        }
+
+        $result = array(
+            'id' => $question->id,
+            'question_text' => $question->question_text,
+            'question_type' => $question->question_type ?? 'text',
+            'is_required' => $question->is_required ?? 0,
+            'order_index' => $question->order_index ?? null,
+        );
+
+        // Buscar nome do questionário
+        $questionnaire = $this->Questionnaire_model->get_by_id($question->questionnaire_id);
+        if ($questionnaire) {
+            $result['questionnaire_title'] = $questionnaire->title ?? $questionnaire->name ?? '';
+        }
+
+        // Buscar opções se houver
+        if (in_array($question->question_type, array('radio', 'checkbox', 'select'))) {
+            $options = $this->Question_model->get_options($question->id);
+            $result['options'] = array();
+            foreach ($options as $opt) {
+                $result['options'][] = array(
+                    'option_text' => $opt->option_text,
+                    'option_value' => $opt->option_value ?? $opt->option_text,
+                );
+            }
+        }
+
+        echo json_encode(array('success' => true, 'question' => $result));
+    }
+
     // ============================================================
     // GRÁFICOS INTELIGENTES
     // ============================================================
