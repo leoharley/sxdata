@@ -17,6 +17,13 @@ class User_model extends CI_Model {
         return $this->db->get_where('users', array('id' => $id))->row();
     }
 
+    public function get_by_role($role) {
+        $this->db->where('role', $role);
+        $this->db->where('is_active', TRUE);
+        $this->db->order_by('full_name', 'ASC');
+        return $this->db->get('users')->result();
+    }
+
     public function get_aplicadores() {
         $this->db->where('role', 'aplicador');
         $this->db->where('is_active', TRUE);

@@ -61,9 +61,29 @@
                            placeholder="Nome da empresa ou pessoa contratante">
                     <?= form_error('client_name', '<div class="invalid-feedback">', '</div>') ?>
                 </div>
+
+                <?php if (!empty($clients)): ?>
+                <div class="mb-3">
+                    <label class="form-label">Clientes com Acesso</label>
+                    <small class="text-muted d-block mb-2">Selecione os clientes que poderão visualizar as análises deste projeto.</small>
+                    <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                        <?php foreach ($clients as $c): ?>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="client_ids[]"
+                                   value="<?= $c->id ?>" id="client_<?= $c->id ?>"
+                                   <?= in_array($c->id, $selected_client_ids ?? []) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="client_<?= $c->id ?>">
+                                <i class="fas fa-user-tag me-1 text-info"></i><?= htmlspecialchars($c->full_name) ?>
+                                <small class="text-muted">(<?= htmlspecialchars($c->username) ?>)</small>
+                            </label>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
-        
+
         <!-- Cronograma e Orçamento -->
         <div class="card mb-4">
             <div class="card-header">

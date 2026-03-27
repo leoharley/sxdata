@@ -49,6 +49,10 @@ class Projects extends CI_Controller {
                 $project_id = $this->Project_model->create($project_data);
 
                 if ($project_id) {
+                    // Salvar clientes vinculados
+                    $client_ids = $this->input->post('client_ids');
+                    $this->_save_project_clients($project_id, $client_ids);
+
                     $this->session->set_flashdata('success', 'Projeto criado com sucesso!');
                     redirect('projects');
                 } else {
@@ -63,7 +67,9 @@ class Projects extends CI_Controller {
         }
 
         $data['title'] = 'Criar Projeto - SXData';
-        
+        $data['clients'] = $this->User_model->get_by_role('cliente');
+        $data['selected_client_ids'] = $this->input->post('client_ids') ?: array();
+
         $this->load->view('admin/header', $data);
         $this->load->view('admin/projects/create', $data);
         $this->load->view('admin/footer');
@@ -97,6 +103,10 @@ class Projects extends CI_Controller {
                 );
 
                 if ($this->Project_model->update($id, $project_data)) {
+                    // Salvar clientes vinculados
+                    $client_ids = $this->input->post('client_ids');
+                    $this->_save_project_clients($id, $client_ids);
+
                     $this->session->set_flashdata('success', 'Projeto atualizado com sucesso!');
                     redirect('projects');
                 } else {
@@ -112,7 +122,9 @@ class Projects extends CI_Controller {
         $data['title'] = 'Editar Projeto - SXData';
         $data['project'] = $project;
         $data['questionnaires'] = $this->Questionnaire_model->get_by_project($id);
-        
+        $data['clients'] = $this->User_model->get_by_role('cliente');
+        $data['selected_client_ids'] = $this->_get_project_client_ids($id);
+
         $this->load->view('admin/header', $data);
         $this->load->view('admin/projects/edit', $data);
         $this->load->view('admin/footer');
@@ -240,6 +252,24 @@ class Projects extends CI_Controller {
         }
         
         return $errors;
+    }
+
+    private function _save_project_clients($project_id, $client_ids) {
+        $this->db->where('project_id', $project_id)->delete('project_clients');
+        if (!empty($client_ids) && is_array($client_ids)) {
+            foreach ($client_ids as $uid) {
+                $this->db->insert('project_clients', array(
+                    'project_id' => $project_id,
+                    'user_id' => (int) $uid,
+                    'created_at' => date('Y-m-d H:i:s'),
+                ));
+            }
+        }
+    }
+
+    private function _get_project_client_ids($project_id) {
+        $rows = $this->db->select('user_id')->where('project_id', $project_id)->get('project_clients')->result();
+        return array_map(function($r) { return (int) $r->user_id; }, $rows);
     }
 
     private function check_auth() {

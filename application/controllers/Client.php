@@ -14,8 +14,16 @@ class Client extends CI_Controller {
 
     public function dashboard() {
         $data['title'] = 'Painel de Análises - SXData';
-        $data['analyses'] = $this->Ai_model->get_statistical_analyses();
-        $data['questionnaires'] = $this->Questionnaire_model->get_active();
+        $user_id = $this->session->userdata('admin_id');
+        $role = $this->session->userdata('admin_role');
+
+        if ($role === 'cliente') {
+            // Filtrar apenas análises de projetos aos quais o cliente tem acesso
+            $project_ids = $this->_get_client_project_ids($user_id);
+            $data['analyses'] = $this->_get_analyses_for_projects($project_ids);
+        } else {
+            $data['analyses'] = $this->Ai_model->get_statistical_analyses();
+        }
 
         $this->load->view('admin/header', $data);
         $this->load->view('client/dashboard', $data);
@@ -26,8 +34,8 @@ class Client extends CI_Controller {
         $data['title'] = 'Análise - SXData';
         $analysis = $this->Ai_model->get_statistical_analysis($id);
 
-        if (!$analysis) {
-            $this->session->set_flashdata('error', 'Análise não encontrada.');
+        if (!$analysis || !$this->_client_can_view_analysis($analysis)) {
+            $this->session->set_flashdata('error', 'Análise não encontrada ou sem permissão.');
             redirect('client/dashboard');
             return;
         }
@@ -107,11 +115,49 @@ class Client extends CI_Controller {
         }
     }
 
+    private function _get_client_project_ids($user_id) {
+        $rows = $this->db->select('project_id')
+                         ->where('user_id', $user_id)
+                         ->get('project_clients')
+                         ->result();
+        return array_map(function($r) { return (int) $r->project_id; }, $rows);
+    }
+
+    private function _get_analyses_for_projects($project_ids) {
+        if (empty($project_ids)) return array();
+
+        // Buscar questionnaire_ids dos projetos
+        $questionnaire_ids = $this->db->select('id')
+                                      ->where_in('project_id', $project_ids)
+                                      ->get('questionnaires')
+                                      ->result();
+        $qids = array_map(function($r) { return (int) $r->id; }, $questionnaire_ids);
+        if (empty($qids)) return array();
+
+        // Buscar análises desses questionários
+        $this->db->select('ai_statistical_analyses.*, q.title as questionnaire_title');
+        $this->db->join('questionnaires q', 'q.id = ai_statistical_analyses.questionnaire_id', 'left');
+        $this->db->where_in('ai_statistical_analyses.questionnaire_id', $qids);
+        $this->db->order_by('ai_statistical_analyses.created_at', 'DESC');
+        return $this->db->get('ai_statistical_analyses')->result_array();
+    }
+
+    private function _client_can_view_analysis($analysis) {
+        $role = $this->session->userdata('admin_role');
+        if ($role !== 'cliente') return true;
+
+        $user_id = $this->session->userdata('admin_id');
+        $project_ids = $this->_get_client_project_ids($user_id);
+        if (empty($project_ids)) return false;
+
+        $qid = $analysis->questionnaire_id;
+        $q = $this->db->select('project_id')->where('id', $qid)->get('questionnaires')->row();
+        return $q && in_array((int) $q->project_id, $project_ids);
+    }
+
     private function check_auth() {
         if (!$this->session->userdata('admin_logged_in')) {
             redirect('auth/login');
         }
-        // Clientes só acessam rotas client/*
-        // Admins/supervisors também podem acessar para preview
     }
 }
