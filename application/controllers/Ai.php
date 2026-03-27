@@ -870,6 +870,116 @@ class Ai extends CI_Controller {
             'message' => "{$count} regra(s) gerada(s) com sucesso."));
     }
 
+    public function approve_adaptive_rule() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+        $this->load->model('Question_model');
+
+        // Buscar a regra
+        $rule = $this->db->where('id', $id)->get('ai_adaptive_rules')->row_array();
+        if (!$rule) {
+            echo json_encode(array('success' => false, 'message' => 'Regra não encontrada.'));
+            return;
+        }
+
+        $source_id = (int) $rule['source_question_id'];
+        $target_id = (int) $rule['target_question_id'];
+        $condition_raw = json_decode($rule['condition_logic'], true);
+
+        // Determinar operador e valor da condição
+        $operator = 'equals';
+        $value = '';
+        if (is_array($condition_raw)) {
+            $operator = $condition_raw['operator'] ?? 'equals';
+            $value = $condition_raw['value'] ?? '';
+        }
+
+        // Buscar lógica condicional existente da pergunta destino
+        $target_question = $this->db->select('id, conditional_logic')->where('id', $target_id)->get('questions')->row();
+        if (!$target_question) {
+            echo json_encode(array('success' => false, 'message' => 'Pergunta destino não encontrada.'));
+            return;
+        }
+
+        $existing_logic = array();
+        if (!empty($target_question->conditional_logic)) {
+            $existing_logic = json_decode($target_question->conditional_logic, true);
+            if (!is_array($existing_logic)) $existing_logic = array();
+        }
+
+        // Nova condição de visibilidade
+        $new_condition = array(
+            'question' => $source_id,
+            'operator' => $operator,
+            'value' => $value,
+        );
+
+        // Verificar se já existe a mesma condição para evitar duplicidade
+        if (!empty($existing_logic['visibility']['conditions'])) {
+            foreach ($existing_logic['visibility']['conditions'] as $c) {
+                if ((int)($c['question'] ?? 0) === $source_id
+                    && ($c['operator'] ?? '') === $operator
+                    && ($c['value'] ?? '') === $value) {
+                    // Já existe, apenas marcar como aprovada
+                    $this->Ai_model->update_adaptive_rule($id, array(
+                        'approved_by' => $this->session->userdata('admin_id'),
+                        'approved_at' => date('Y-m-d H:i:s'),
+                    ));
+                    echo json_encode(array('success' => true, 'message' => 'Regra aprovada. Condição já existia no questionário.'));
+                    return;
+                }
+            }
+        }
+
+        // Montar/mesclar a lógica de visibilidade
+        if (empty($existing_logic['visibility'])) {
+            $existing_logic['visibility'] = array(
+                'operator' => 'AND',
+                'conditions' => array($new_condition),
+            );
+        } else {
+            $existing_logic['visibility']['conditions'][] = $new_condition;
+        }
+
+        // Atualizar a pergunta com a nova lógica condicional
+        $this->Question_model->update($target_id, array(
+            'conditional_logic' => json_encode($existing_logic, JSON_UNESCAPED_UNICODE),
+        ));
+
+        // Marcar regra como aprovada
+        $this->Ai_model->update_adaptive_rule($id, array(
+            'approved_by' => $this->session->userdata('admin_id'),
+            'approved_at' => date('Y-m-d H:i:s'),
+        ));
+
+        echo json_encode(array(
+            'success' => true,
+            'message' => 'Regra aprovada! Lógica condicional aplicada: Q#' . $source_id . ' ' . $operator . ' "' . $value . '" → exibe Q#' . $target_id,
+        ));
+    }
+
+    public function reject_adaptive_rule() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+        $this->Ai_model->update_adaptive_rule($id, array(
+            'is_active' => false,
+            'approved_by' => $this->session->userdata('admin_id'),
+            'approved_at' => date('Y-m-d H:i:s'),
+        ));
+        echo json_encode(array('success' => true));
+    }
+
+    public function restore_adaptive_rule() {
+        header('Content-Type: application/json');
+        $id = $this->input->post('id');
+        $this->Ai_model->update_adaptive_rule($id, array(
+            'is_active' => true,
+            'approved_by' => null,
+            'approved_at' => null,
+        ));
+        echo json_encode(array('success' => true));
+    }
+
     // ============================================================
     // SUGESTÕES DE FOLLOW-UP
     // ============================================================

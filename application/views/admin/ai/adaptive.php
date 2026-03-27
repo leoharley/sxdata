@@ -51,6 +51,10 @@
         text-transform: uppercase;
     }
     .priority-badge { font-size: 0.75rem; padding: 0.2em 0.5em; border-radius: 0.25rem; }
+    .rule-actions { white-space: nowrap; }
+    .badge-approved { background: #8fae5d; color: white; }
+    .badge-rejected { background: #dc3545; color: white; }
+    .badge-pending { background: #f0ad4e; color: #333; }
 </style>
 
 <div class="d-flex justify-content-between align-items-start mb-4">
@@ -165,6 +169,7 @@
                             <th>Prioridade</th>
                             <th>Tipo</th>
                             <th>Status</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -233,10 +238,35 @@
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <?php if (!empty($rule['is_active'])): ?>
-                                    <span class="badge bg-success">Ativa</span>
+                                <?php
+                                    $approval = $rule['approved_by'] ?? null;
+                                    $approved_at = $rule['approved_at'] ?? null;
+                                    $is_rejected = isset($rule['is_active']) && !$rule['is_active'] && $approval;
+                                ?>
+                                <?php if ($approved_at && !$is_rejected): ?>
+                                    <span class="badge badge-approved"><i class="fas fa-check me-1"></i>Aprovada</span>
+                                <?php elseif ($is_rejected): ?>
+                                    <span class="badge badge-rejected"><i class="fas fa-times me-1"></i>Rejeitada</span>
+                                <?php elseif (!empty($rule['is_active'])): ?>
+                                    <span class="badge badge-pending"><i class="fas fa-clock me-1"></i>Pendente</span>
                                 <?php else: ?>
                                     <span class="badge bg-secondary">Inativa</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="rule-actions">
+                                <?php if (empty($approved_at) && !empty($rule['is_active'])): ?>
+                                <button class="btn btn-sm btn-outline-success py-0 px-2 btn-approve-rule" data-id="<?= (int)$rule['id'] ?>" title="Aprovar e aplicar como lógica condicional">
+                                    <i class="fas fa-check me-1"></i>Aprovar
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger py-0 px-2 btn-reject-rule" data-id="<?= (int)$rule['id'] ?>" title="Rejeitar regra">
+                                    <i class="fas fa-times me-1"></i>Rejeitar
+                                </button>
+                                <?php elseif ($approved_at && !$is_rejected): ?>
+                                <small class="text-muted"><i class="fas fa-check-circle text-success me-1"></i>Aplicada</small>
+                                <?php else: ?>
+                                <button class="btn btn-sm btn-outline-secondary py-0 px-2 btn-restore-rule" data-id="<?= (int)$rule['id'] ?>" title="Restaurar para pendente">
+                                    <i class="fas fa-undo me-1"></i>
+                                </button>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -249,8 +279,12 @@
             <h6 class="mt-4 mb-3" style="color: var(--secondary-color); font-weight: 600;">
                 <i class="fas fa-stream me-2"></i>Fluxo Visual
             </h6>
-            <?php foreach ($rules as $rule): ?>
-            <div class="rule-card <?= !empty($rule['ai_generated']) ? 'ai-generated' : 'manual' ?>">
+            <?php foreach ($rules as $rule):
+                $approval2 = $rule['approved_by'] ?? null;
+                $approved_at2 = $rule['approved_at'] ?? null;
+                $is_rejected2 = isset($rule['is_active']) && !$rule['is_active'] && $approval2;
+            ?>
+            <div class="rule-card <?= !empty($rule['ai_generated']) ? 'ai-generated' : 'manual' ?>" id="flow-<?= (int)$rule['id'] ?>">
                 <div class="d-flex align-items-center flex-wrap">
                     <span class="rule-node">Q#<?= $rule['source_question_id'] ?></span>
                     <span class="rule-arrow"><i class="fas fa-arrow-right"></i></span>
@@ -262,10 +296,29 @@
                             <span class="badge" style="background: var(--secondary-color); color: white;"><i class="fas fa-user me-1"></i>Manual</span>
                         <?php endif; ?>
                         <span class="badge bg-secondary ms-1">Prioridade: <?= $rule['priority'] ?></span>
+
+                        <?php if ($approved_at2 && !$is_rejected2): ?>
+                            <span class="badge badge-approved ms-1"><i class="fas fa-check me-1"></i>Aprovada</span>
+                        <?php elseif ($is_rejected2): ?>
+                            <span class="badge badge-rejected ms-1"><i class="fas fa-times me-1"></i>Rejeitada</span>
+                        <?php elseif (!empty($rule['is_active'])): ?>
+                            <span class="badge badge-pending ms-1"><i class="fas fa-clock me-1"></i>Pendente</span>
+                        <?php endif; ?>
                     </div>
                     <?php if (!empty($rule['fallback_target_id'])): ?>
-                    <div class="ms-auto">
+                    <div class="ms-auto me-2">
                         <small class="text-warning"><i class="fas fa-shield-alt me-1"></i>Fallback: Q#<?= $rule['fallback_target_id'] ?></small>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (empty($approved_at2) && !empty($rule['is_active'])): ?>
+                    <div class="ms-auto d-flex gap-1">
+                        <button class="btn btn-sm btn-success py-0 px-2 btn-approve-rule" data-id="<?= (int)$rule['id'] ?>">
+                            <i class="fas fa-check me-1"></i>Aprovar
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-2 btn-reject-rule" data-id="<?= (int)$rule['id'] ?>">
+                            <i class="fas fa-times me-1"></i>Rejeitar
+                        </button>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -344,5 +397,80 @@ document.getElementById('btnGenerateRules').addEventListener('click', function()
         }
     });
 });
+<?php endif; ?>
+
+<?php if (!empty($rules)): ?>
+(function waitForJQuery() {
+    if (typeof jQuery === 'undefined') return setTimeout(waitForJQuery, 50);
+    jQuery(function($) {
+        var BASE = '<?= base_url() ?>';
+
+        // Aprovar regra
+        $(document).on('click', '.btn-approve-rule', function() {
+            var $btn = $(this);
+            var id = $btn.data('id');
+            if (!confirm('Aprovar esta regra? Ela será aplicada como lógica condicional no questionário.')) return;
+
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+            $.ajax({
+                url: BASE + 'ai/approve_adaptive_rule',
+                type: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.success) {
+                        alert(res.message || 'Regra aprovada e aplicada como lógica condicional!');
+                        location.reload();
+                    } else {
+                        alert(res.message || 'Erro ao aprovar.');
+                        $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i>Aprovar');
+                    }
+                },
+                error: function() {
+                    alert('Erro de comunicação.');
+                    $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i>Aprovar');
+                }
+            });
+        });
+
+        // Rejeitar regra
+        $(document).on('click', '.btn-reject-rule', function() {
+            var $btn = $(this);
+            var id = $btn.data('id');
+            if (!confirm('Rejeitar esta regra?')) return;
+
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+            $.ajax({
+                url: BASE + 'ai/reject_adaptive_rule',
+                type: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.success) location.reload();
+                    else { alert(res.message || 'Erro.'); $btn.prop('disabled', false).html('<i class="fas fa-times me-1"></i>Rejeitar'); }
+                },
+                error: function() { alert('Erro de comunicação.'); $btn.prop('disabled', false).html('<i class="fas fa-times me-1"></i>Rejeitar'); }
+            });
+        });
+
+        // Restaurar regra
+        $(document).on('click', '.btn-restore-rule', function() {
+            var $btn = $(this);
+            var id = $btn.data('id');
+            $btn.prop('disabled', true);
+            $.ajax({
+                url: BASE + 'ai/restore_adaptive_rule',
+                type: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.success) location.reload();
+                    else { alert(res.message || 'Erro.'); $btn.prop('disabled', false); }
+                },
+                error: function() { alert('Erro de comunicação.'); $btn.prop('disabled', false); }
+            });
+        });
+    });
+})();
 <?php endif; ?>
 </script>
