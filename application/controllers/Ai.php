@@ -1645,6 +1645,13 @@ class Ai extends CI_Controller {
     // DIRETRIZES DA IA
     // ============================================================
 
+    public function security() {
+        $data['title'] = 'Segurança e Privacidade - IA SXData';
+        $this->load->view('admin/header', $data);
+        $this->load->view('admin/ai/security', $data);
+        $this->load->view('admin/footer');
+    }
+
     public function directives() {
         $data['title'] = 'Diretrizes da IA - SXData';
         $data['directives'] = $this->Ai_model->get_directives();

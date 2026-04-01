@@ -25,6 +25,8 @@ $route['politica_de_privacidade'] = 'welcome/politica_de_privacidade';
 // Rotas do Módulo de IA
 $route['admin/ai'] = 'ai';
 $route['admin/ai/settings'] = 'ai/settings';
+$route['admin/ai/security'] = 'ai/security';
+$route['ai/security'] = 'ai/security';
 $route['admin/ai/directives'] = 'ai/directives';
 $route['ai/save_directive'] = 'ai/save_directive';
 $route['ai/get_directive'] = 'ai/get_directive';
