@@ -246,8 +246,9 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="text-preview" title="<?= htmlspecialchars($t->question_text ?? '') ?>">
-                                    <?= htmlspecialchars(mb_strimwidth($t->question_text ?? '-', 0, 30, '...')) ?>
+                                <?php $qtext = $t->resolved_question_text ?? $t->question_text ?? ''; ?>
+                                <span class="text-preview" title="<?= htmlspecialchars($qtext) ?>">
+                                    <?= htmlspecialchars(mb_strimwidth($qtext ?: '-', 0, 30, '...')) ?>
                                 </span>
                             </td>
                             <td>
@@ -349,7 +350,7 @@ function showDetail(row) {
     html += '<h6 style="color: var(--secondary-color);"><i class="fas fa-info-circle me-1"></i>Informações</h6>';
     html += '<table class="table table-sm mb-0">';
     html += '<tr><th class="text-muted" style="width:40%">Questionário</th><td>' + escapeHtml(t.questionnaire_title || 'N/A') + '</td></tr>';
-    html += '<tr><th class="text-muted">Pergunta</th><td>' + escapeHtml(t.question_text || 'N/A') + '</td></tr>';
+    html += '<tr><th class="text-muted">Pergunta</th><td>' + escapeHtml(t.resolved_question_text || t.question_text || 'N/A') + '</td></tr>';
     html += '<tr><th class="text-muted">Aplicador</th><td>' + escapeHtml(t.applicator_name || 'N/A') + '</td></tr>';
     html += '<tr><th class="text-muted">Data/Hora</th><td>' + escapeHtml(t.timestamp_app || t.created_at || '') + '</td></tr>';
     html += '<tr><th class="text-muted">Confiança</th><td>' + conf + '</td></tr>';

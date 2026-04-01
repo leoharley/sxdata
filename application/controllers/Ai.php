@@ -171,10 +171,12 @@ class Ai extends CI_Controller {
         $per_page                = 20;
         $offset                  = ($page - 1) * $per_page;
 
-        // Query base
-        $this->db->select('t.*, q.title as questionnaire_title')
+        // Query base — resolve questionnaire via question_id se questionnaire_id estiver NULL
+        $this->db->select('t.*, COALESCE(q.title, q2.title) as questionnaire_title, COALESCE(t.question_text, qst.question_text) as resolved_question_text', FALSE)
                  ->from('ai_transcriptions t')
-                 ->join('questionnaires q', 'q.id = t.questionnaire_id', 'left');
+                 ->join('questions qst', 'qst.id = t.question_id', 'left')
+                 ->join('questionnaires q', 'q.id = t.questionnaire_id', 'left')
+                 ->join('questionnaires q2', 'q2.id = qst.questionnaire_id', 'left');
 
         if ($filter_questionnaire_id) $this->db->where('t.questionnaire_id', $filter_questionnaire_id);
         if ($filter_applicator_id)    $this->db->where('t.applicator_id', $filter_applicator_id);
