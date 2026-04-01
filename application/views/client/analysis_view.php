@@ -37,6 +37,14 @@
         color: #999;
         font-size: 0.9rem;
     }
+    .chart-controls {
+        display: flex; gap: 0.5rem; align-items: center;
+    }
+    .chart-controls select {
+        font-size: 0.78rem; padding: 0.2rem 0.4rem;
+        border: 1px solid #dee2e6; border-radius: 0.25rem;
+        background: white; color: var(--secondary-color);
+    }
     .question-ref-link {
         color: var(--primary-color);
         text-decoration: none;
@@ -157,7 +165,21 @@
         <div class="col-lg-6">
             <div class="client-chart-card">
                 <div class="client-chart-header">
-                    <h6><?= client_linkify_questions($chartTitle, $questions_map) ?></h6>
+                    <h6 class="mb-0"><?= client_linkify_questions($chartTitle, $questions_map) ?></h6>
+                    <div class="chart-controls">
+                        <select class="client-display-sel" data-idx="<?= $index ?>">
+                            <option value="absolute">Absoluto</option>
+                            <option value="percent">Percentual</option>
+                        </select>
+                        <select class="client-type-sel" data-idx="<?= $index ?>">
+                            <option value="<?= htmlspecialchars($chart['chart_type'] ?? $chart['type'] ?? 'bar') ?>" selected><?= ucfirst($chart['chart_type'] ?? $chart['type'] ?? 'bar') ?></option>
+                            <option value="bar">Barras</option>
+                            <option value="line">Linha</option>
+                            <option value="pie">Pizza</option>
+                            <option value="doughnut">Rosca</option>
+                            <option value="radar">Radar</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="chart-container">
                     <canvas id="chart-<?= $index ?>"></canvas>
@@ -220,6 +242,9 @@ document.addEventListener('DOMContentLoaded', function() {
         'rgba(32, 201, 151, 1)', 'rgba(253, 126, 20, 1)'
     ];
 
+    var chartInstances = [];
+    var chartDataStore = [];
+
     chartSuggestions.forEach(function(chart, index) {
         var canvas = document.getElementById('chart-' + index);
         if (!canvas) return;
@@ -265,18 +290,94 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        new Chart(canvas, {
-            type: chartType,
-            data: { labels: labels, datasets: datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } }
+        // Store data for switching
+        chartDataStore[index] = {
+            labels: labels,
+            datasets: JSON.parse(JSON.stringify(datasets)),
+            chartType: chartType
+        };
+
+        buildClientChart(index, chartType, labels, datasets, false);
+
+        // Deduplicate type selector options
+        var typeSel = document.querySelector('.client-type-sel[data-idx="' + index + '"]');
+        if (typeSel) {
+            var seen = {};
+            Array.from(typeSel.options).forEach(function(opt) {
+                var v = opt.value.toLowerCase();
+                if (seen[v]) { opt.remove(); }
+                else { seen[v] = true; opt.value = v; }
+            });
+        }
+
+        // Generate AI description
+        generateDescription(index, chart, labels, rawData || (datasets[0] ? datasets[0].data : []));
+    });
+
+    function buildClientChart(index, type, labels, datasets, asPercent) {
+        var canvas = document.getElementById('chart-' + index);
+        if (!canvas) return;
+        if (chartInstances[index]) chartInstances[index].destroy();
+
+        var displayDatasets = JSON.parse(JSON.stringify(datasets));
+
+        if (asPercent) {
+            displayDatasets.forEach(function(ds) {
+                var total = 0;
+                (ds.data || []).forEach(function(v) { total += (parseFloat(v) || 0); });
+                if (total > 0) {
+                    ds.data = ds.data.map(function(v) { return parseFloat(((parseFloat(v) || 0) / total * 100).toFixed(1)); });
+                }
+            });
+        }
+
+        displayDatasets.forEach(function(ds, i) {
+            if (['pie', 'doughnut'].indexOf(type) >= 0) {
+                ds.backgroundColor = colorPalette.slice(0, (ds.data || []).length);
+                ds.borderColor = borderPalette.slice(0, (ds.data || []).length);
+            } else {
+                ds.backgroundColor = colorPalette[i % colorPalette.length];
+                ds.borderColor = borderPalette[i % borderPalette.length];
             }
         });
 
-        // Gerar descrição via IA
-        generateDescription(index, chart, labels, rawData || (datasets[0] ? datasets[0].data : []));
+        var options = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+        };
+        if (asPercent && ['bar', 'line', 'radar'].indexOf(type) >= 0) {
+            options.scales = { y: { ticks: { callback: function(v) { return v + '%'; } } } };
+        }
+        if (asPercent && ['pie', 'doughnut'].indexOf(type) >= 0) {
+            options.plugins.tooltip = {
+                callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; } }
+            };
+        }
+
+        chartInstances[index] = new Chart(canvas, {
+            type: type,
+            data: { labels: labels, datasets: displayDatasets },
+            options: options
+        });
+    }
+
+    // Type change
+    $(document).on('change', '.client-type-sel', function() {
+        var idx = $(this).data('idx');
+        var store = chartDataStore[idx];
+        if (!store) return;
+        var isPercent = $('[data-idx="' + idx + '"].client-display-sel').val() === 'percent';
+        buildClientChart(idx, $(this).val(), store.labels, store.datasets, isPercent);
+    });
+
+    // Display mode change
+    $(document).on('change', '.client-display-sel', function() {
+        var idx = $(this).data('idx');
+        var store = chartDataStore[idx];
+        if (!store) return;
+        var type = $('[data-idx="' + idx + '"].client-type-sel').val() || store.chartType;
+        buildClientChart(idx, type, store.labels, store.datasets, $(this).val() === 'percent');
     });
 
     function generateDescription(index, chart, labels, data) {
