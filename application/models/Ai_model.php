@@ -96,7 +96,7 @@ class Ai_model extends CI_Model {
         return $this->db->order_by('feature_key', 'ASC')
                         ->order_by('version', 'DESC')
                         ->get('ai_prompts')
-                        ->result_array();
+                        ->result();
     }
 
     public function get_active_prompt($feature_key) {

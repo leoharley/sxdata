@@ -280,10 +280,10 @@
                     <?php foreach (array_slice($execution_stats['recent_errors'], 0, 5) as $error): ?>
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between">
-                            <small class="fw-bold"><?= htmlspecialchars($error->feature_key) ?></small>
-                            <small class="text-muted"><?= date('d/m H:i', strtotime($error->created_at)) ?></small>
+                            <small class="fw-bold"><?= htmlspecialchars($error['feature_key'] ?? '') ?></small>
+                            <small class="text-muted"><?= !empty($error['created_at']) ? date('d/m H:i', strtotime($error['created_at'])) : '' ?></small>
                         </div>
-                        <small class="text-danger"><?= htmlspecialchars(substr($error->error_message ?? '', 0, 100)) ?></small>
+                        <small class="text-danger"><?= htmlspecialchars(substr($error['error_message'] ?? '', 0, 100)) ?></small>
                     </div>
                     <?php endforeach; ?>
                 </div>

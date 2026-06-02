@@ -164,8 +164,8 @@
             $featureLabel = $featureKey;
             if (!empty($settings)) {
                 foreach ($settings as $s) {
-                    if ($s->feature_key === $featureKey) {
-                        $featureLabel = $s->feature_name ?? $featureKey;
+                    if ($s['feature_key'] === $featureKey) {
+                        $featureLabel = $s['feature_name'] ?? $featureKey;
                         break;
                     }
                 }

@@ -266,7 +266,7 @@ $available_models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'w
                 </h2>
                 <div id="prompt-<?= $index ?>" class="accordion-collapse collapse" data-bs-parent="#promptsAccordion">
                     <div class="accordion-body bg-light">
-                        <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.85rem; color: #333;"><?= htmlspecialchars($prompt->prompt_text ?? '') ?></pre>
+                        <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.85rem; color: #333;"><?= htmlspecialchars($prompt->user_prompt_template ?? '') ?></pre>
                     </div>
                 </div>
             </div>
@@ -288,7 +288,7 @@ $available_models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'w
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                <input type="hidden" name="setting_id" id="edit_setting_id">
+                <input type="hidden" name="id" id="edit_setting_id">
 
                 <div class="row">
                     <div class="col-md-6">
@@ -330,7 +330,7 @@ $available_models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'w
                     <div class="col-md-4">
                         <div class="mb-3">
                             <label for="edit_timeout" class="form-label">Timeout (segundos)</label>
-                            <input type="number" class="form-control" name="timeout" id="edit_timeout"
+                            <input type="number" class="form-control" name="timeout_seconds" id="edit_timeout"
                                    min="5" max="300" value="30">
                         </div>
                     </div>
@@ -524,7 +524,7 @@ function openEditModal(setting) {
     document.getElementById('edit_model').value = setting.model || 'gpt-4o-mini';
     document.getElementById('edit_temperature').value = setting.temperature ?? 0.7;
     document.getElementById('edit_max_tokens').value = setting.max_tokens ?? 2000;
-    document.getElementById('edit_timeout').value = setting.timeout ?? 30;
+    document.getElementById('edit_timeout').value = setting.timeout_seconds ?? 30;
     document.getElementById('edit_retry').value = setting.retry_attempts ?? 3;
     document.getElementById('edit_is_enabled').checked = !!parseInt(setting.is_enabled);
 
