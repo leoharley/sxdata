@@ -219,7 +219,7 @@ $available_models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'w
                             <div class="meta-item">Modelo: <span><?= htmlspecialchars($setting->model ?? 'gpt-4o-mini') ?></span></div>
                             <div class="meta-item">Temperatura: <span><?= number_format($setting->temperature ?? 0.7, 1) ?></span></div>
                             <div class="meta-item">Max Tokens: <span><?= number_format($setting->max_tokens ?? 2000) ?></span></div>
-                            <div class="meta-item">Timeout: <span><?= $setting->timeout ?? 30 ?>s</span></div>
+                            <div class="meta-item">Timeout: <span><?= $setting->timeout_seconds ?? 30 ?>s</span></div>
                             <div class="meta-item">Tentativas: <span><?= $setting->retry_attempts ?? 3 ?></span></div>
                         </div>
                     </div>

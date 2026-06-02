@@ -20,10 +20,14 @@ class Ai_model extends CI_Model {
     }
 
     public function get_settings_by_category() {
-        $settings = $this->get_all_settings();
+        // Retorna OBJETOS (a view admin/ai/settings.php acessa via $setting->prop)
+        $settings = $this->db->order_by('category', 'ASC')
+                             ->order_by('feature_name', 'ASC')
+                             ->get('ai_settings')
+                             ->result();
         $grouped = array();
         foreach ($settings as $setting) {
-            $grouped[$setting['category']][] = $setting;
+            $grouped[$setting->category][] = $setting;
         }
         return $grouped;
     }
