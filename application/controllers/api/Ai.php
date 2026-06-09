@@ -163,6 +163,12 @@ class Ai extends CI_Controller {
     public function transcribe() {
         // Capturar qualquer erro PHP para retornar JSON
         set_error_handler(function($severity, $message, $file, $line) {
+            // Respeita o operador @ e o nivel de error_reporting: avisos
+            // suprimidos (ex.: @unlink de limpeza, @-internos da lib de Upload)
+            // NAO devem virar exceção fatal e derrubar a resposta.
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
             throw new ErrorException($message, 0, $severity, $file, $line);
         });
 
@@ -206,7 +212,13 @@ class Ai extends CI_Controller {
             $this->load->library('upload', $config);
 
             if (!$this->upload->do_upload($field_name)) {
-                echo json_encode(array('success' => false, 'message' => 'Erro no upload: ' . strip_tags($this->upload->display_errors('', ''))));
+                $err = strip_tags($this->upload->display_errors('', ''));
+                // Log diagnostico: caminho real resolvido e se e gravavel pelo PHP
+                log_message('error', 'Transcribe upload falhou. Path=' . $upload_path
+                    . ' is_dir=' . (is_dir($upload_path) ? 'sim' : 'nao')
+                    . ' writable=' . (is_writable($upload_path) ? 'sim' : 'nao')
+                    . ' | ' . $err);
+                echo json_encode(array('success' => false, 'message' => 'Erro no upload: ' . $err));
                 return;
             }
 
@@ -269,8 +281,10 @@ class Ai extends CI_Controller {
                 'resource_id' => $transcription_id,
             ));
 
-            // Limpar arquivo após transcrição
-            @unlink($file_path);
+            // Limpar arquivo após transcrição (limpeza segura: nunca derruba a resposta)
+            if (!empty($file_path) && is_file($file_path)) {
+                @unlink($file_path);
+            }
 
             if ($result['success']) {
                 // Calcular confiança média dos segmentos
@@ -313,7 +327,9 @@ class Ai extends CI_Controller {
                     'language' => $result['language'] ?? 'pt',
                 ));
             } else {
-                @unlink($file_path); // Garantir limpeza
+                if (!empty($file_path) && is_file($file_path)) {
+                    @unlink($file_path); // Garantir limpeza
+                }
 
                 $this->Ai_model->update_transcription($transcription_id, array(
                     'status' => 'error',
