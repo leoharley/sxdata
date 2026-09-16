@@ -100,7 +100,7 @@
         <div class="login-card">
             <div class="login-header">
                 <img src="<?php echo img_url('logo_azul_com_branco.png'); ?>" alt="Imagem" width="45%" height="auto">
-                <p><small>Seja bem-vindo(a) ao painel de gestão do SXData.</small></p>                
+                <p><small>Sej bem-vindo(a) ao painel de gestão do SXData.</small></p>                
             </div>
             
             <div class="login-body">
