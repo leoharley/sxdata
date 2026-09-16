@@ -33,3 +33,6 @@ user_guide_src/cilexer/pycilexer.egg-info/*
 /application/config/database.php
 /application/config/config.php
 .env
+
+# Uploads gerados em runtime (fotos e audios dos aplicadores)
+uploads/

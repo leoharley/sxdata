@@ -1,0 +1,4 @@
+# O cPanel espera o .cpanel.yml com quebras de linha LF (Unix).
+# Sem isto, o core.autocrlf do Windows grava CRLF e o deploy falha
+# com "A valid .cpanel.yml file exists".
+.cpanel.yml text eol=lf

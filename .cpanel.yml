@@ -1,0 +1,11 @@
+---
+deployment:
+  tasks:
+    # O repositorio esta clonado DENTRO da propria pasta do site
+    # (/home/sxdata/painel.sxdata.com.br), entao o proprio "git pull" do
+    # cPanel ja atualiza os arquivos no lugar certo.
+    #
+    # NAO usar rsync aqui: origem e destino sao a mesma pasta, e um
+    # "rsync --delete" apagaria uploads/, .env e os configs do servidor.
+    - export DEPLOYPATH=/home/sxdata/painel.sxdata.com.br
+    - /bin/echo "Deploy concluido em $DEPLOYPATH"
