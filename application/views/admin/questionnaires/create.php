@@ -168,6 +168,7 @@
                     <label for="aplicadores" class="form-label">Aplicadores Permitidos *</label>
                     <select class="form-select" id="aplicadores" name="aplicadores[]" multiple size="6" required>
                         <option value="all">🌟 Todos os Aplicadores</option>
+                        <option value="none">🚫 Nenhum Aplicador (ocultar do app)</option>
                         <?php foreach ($aplicadores as $aplicador): ?>
                         <option value="<?= $aplicador->id ?>" <?= set_select('aplicadores[]', $aplicador->id) ?>>
                             <?= $aplicador->full_name ?> (<?= $aplicador->username ?>)
@@ -329,20 +330,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // Gerenciamento do select de aplicadores
     aplicadoresSelect.addEventListener('change', function() {
         const allOption = this.querySelector('option[value="all"]');
-        const otherOptions = Array.from(this.querySelectorAll('option:not([value="all"])'));
-        
-        if (allOption.selected) {
+        const noneOption = this.querySelector('option[value="none"]');
+        // "all" e "none" sao exclusivos entre si e com a selecao individual
+        const otherOptions = Array.from(
+            this.querySelectorAll('option:not([value="all"]):not([value="none"])')
+        );
+
+        if (noneOption.selected && this.dataset.lastNone !== 'true') {
+            allOption.selected = false;
+            otherOptions.forEach(option => option.selected = false);
+        } else if (allOption.selected && this.dataset.lastAll !== 'true') {
+            noneOption.selected = false;
             otherOptions.forEach(option => option.selected = false);
         } else {
             const hasSpecificSelection = otherOptions.some(option => option.selected);
             if (hasSpecificSelection) {
                 allOption.selected = false;
+                noneOption.selected = false;
             }
         }
-        
+
         if (!Array.from(this.selectedOptions).length) {
             allOption.selected = true;
         }
+
+        this.dataset.lastAll = allOption.selected ? 'true' : 'false';
+        this.dataset.lastNone = noneOption.selected ? 'true' : 'false';
     });
     
     // Gerenciamento do select de projeto

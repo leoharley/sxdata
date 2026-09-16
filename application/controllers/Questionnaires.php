@@ -37,11 +37,16 @@ class Questionnaires extends CI_Controller {
                 $aplicadores_json = null;
                 
                 if ($aplicadores && is_array($aplicadores)) {
-                    if (in_array('all', $aplicadores)) {
-                        $all_aplicadores = $this->User_model->get_aplicadores();
-                        $aplicadores = array_column($all_aplicadores, 'id');
+                    if (in_array('none', $aplicadores)) {
+                        // "[]" = nenhum aplicador: some do app, mas continua no painel
+                        $aplicadores_json = json_encode(array());
+                    } else {
+                        if (in_array('all', $aplicadores)) {
+                            $all_aplicadores = $this->User_model->get_aplicadores();
+                            $aplicadores = array_column($all_aplicadores, 'id');
+                        }
+                        $aplicadores_json = json_encode(array_map('intval', $aplicadores));
                     }
-                    $aplicadores_json = json_encode(array_map('intval', $aplicadores));
                 }
 
                 $questionnaire_data = array(
@@ -397,11 +402,16 @@ class Questionnaires extends CI_Controller {
                 $aplicadores_json = null;
                 
                 if ($aplicadores && is_array($aplicadores)) {
-                    if (in_array('all', $aplicadores)) {
-                        $all_aplicadores = $this->User_model->get_aplicadores();
-                        $aplicadores = array_column($all_aplicadores, 'id');
+                    if (in_array('none', $aplicadores)) {
+                        // "[]" = nenhum aplicador: some do app, mas continua no painel
+                        $aplicadores_json = json_encode(array());
+                    } else {
+                        if (in_array('all', $aplicadores)) {
+                            $all_aplicadores = $this->User_model->get_aplicadores();
+                            $aplicadores = array_column($all_aplicadores, 'id');
+                        }
+                        $aplicadores_json = json_encode(array_map('intval', $aplicadores));
                     }
-                    $aplicadores_json = json_encode(array_map('intval', $aplicadores));
                 }
 
                 $questionnaire_data = array(

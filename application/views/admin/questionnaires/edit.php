@@ -337,10 +337,23 @@ function is_checkbox_checked($value) {
                                             (count(array_intersect($aplicadores_selecionados, $all_aplicadores_ids)) == count($all_aplicadores_ids));
                         ?>
                         
-                        <option value="all" <?= $todos_selecionados ? 'selected' : '' ?>>
+                        <?php
+                        // "[]" gravado = nenhum aplicador (retirado do app sem mudar o status)
+                        $nenhum_selecionado = is_array($aplicadores_selecionados)
+                                              && count($aplicadores_selecionados) === 0
+                                              && $questionnaire->aplicadores !== NULL
+                                              && trim((string) $questionnaire->aplicadores) !== '';
+                        if ($nenhum_selecionado) { $todos_selecionados = false; }
+                        ?>
+
+                        <option value="all" <?= ($todos_selecionados && !$nenhum_selecionado) ? 'selected' : '' ?>>
                             🌟 Todos os Aplicadores
                         </option>
-                        
+
+                        <option value="none" <?= $nenhum_selecionado ? 'selected' : '' ?>>
+                            🚫 Nenhum Aplicador (ocultar do app)
+                        </option>
+
                         <?php foreach ($aplicadores as $aplicador): ?>
                         <option value="<?= $aplicador->id ?>" 
                                 <?= (!$todos_selecionados && in_array($aplicador->id, $aplicadores_selecionados)) ? 'selected' : '' ?>>
@@ -350,8 +363,9 @@ function is_checkbox_checked($value) {
                     </select>
                     <small class="form-text text-muted">
                         <i class="fas fa-info-circle me-1"></i>
-                        Segure Ctrl (Windows) ou Cmd (Mac) para selecionar múltiplos aplicadores. 
+                        Segure Ctrl (Windows) ou Cmd (Mac) para selecionar múltiplos aplicadores.
                         Selecione "Todos os Aplicadores" para permitir que qualquer aplicador use este questionário.
+                        Selecione "Nenhum Aplicador" para remover o questionário do app mantendo perguntas e respostas no painel.
                     </small>
                     
                     <?php if (!empty($aplicadores_selecionados) && !$todos_selecionados): ?>
@@ -881,21 +895,41 @@ document.addEventListener('DOMContentLoaded', function() {
     // Gerenciamento do select de aplicadores
     aplicadoresSelect.addEventListener('change', function() {
         const allOption = this.querySelector('option[value="all"]');
-        const otherOptions = Array.from(this.querySelectorAll('option:not([value="all"])'));
-        
-        if (allOption.selected) {
+        const noneOption = this.querySelector('option[value="none"]');
+        // "all" e "none" sao exclusivos entre si e com a selecao individual
+        const otherOptions = Array.from(
+            this.querySelectorAll('option:not([value="all"]):not([value="none"])')
+        );
+
+        if (noneOption.selected && this.dataset.lastNone !== 'true') {
+            allOption.selected = false;
+            otherOptions.forEach(option => option.selected = false);
+        } else if (allOption.selected && this.dataset.lastAll !== 'true') {
+            noneOption.selected = false;
             otherOptions.forEach(option => option.selected = false);
         } else {
             const hasSpecificSelection = otherOptions.some(option => option.selected);
             if (hasSpecificSelection) {
                 allOption.selected = false;
+                noneOption.selected = false;
             }
         }
-        
+
         if (!Array.from(this.selectedOptions).length) {
             allOption.selected = true;
         }
+
+        this.dataset.lastAll = allOption.selected ? 'true' : 'false';
+        this.dataset.lastNone = noneOption.selected ? 'true' : 'false';
     });
+
+    // Estado inicial para o controle de exclusividade
+    (function initAplicadoresState() {
+        const allOption = aplicadoresSelect.querySelector('option[value="all"]');
+        const noneOption = aplicadoresSelect.querySelector('option[value="none"]');
+        aplicadoresSelect.dataset.lastAll = allOption.selected ? 'true' : 'false';
+        aplicadoresSelect.dataset.lastNone = noneOption.selected ? 'true' : 'false';
+    })();
 
     // Alerta ao mudar projeto
     projectSelect.addEventListener('change', function() {

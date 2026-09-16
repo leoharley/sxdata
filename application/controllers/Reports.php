@@ -33,7 +33,7 @@ class Reports extends CI_Controller {
         $data['users'] = $this->User_model->get_all_with_stats();
 
         // Carregar dados
-        $data['questionnaires'] = $this->Questionnaire_model->get_active();
+        $data['questionnaires'] = $this->Questionnaire_model->get_for_analysis();
         $data['period_stats'] = $this->calculate_period_stats($filters);
         $data['charts_data'] = $this->get_charts_data($filters);
         $data['detailed_analysis'] = $this->get_detailed_analysis($filters);

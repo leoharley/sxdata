@@ -27,6 +27,24 @@ class Questionnaire_model extends CI_Model {
         return $this->db->get()->result();
     }
 
+    /**
+     * Questionarios que devem aparecer nos FILTROS do painel (relatorios, respostas).
+     *
+     * Inclui os pausados/inativos que ja possuem respostas coletadas, para que
+     * o historico nunca desapareca do dashboard quando o questionario e tirado do app.
+     * Um questionario inativo e SEM respostas nao polui o filtro.
+     */
+    public function get_for_analysis() {
+        $this->db->select('q.*, u.full_name as created_by_name, p.name as project_name,
+                          (SELECT COUNT(*) FROM form_responses fr WHERE fr.questionnaire_id = q.id) as response_count');
+        $this->db->from('questionnaires q');
+        $this->db->join('users u', 'q.created_by = u.id', 'left');
+        $this->db->join('projects p', 'q.project_id = p.id', 'left');
+        $this->db->where("(q.status = 'active' OR EXISTS (SELECT 1 FROM form_responses fr3 WHERE fr3.questionnaire_id = q.id))", NULL, FALSE);
+        $this->db->order_by('q.created_at', 'DESC');
+        return $this->db->get()->result();
+    }
+
     public function get_all_with_stats() {
         $questionnaires = $this->get_all();
         
@@ -163,10 +181,11 @@ class Questionnaire_model extends CI_Model {
     }
 
     public function get_usage_stats() {
+        // Estatistica historica: NAO filtra por status.
+        // Questionarios pausados/inativos continuam exibindo as respostas ja coletadas.
         $this->db->select('q.title, COUNT(fr.id) as response_count');
         $this->db->from('questionnaires q');
         $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->group_by('q.id, q.title');
         $this->db->order_by('response_count', 'DESC');
         $this->db->limit(10);
@@ -180,6 +199,10 @@ class Questionnaire_model extends CI_Model {
         $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
         $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->where('q.status', 'active');
+        // Projeto concluido/cancelado tira o questionario do app automaticamente,
+        // sem alterar o status do questionario (historico preservado no painel).
+        // COALESCE cobre o LEFT JOIN sem projeto, onde p.status vem NULL.
+        $this->db->where("COALESCE(p.status, 'active') NOT IN ('completed', 'cancelled')", NULL, FALSE);
         $this->db->group_by('q.id,p.name');
         $this->db->order_by('q.title', 'ASC');
         
@@ -222,18 +245,24 @@ class Questionnaire_model extends CI_Model {
             return FALSE;
         }
         
-        // Se não há restrição de aplicadores (NULL), todos podem acessar
-        if (empty($questionnaire->aplicadores)) {
+        // NULL / string vazia = sem restricao: todos os aplicadores podem acessar
+        if ($questionnaire->aplicadores === NULL || trim((string) $questionnaire->aplicadores) === '') {
             return TRUE;
         }
-        
+
         // Decodificar JSON e verificar se o aplicador está na lista
         $aplicadores_permitidos = json_decode($questionnaire->aplicadores, true);
-        
+
         if (!is_array($aplicadores_permitidos)) {
             return TRUE; // Fallback: se não conseguir decodificar, permite acesso
         }
-        
+
+        // Lista vazia "[]" = NENHUM aplicador. Diferente de NULL (todos).
+        // Permite tirar o questionario do app sem mudar o status.
+        if (count($aplicadores_permitidos) === 0) {
+            return FALSE;
+        }
+
         return in_array($aplicador_id, $aplicadores_permitidos);
     }
 
@@ -249,9 +278,11 @@ class Questionnaire_model extends CI_Model {
         $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
         $this->db->join('projects p', 'q.project_id = p.id', 'left');
         $this->db->where('q.status', 'active');
+        // Mesma regra do app: projeto concluido/cancelado nao aparece para o aplicador.
+        $this->db->where("COALESCE(p.status, 'active') NOT IN ('completed', 'cancelled')", NULL, FALSE);
         $this->db->group_by('q.id');
         $this->db->order_by('q.title', 'ASC');
-        
+
         $all_questionnaires = $this->db->get()->result();
         
         // Filtrar questionários que o aplicador pode acessar
@@ -298,16 +329,22 @@ class Questionnaire_model extends CI_Model {
      * @return string Nomes dos aplicadores separados por vírgula
      */
     public function get_aplicadores_names($questionnaire) {
-        if (empty($questionnaire->aplicadores)) {
+        // NULL / string vazia = sem restricao
+        if ($questionnaire->aplicadores === NULL || trim((string) $questionnaire->aplicadores) === '') {
             return 'Todos os aplicadores';
         }
-        
+
         $aplicadores_ids = json_decode($questionnaire->aplicadores, true);
-        
-        if (!is_array($aplicadores_ids) || empty($aplicadores_ids)) {
+
+        if (!is_array($aplicadores_ids)) {
             return 'Todos os aplicadores';
         }
-        
+
+        // "[]" = nenhum aplicador (questionario oculto no app)
+        if (count($aplicadores_ids) === 0) {
+            return 'Nenhum aplicador (oculto no app)';
+        }
+
         $this->db->select('full_name');
         $this->db->where_in('id', $aplicadores_ids);
         $this->db->where('role', 'aplicador');
@@ -1416,7 +1453,7 @@ class Questionnaire_model extends CI_Model {
         ');
         $this->db->from('questionnaires q');
         $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.applied_by = ' . (int)$user_id, 'left');
-        $this->db->where('q.status', 'active');
+        // Historico do aplicador: sem filtro de status (having > 0 ja limita aos aplicados)
         $this->db->group_by('q.id, q.title');
         $this->db->having('COUNT(fr.id) > 0');
         $this->db->order_by('total_applications', 'DESC');
@@ -1720,9 +1757,10 @@ public function validate_questionnaire_ids($questionnaire_ids) {
     }
     
     // Verificar se os questionários existem no banco
+    // NAO filtra por status: relatorios precisam aceitar questionarios pausados/inativos
+    // que ja possuem respostas coletadas.
     $this->db->select('id, title, status');
     $this->db->where_in('id', $valid_ids);
-    $this->db->where('status', 'active'); // Apenas questionários ativos
     $questionnaires = $this->db->get('questionnaires')->result();
     
     return array_column($questionnaires, 'id');
@@ -1762,10 +1800,10 @@ public function get_questionnaires_with_location_count($filters = []) {
     $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.completed_at IS NOT NULL', 'left');
     
     // Aplicar filtros se fornecidos
+    // Sem filtro explicito, NAO restringe por status: o mapa/analise historica
+    // deve continuar mostrando questionarios pausados/inativos ja aplicados.
     if (isset($filters['status']) && !empty($filters['status'])) {
         $this->db->where('q.status', $filters['status']);
-    } else {
-        $this->db->where('q.status', 'active'); // Default: apenas ativos
     }
     
     if (isset($filters['date_from']) && !empty($filters['date_from'])) {
@@ -2052,8 +2090,8 @@ public function get_questionnaires_by_region($filters = []) {
     
     $this->db->from('questionnaires q');
     $this->db->join('form_responses fr', 'q.id = fr.questionnaire_id AND fr.completed_at IS NOT NULL', 'inner');
-    
-    $this->db->where('q.status', 'active');
+
+    // Analise historica por regiao: sem filtro de status (join inner ja limita aos aplicados)
     $this->db->where('fr.location_name IS NOT NULL');
     $this->db->where('fr.location_name !=', '');
     
