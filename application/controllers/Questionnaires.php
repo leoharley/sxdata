@@ -36,15 +36,18 @@ class Questionnaires extends CI_Controller {
                 $aplicadores = $this->input->post('aplicadores');
                 $aplicadores_json = null;
                 
+                // Convencao do campo "aplicadores":
+                //   NULL = todos (inclusive usuarios criados depois)
+                //   "[]"  = nenhum (oculto no app, preservado no painel)
+                //   "[1]" = apenas os IDs listados
                 if ($aplicadores && is_array($aplicadores)) {
                     if (in_array('none', $aplicadores)) {
-                        // "[]" = nenhum aplicador: some do app, mas continua no painel
                         $aplicadores_json = json_encode(array());
+                    } elseif (in_array('all', $aplicadores)) {
+                        // NULL em vez de uma lista fixa de IDs: assim um aplicador
+                        // novo passa a enxergar o questionario sem precisar reedita-lo.
+                        $aplicadores_json = NULL;
                     } else {
-                        if (in_array('all', $aplicadores)) {
-                            $all_aplicadores = $this->User_model->get_aplicadores_para_atribuicao();
-                            $aplicadores = array_column($all_aplicadores, 'id');
-                        }
                         $aplicadores_json = json_encode(array_map('intval', $aplicadores));
                     }
                 }
@@ -401,15 +404,18 @@ class Questionnaires extends CI_Controller {
                 $aplicadores = $this->input->post('aplicadores');
                 $aplicadores_json = null;
                 
+                // Convencao do campo "aplicadores":
+                //   NULL = todos (inclusive usuarios criados depois)
+                //   "[]"  = nenhum (oculto no app, preservado no painel)
+                //   "[1]" = apenas os IDs listados
                 if ($aplicadores && is_array($aplicadores)) {
                     if (in_array('none', $aplicadores)) {
-                        // "[]" = nenhum aplicador: some do app, mas continua no painel
                         $aplicadores_json = json_encode(array());
+                    } elseif (in_array('all', $aplicadores)) {
+                        // NULL em vez de uma lista fixa de IDs: assim um aplicador
+                        // novo passa a enxergar o questionario sem precisar reedita-lo.
+                        $aplicadores_json = NULL;
                     } else {
-                        if (in_array('all', $aplicadores)) {
-                            $all_aplicadores = $this->User_model->get_aplicadores_para_atribuicao();
-                            $aplicadores = array_column($all_aplicadores, 'id');
-                        }
                         $aplicadores_json = json_encode(array_map('intval', $aplicadores));
                     }
                 }

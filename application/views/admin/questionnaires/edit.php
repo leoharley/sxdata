@@ -330,23 +330,19 @@ function is_checkbox_checked($value) {
                 <div class="mb-3 mt-3">
                     <label for="aplicadores" class="form-label">Aplicadores Permitidos *</label>
                     <select class="form-select" id="aplicadores" name="aplicadores[]" multiple size="6" required>
-                        <?php 
-                        // Verificar se todos os aplicadores estão selecionados ou se campo está vazio
-                        $all_aplicadores_ids = array_column($aplicadores, 'id');
-                        $todos_selecionados = empty($aplicadores_selecionados) || 
-                                            (count(array_intersect($aplicadores_selecionados, $all_aplicadores_ids)) == count($all_aplicadores_ids));
-                        ?>
-                        
                         <?php
-                        // "[]" gravado = nenhum aplicador (retirado do app sem mudar o status)
-                        $nenhum_selecionado = is_array($aplicadores_selecionados)
-                                              && count($aplicadores_selecionados) === 0
-                                              && $questionnaire->aplicadores !== NULL
-                                              && trim((string) $questionnaire->aplicadores) !== '';
-                        if ($nenhum_selecionado) { $todos_selecionados = false; }
+                        // Le a convencao gravada no campo "aplicadores":
+                        //   NULL / vazio = todos
+                        //   "[]"         = nenhum
+                        //   "[1,2]"      = apenas os IDs listados
+                        $aplicadores_raw = $questionnaire->aplicadores;
+                        $sem_restricao = ($aplicadores_raw === NULL || trim((string) $aplicadores_raw) === '');
+
+                        $todos_selecionados  = $sem_restricao;
+                        $nenhum_selecionado  = (!$sem_restricao && count($aplicadores_selecionados) === 0);
                         ?>
 
-                        <option value="all" <?= ($todos_selecionados && !$nenhum_selecionado) ? 'selected' : '' ?>>
+                        <option value="all" <?= $todos_selecionados ? 'selected' : '' ?>>
                             🌟 Todos os Aplicadores
                         </option>
 
@@ -368,23 +364,29 @@ function is_checkbox_checked($value) {
                         Selecione "Nenhum Aplicador" para remover o questionário do app mantendo perguntas e respostas no painel.
                     </small>
                     
-                    <?php if (!empty($aplicadores_selecionados) && !$todos_selecionados): ?>
                     <div class="mt-2">
-                        <small class="text-info">
+                        <small class="<?= $nenhum_selecionado ? 'text-danger' : 'text-info' ?>">
                             <i class="fas fa-users me-1"></i>
-                            Aplicadores atuais: 
-                            <?php 
-                            $nomes_selecionados = array();
-                            foreach ($aplicadores as $aplicador) {
-                                if (in_array($aplicador->id, $aplicadores_selecionados)) {
-                                    $nomes_selecionados[] = $aplicador->full_name;
+                            <?php if ($todos_selecionados): ?>
+                                Situação atual: <strong>todos os aplicadores</strong> (incluindo os que forem criados depois).
+                            <?php elseif ($nenhum_selecionado): ?>
+                                Situação atual: <strong>nenhum aplicador</strong> — este questionário não aparece no app.
+                            <?php else: ?>
+                                Aplicadores atuais:
+                                <?php
+                                $nomes_selecionados = array();
+                                foreach ($aplicadores as $aplicador) {
+                                    if (in_array($aplicador->id, $aplicadores_selecionados)) {
+                                        $nomes_selecionados[] = $aplicador->full_name;
+                                    }
                                 }
-                            }
-                            echo implode(', ', $nomes_selecionados);
-                            ?>
+                                echo $nomes_selecionados
+                                     ? implode(', ', $nomes_selecionados)
+                                     : 'nenhum usuário ativo corresponde aos IDs salvos';
+                                ?>
+                            <?php endif; ?>
                         </small>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>
