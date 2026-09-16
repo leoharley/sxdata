@@ -193,7 +193,14 @@ class Questionnaire_model extends CI_Model {
         return $this->db->get()->result();
     }
 
-    public function get_for_api($user_role = null) {
+    /**
+     * Questionarios entregues ao APP.
+     *
+     * @param string|null $user_role  Mantido por compatibilidade
+     * @param int|null    $user_id    Aplicador autenticado. Quando informado, aplica
+     *                                a restricao de aplicadores permitidos do questionario.
+     */
+    public function get_for_api($user_role = null, $user_id = null) {
         $this->db->select('q.*, COUNT(questions.id) as question_count, p.name as project_name');
         $this->db->from('questionnaires q');
         $this->db->join('questions', 'q.id = questions.questionnaire_id', 'left');
@@ -205,15 +212,60 @@ class Questionnaire_model extends CI_Model {
         $this->db->where("COALESCE(p.status, 'active') NOT IN ('completed', 'cancelled')", NULL, FALSE);
         $this->db->group_by('q.id,p.name');
         $this->db->order_by('q.title', 'ASC');
-        
+
         $questionnaires = $this->db->get()->result();
-        
+
+        // Filtrar por aplicadores permitidos (NULL = todos, "[]" = nenhum).
+        // Feito em PHP porque o campo e um JSON em coluna TEXT.
+        if ($user_id !== null) {
+            $permitidos = array();
+            foreach ($questionnaires as $questionnaire) {
+                if ($this->is_aplicador_allowed($questionnaire, $user_id)) {
+                    $permitidos[] = $questionnaire;
+                }
+            }
+            $questionnaires = $permitidos;
+        }
+
         // Adicionar perguntas para cada questionário
         foreach ($questionnaires as &$questionnaire) {
             $questionnaire->questions = $this->get_questions_with_options($questionnaire->id);
         }
-        
+
         return $questionnaires;
+    }
+
+    /**
+     * Regra unica de "este aplicador pode ver este questionario".
+     *
+     * NULL / vazio = sem restricao (todos)
+     * "[]"         = nenhum aplicador (oculto no app)
+     * "[1,2]"      = apenas os IDs listados
+     *
+     * @param object $questionnaire Registro do questionario (precisa ter ->aplicadores)
+     * @param int    $aplicador_id
+     * @return bool
+     */
+    public function is_aplicador_allowed($questionnaire, $aplicador_id) {
+        if (!isset($questionnaire->aplicadores)
+            || $questionnaire->aplicadores === NULL
+            || trim((string) $questionnaire->aplicadores) === '') {
+            return TRUE;
+        }
+
+        $aplicadores_permitidos = json_decode($questionnaire->aplicadores, true);
+
+        if (!is_array($aplicadores_permitidos)) {
+            return TRUE; // Fallback: JSON invalido nao bloqueia o aplicador
+        }
+
+        if (count($aplicadores_permitidos) === 0) {
+            return FALSE; // "[]" = nenhum aplicador
+        }
+
+        // IDs podem vir como string no JSON; normaliza antes de comparar
+        $aplicadores_permitidos = array_map('intval', $aplicadores_permitidos);
+        return in_array((int) $aplicador_id, $aplicadores_permitidos, TRUE);
     }
 
     private function get_questions_with_options($questionnaire_id) {
@@ -245,25 +297,8 @@ class Questionnaire_model extends CI_Model {
             return FALSE;
         }
         
-        // NULL / string vazia = sem restricao: todos os aplicadores podem acessar
-        if ($questionnaire->aplicadores === NULL || trim((string) $questionnaire->aplicadores) === '') {
-            return TRUE;
-        }
-
-        // Decodificar JSON e verificar se o aplicador está na lista
-        $aplicadores_permitidos = json_decode($questionnaire->aplicadores, true);
-
-        if (!is_array($aplicadores_permitidos)) {
-            return TRUE; // Fallback: se não conseguir decodificar, permite acesso
-        }
-
-        // Lista vazia "[]" = NENHUM aplicador. Diferente de NULL (todos).
-        // Permite tirar o questionario do app sem mudar o status.
-        if (count($aplicadores_permitidos) === 0) {
-            return FALSE;
-        }
-
-        return in_array($aplicador_id, $aplicadores_permitidos);
+        // Mesma regra usada pela API do app (NULL=todos, []=nenhum, [ids]=lista)
+        return $this->is_aplicador_allowed($questionnaire, $aplicador_id);
     }
 
     /**

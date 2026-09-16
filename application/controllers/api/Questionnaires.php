@@ -30,7 +30,8 @@ class Questionnaires extends CI_Controller {
         }
 
         try {
-            $questionnaires = $this->Questionnaire_model->get_for_api();
+            // Passa o usuario autenticado para filtrar por aplicadores permitidos
+            $questionnaires = $this->Questionnaire_model->get_for_api(null, $user_id);
             
             echo json_encode([
                 'success' => true,
