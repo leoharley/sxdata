@@ -357,7 +357,7 @@ function is_checkbox_checked($value) {
                         <?php foreach ($aplicadores as $aplicador): ?>
                         <option value="<?= $aplicador->id ?>" 
                                 <?= (!$todos_selecionados && in_array($aplicador->id, $aplicadores_selecionados)) ? 'selected' : '' ?>>
-                            <?= $aplicador->full_name ?> (<?= $aplicador->username ?>)
+                            <?= $aplicador->full_name ?> (<?= $aplicador->username ?>)<?= $aplicador->role !== 'aplicador' ? ' — ' . ucfirst($aplicador->role) : '' ?>
                         </option>
                         <?php endforeach; ?>
                     </select>

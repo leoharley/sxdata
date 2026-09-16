@@ -31,6 +31,21 @@ class User_model extends CI_Model {
         return $this->db->get('users')->result();
     }
 
+    /**
+     * Usuarios que podem APLICAR questionarios pelo app.
+     *
+     * Inclui supervisores e administradores, porque a API de coleta
+     * (api/Responses.php) aceita respostas desses perfis. Usar apenas
+     * get_aplicadores() aqui impedia que eles fossem atribuidos a um
+     * questionario, mesmo podendo aplica-lo.
+     */
+    public function get_aplicadores_para_atribuicao() {
+        $this->db->where_in('role', array('aplicador', 'supervisor', 'administrador'));
+        $this->db->where('is_active', TRUE);
+        $this->db->order_by('full_name', 'ASC');
+        return $this->db->get('users')->result();
+    }
+
     public function authenticate($username, $password) {
         $user = $this->db->get_where('users', array(
             'username' => $username,

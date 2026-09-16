@@ -171,7 +171,7 @@
                         <option value="none">🚫 Nenhum Aplicador (ocultar do app)</option>
                         <?php foreach ($aplicadores as $aplicador): ?>
                         <option value="<?= $aplicador->id ?>" <?= set_select('aplicadores[]', $aplicador->id) ?>>
-                            <?= $aplicador->full_name ?> (<?= $aplicador->username ?>)
+                            <?= $aplicador->full_name ?> (<?= $aplicador->username ?>)<?= $aplicador->role !== 'aplicador' ? ' — ' . ucfirst($aplicador->role) : '' ?>
                         </option>
                         <?php endforeach; ?>
                     </select>

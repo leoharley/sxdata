@@ -42,7 +42,7 @@ class Questionnaires extends CI_Controller {
                         $aplicadores_json = json_encode(array());
                     } else {
                         if (in_array('all', $aplicadores)) {
-                            $all_aplicadores = $this->User_model->get_aplicadores();
+                            $all_aplicadores = $this->User_model->get_aplicadores_para_atribuicao();
                             $aplicadores = array_column($all_aplicadores, 'id');
                         }
                         $aplicadores_json = json_encode(array_map('intval', $aplicadores));
@@ -181,7 +181,7 @@ class Questionnaires extends CI_Controller {
         }
 
         $data['title'] = 'Criar Questionário - SXData';
-        $data['aplicadores'] = $this->User_model->get_aplicadores();
+        $data['aplicadores'] = $this->User_model->get_aplicadores_para_atribuicao();
         $data['projects'] = $this->Project_model->get_for_select();
         $data['preselected_project_id'] = $preselected_project_id;
         
@@ -407,7 +407,7 @@ class Questionnaires extends CI_Controller {
                         $aplicadores_json = json_encode(array());
                     } else {
                         if (in_array('all', $aplicadores)) {
-                            $all_aplicadores = $this->User_model->get_aplicadores();
+                            $all_aplicadores = $this->User_model->get_aplicadores_para_atribuicao();
                             $aplicadores = array_column($all_aplicadores, 'id');
                         }
                         $aplicadores_json = json_encode(array_map('intval', $aplicadores));
@@ -557,7 +557,7 @@ class Questionnaires extends CI_Controller {
             }
         }
         
-        $data['aplicadores'] = $this->User_model->get_aplicadores();
+        $data['aplicadores'] = $this->User_model->get_aplicadores_para_atribuicao();
         $data['projects'] = $this->Project_model->get_for_select();
         
         // Carregar dicas de follow-up agrupadas por question_id
