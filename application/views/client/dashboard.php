@@ -41,13 +41,75 @@
         margin-bottom: 1rem;
         opacity: 0.4;
     }
+    /* Painel automatico */
+    .live-block {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+    .live-block > header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+    .kpi {
+        border: 1px solid #eef0f2;
+        border-radius: .6rem;
+        padding: .85rem 1rem;
+        height: 100%;
+    }
+    .kpi .kpi-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--secondary-color);
+        line-height: 1.2;
+    }
+    .kpi .kpi-label {
+        font-size: .78rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+    }
+    .chart-box {
+        position: relative;
+        height: 260px;
+    }
+    .q-title {
+        font-size: .95rem;
+        font-weight: 600;
+        color: var(--secondary-color);
+        margin-bottom: .5rem;
+    }
+    .open-answer {
+        border-left: 3px solid #dfe4ea;
+        padding: .4rem 0 .4rem .75rem;
+        margin-bottom: .5rem;
+        font-size: .9rem;
+    }
+    .open-answer .meta {
+        font-size: .75rem;
+        color: #9aa4ae;
+    }
+    .live-updated {
+        font-size: .78rem;
+        color: #6c757d;
+    }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2><i class="fas fa-chart-pie me-2" style="color: var(--primary-color);"></i>Painel de Análises</h2>
-        <small class="text-muted">Visualize os resultados das análises estatísticas</small>
+        <small class="text-muted">Resultados atualizados conforme as respostas chegam do campo</small>
     </div>
+    <button class="btn btn-outline-secondary btn-sm" onclick="window.location.reload();">
+        <i class="fas fa-sync-alt me-1"></i> Atualizar
+    </button>
 </div>
 
 <div class="client-welcome">
@@ -55,18 +117,164 @@
         <i class="fas fa-user-circle me-3" style="font-size: 2rem; color: var(--primary-color);"></i>
         <div>
             <h5 class="mb-1" style="color: var(--secondary-color);">Bem-vindo(a), <?= htmlspecialchars($this->session->userdata('admin_name')) ?>!</h5>
-            <p class="mb-0 text-muted">Aqui você encontra os gráficos e análises gerados a partir dos dados coletados.</p>
+            <p class="mb-0 text-muted">Aqui você acompanha os resultados da coleta em tempo real.</p>
         </div>
     </div>
 </div>
 
-<?php if (empty($analyses)): ?>
+<?php
+// ============================================================
+// BLOCO 1 - Estatisticas automaticas (sem IA, direto do banco)
+// ============================================================
+$live = isset($live) ? $live : array();
+?>
+
+<?php if (empty($live)): ?>
     <div class="empty-state">
         <i class="fas fa-chart-bar d-block"></i>
-        <h5>Nenhuma análise disponível</h5>
-        <p>Ainda não há análises estatísticas geradas. Aguarde o administrador gerar as análises.</p>
+        <h5>Nenhuma resposta coletada ainda</h5>
+        <p>Assim que os aplicadores enviarem as primeiras respostas, os gráficos aparecem aqui automaticamente.</p>
     </div>
 <?php else: ?>
+    <p class="live-updated mb-3">
+        <i class="fas fa-clock me-1"></i>
+        Dados apurados em <?= date('d/m/Y H:i') ?>. Use "Atualizar" para recarregar.
+    </p>
+
+    <?php foreach ($live as $bloco):
+        $q        = $bloco['questionnaire'];
+        $ov       = $bloco['overview'];
+        $uid      = 'q' . (int) $q->id;
+    ?>
+    <section class="live-block">
+        <header>
+            <div>
+                <h5 class="mb-0" style="color: var(--secondary-color);">
+                    <?= htmlspecialchars($q->title) ?>
+                </h5>
+                <?php if (!empty($q->project_name)): ?>
+                    <small class="text-muted"><i class="fas fa-folder me-1"></i><?= htmlspecialchars($q->project_name) ?></small>
+                <?php endif; ?>
+            </div>
+            <span class="badge bg-success">
+                <?= number_format($ov['total_responses'], 0, ',', '.') ?> resposta(s)
+            </span>
+        </header>
+
+        <div class="p-3">
+            <!-- KPIs -->
+            <div class="row g-2 mb-4">
+                <div class="col-6 col-lg-3">
+                    <div class="kpi">
+                        <div class="kpi-value"><?= number_format($ov['total_responses'], 0, ',', '.') ?></div>
+                        <div class="kpi-label">Respostas</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="kpi">
+                        <div class="kpi-value"><?= (int) $ov['total_applicators'] ?></div>
+                        <div class="kpi-label">Aplicadores</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="kpi">
+                        <div class="kpi-value"><?= (int) $ov['total_locations'] ?></div>
+                        <div class="kpi-label">Locais</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="kpi">
+                        <div class="kpi-value" style="font-size:1.05rem;">
+                            <?= $ov['last_response'] ? date('d/m/Y', strtotime($ov['last_response'])) : '-' ?>
+                        </div>
+                        <div class="kpi-label">Última resposta</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evolucao + cobertura -->
+            <div class="row g-3 mb-4">
+                <?php if (!empty($bloco['por_dia'])): ?>
+                <div class="col-lg-6">
+                    <div class="q-title">Respostas por dia (últimos 30 dias)</div>
+                    <div class="chart-box"><canvas id="dia_<?= $uid ?>"></canvas></div>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($bloco['por_local'])): ?>
+                <div class="col-lg-6">
+                    <div class="q-title">Cobertura por local</div>
+                    <div class="chart-box"><canvas id="loc_<?= $uid ?>"></canvas></div>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($bloco['por_aplicador'])): ?>
+                <div class="col-lg-6">
+                    <div class="q-title">Respostas por aplicador</div>
+                    <div class="chart-box"><canvas id="apl_<?= $uid ?>"></canvas></div>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Perguntas fechadas -->
+            <?php if (!empty($bloco['perguntas'])): ?>
+                <h6 class="mb-3" style="color: var(--secondary-color);">
+                    <i class="fas fa-list-ul me-1"></i> Resultados por pergunta
+                </h6>
+                <div class="row g-3 mb-3">
+                    <?php foreach ($bloco['perguntas'] as $i => $pg): ?>
+                    <div class="col-lg-6">
+                        <div class="q-title"><?= htmlspecialchars($pg['question_text']) ?></div>
+
+                        <?php if (!empty($pg['resumo'])): ?>
+                            <!-- Pergunta numerica -->
+                            <div class="d-flex gap-3 small text-muted mb-2">
+                                <span>Média: <strong><?= $pg['resumo']['media'] ?></strong></span>
+                                <span>Mín: <strong><?= $pg['resumo']['minimo'] ?></strong></span>
+                                <span>Máx: <strong><?= $pg['resumo']['maximo'] ?></strong></span>
+                                <span><?= (int) $pg['total'] ?> resp.</span>
+                            </div>
+                        <?php else: ?>
+                            <div class="chart-box"><canvas id="pg_<?= $uid ?>_<?= (int) $i ?>"></canvas></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <!-- Respostas abertas -->
+            <?php if (!empty($bloco['abertas'])): ?>
+                <h6 class="mb-2 mt-4" style="color: var(--secondary-color);">
+                    <i class="fas fa-comment-dots me-1"></i> Respostas abertas (mais recentes)
+                </h6>
+                <?php foreach ($bloco['abertas'] as $grupo): ?>
+                    <div class="mb-3">
+                        <div class="q-title"><?= htmlspecialchars($grupo['question_text']) ?></div>
+                        <?php foreach ($grupo['respostas'] as $resp): ?>
+                            <div class="open-answer">
+                                <?= nl2br(htmlspecialchars($resp['texto'])) ?>
+                                <div class="meta">
+                                    <?= $resp['data'] ? date('d/m/Y', strtotime($resp['data'])) : '' ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php endforeach; ?>
+<?php endif; ?>
+
+<?php
+// ============================================================
+// BLOCO 2 - Analises de IA (opcional, quando o admin gerar)
+// ============================================================
+?>
+<?php if (!empty($analyses)): ?>
+    <h5 class="mb-3 mt-4" style="color: var(--secondary-color);">
+        <i class="fas fa-robot me-2"></i>Análises aprofundadas
+    </h5>
     <div class="row">
         <?php
             $typeLabels = array('statistical' => 'Estatística', 'sentiment' => 'Sentimento', 'correlation' => 'Correlação', 'general' => 'Geral');
@@ -111,3 +319,98 @@
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
+
+<script>
+(function () {
+    // Paleta alinhada a identidade do painel
+    var CORES = ['#8fae5d', '#23345f', '#3498db', '#f39c12', '#e74c3c',
+                 '#16a085', '#9b59b6', '#34495e', '#d35400', '#7f8c8d'];
+
+    function cores(n) {
+        var out = [];
+        for (var i = 0; i < n; i++) { out.push(CORES[i % CORES.length]); }
+        return out;
+    }
+
+    function barras(id, rotulos, valores, horizontal) {
+        var el = document.getElementById(id);
+        if (!el) { return; }
+        new Chart(el, {
+            type: 'bar',
+            data: {
+                labels: rotulos,
+                datasets: [{ data: valores, backgroundColor: cores(valores.length), borderRadius: 4 }]
+            },
+            options: {
+                indexAxis: horizontal ? 'y' : 'x',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true }, y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    function linha(id, rotulos, valores) {
+        var el = document.getElementById(id);
+        if (!el) { return; }
+        new Chart(el, {
+            type: 'line',
+            data: {
+                labels: rotulos,
+                datasets: [{
+                    data: valores,
+                    borderColor: '#8fae5d',
+                    backgroundColor: 'rgba(143,174,93,0.15)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    var dados = <?= json_encode(array_map(function ($b) {
+        return array(
+            'uid'       => 'q' . (int) $b['questionnaire']->id,
+            'por_dia'   => $b['por_dia'],
+            'por_local' => $b['por_local'],
+            'por_apl'   => $b['por_aplicador'],
+            'perguntas' => array_map(function ($p) {
+                return array('linhas' => $p['linhas'], 'resumo' => $p['resumo']);
+            }, $b['perguntas']),
+        );
+    }, $live), JSON_UNESCAPED_UNICODE) ?>;
+
+    dados.forEach(function (d) {
+        if (d.por_dia && d.por_dia.length) {
+            linha('dia_' + d.uid,
+                  d.por_dia.map(function (r) { return r.dia; }),
+                  d.por_dia.map(function (r) { return r.total; }));
+        }
+        if (d.por_local && d.por_local.length) {
+            barras('loc_' + d.uid,
+                   d.por_local.map(function (r) { return r.rotulo; }),
+                   d.por_local.map(function (r) { return r.total; }), true);
+        }
+        if (d.por_apl && d.por_apl.length) {
+            barras('apl_' + d.uid,
+                   d.por_apl.map(function (r) { return r.rotulo; }),
+                   d.por_apl.map(function (r) { return r.total; }), true);
+        }
+        (d.perguntas || []).forEach(function (p, i) {
+            if (p.linhas && p.linhas.length) {
+                barras('pg_' + d.uid + '_' + i,
+                       p.linhas.map(function (r) { return r.rotulo; }),
+                       p.linhas.map(function (r) { return r.total; }), true);
+            }
+        });
+    });
+})();
+</script>

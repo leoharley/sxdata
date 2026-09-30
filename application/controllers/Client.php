@@ -22,12 +22,64 @@ class Client extends CI_Controller {
             $project_ids = $this->_get_client_project_ids($user_id);
             $data['analyses'] = $this->_get_analyses_for_projects($project_ids);
         } else {
+            $project_ids = array();
             $data['analyses'] = $this->Ai_model->get_statistical_analyses();
         }
+
+        // Estatisticas calculadas direto do banco, sem IA e sem geracao manual.
+        // E o conteudo principal do painel: acompanha a coleta em tempo real.
+        $data['live'] = $this->_build_live_analytics($role, $project_ids);
 
         $this->load->view('admin/header', $data);
         $this->load->view('client/dashboard', $data);
         $this->load->view('admin/footer');
+    }
+
+    /**
+     * Monta os dados automaticos de cada questionario visivel ao usuario.
+     *
+     * Cliente ve apenas os projetos vinculados a ele; admin/supervisor
+     * veem todos, para poderem conferir o que o cliente esta vendo.
+     */
+    private function _build_live_analytics($role, $project_ids) {
+        $this->load->model('Client_analytics_model');
+
+        if ($role === 'cliente') {
+            if (empty($project_ids)) {
+                return array();
+            }
+            $questionnaires = $this->Client_analytics_model
+                                   ->get_questionnaires_for_projects($project_ids);
+        } else {
+            $todos_projetos = $this->db->select('id')->get('projects')->result();
+            $ids = array_map(function ($p) { return (int) $p->id; }, $todos_projetos);
+            $questionnaires = empty($ids)
+                            ? array()
+                            : $this->Client_analytics_model->get_questionnaires_for_projects($ids);
+        }
+
+        $live = array();
+
+        foreach ($questionnaires as $q) {
+            $overview = $this->Client_analytics_model->get_overview($q->id);
+
+            // Sem respostas coletadas nao ha o que mostrar
+            if ($overview['total_responses'] === 0) {
+                continue;
+            }
+
+            $live[] = array(
+                'questionnaire'  => $q,
+                'overview'       => $overview,
+                'por_dia'        => $this->Client_analytics_model->get_responses_by_day($q->id, 30),
+                'por_local'      => $this->Client_analytics_model->get_coverage_by_location($q->id),
+                'por_aplicador'  => $this->Client_analytics_model->get_coverage_by_applicator($q->id),
+                'perguntas'      => $this->Client_analytics_model->get_question_breakdown($q->id),
+                'abertas'        => $this->Client_analytics_model->get_open_answers($q->id, 30),
+            );
+        }
+
+        return $live;
     }
 
     public function view_analysis($id) {
