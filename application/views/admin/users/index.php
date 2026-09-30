@@ -245,6 +245,7 @@
                             <option value="aplicador">Aplicador</option>
                             <option value="supervisor">Supervisor</option>
                             <option value="administrador">Administrador</option>
+                            <option value="cliente">Cliente</option>
                         </select>
                     </div>
                     
