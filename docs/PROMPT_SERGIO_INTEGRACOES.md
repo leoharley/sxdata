@@ -1,14 +1,19 @@
-# Integrações de dados dos relatórios municipais — o que falta fazer
+# Tarefas do Sérgio — integrações de dados e mapa integrado
 
 Para: Sérgio (ou o agente de código que ele usar).
-Contexto: proposta "Evolução da Plataforma SXDATA", frente A (camada de
-integração) e frente B (ampliação das informações, incluindo saúde).
 
-O restante da proposta já está implementado no painel. Falta a parte que
-busca os dados nas fontes. Este documento explica onde ela se encaixa, o
-formato que o painel espera e o que entregar.
+Este documento tem duas tarefas, nesta ordem:
+
+- **Tarefa 1 — Integrações de dados (seções 1 a 6).** Proposta "Evolução da
+  Plataforma SXDATA", frente A (camada de integração) e frente B (ampliação das
+  informações, incluindo saúde). O restante da proposta já está implementado no
+  painel; falta a parte que busca os dados nas fontes.
+- **Tarefa 2 — Mapa integrado de dados secundários e primários (seção 7).**
+  Usa os indicadores da Tarefa 1, então vem depois dela.
 
 ---
+
+# Tarefa 1 — Integrações de dados dos relatórios municipais
 
 ## 1. O que já existe
 
@@ -243,3 +248,100 @@ O fluxo completo está em `application/controllers/Relatorios_municipais.php`.
 A montagem dos gráficos a partir das linhas está em
 `application/libraries/Relatorio_graficos.php`; lá fica claro como cada `modo`
 de gráfico (série, categorias, ranking, composição, pirâmide) lê as linhas.
+
+---
+
+# Tarefa 2 — Mapa integrado de dados secundários + dados primários (SXDATA — painel web e app)
+
+## 7.1 Contexto
+O SXDATA é uma plataforma de coleta de dados com painel web administrativo e aplicativo de campo. Hoje ela já tem formulários/questionários, funcionamento offline, sincronização, captura de fotos, coordenadas geográficas, exportação Excel/KMZ e painéis de consulta. Também já existe uma busca de **dados secundários** (dados oficiais, ex.: IBGE e outras fontes públicas) por município.
+
+O cliente costuma contratar dois tipos de dado juntos:
+- **Dados secundários**: indicadores oficiais do município.
+- **Dados primários**: o que a equipe coleta em campo (entrevistas, pontos georreferenciados de comunidades etc.).
+
+A feature melhora a busca de dados secundários e junta os dois tipos de dado numa visão de mapa.
+
+## 7.2 Objetivo funcional
+1. **Dashboard com mapa (painel web)**
+   - O usuário busca um ou mais municípios, que aparecem destacados no mapa (contorno/polígono do município).
+   - Um painel de filtros permite buscar **indicadores por tema** (ex.: Saúde, Demografia, Educação, Economia, Saneamento). Escolhido o tema, aparecem os indicadores do município selecionado (valor, ano de referência e fonte).
+   - O mapa mostra os **pontos de coleta primária** (ex.: comunidades) que caem naquele município.
+   - Ao **clicar num ponto**, abre um popup/painel lateral com os dados coletados ali (respostas do formulário, fotos, data, coletor) e um link para o registro completo.
+   - Ao clicar no município, aparecem os indicadores secundários dele.
+
+   Exemplo de uso: o município de Monte do Carmo aparece no mapa com seus indicadores de saúde e demografia. Dentro dele, a comunidade "Andiroba", coletada em campo, aparece como ponto; clicar nela mostra os dados primários coletados.
+
+2. **Aplicativo de campo**
+   - O coletor pode **registrar um ponto/comunidade** no mapa (usando o GPS atual ou tocando no mapa), com nome e tipo, e associar a ele as coletas/entrevistas feitas no local.
+   - Tem de funcionar **offline**, seguindo o mecanismo de sincronização que já existe, e os pontos devem aparecer no painel depois da sincronização.
+   - Se for viável sem grande esforço, o app também mostra o mapa do município com os pontos já sincronizados e um resumo dos indicadores secundários (cacheado para uso offline).
+
+## 7.3 Como trabalhar
+1. **Explore antes de codar.** Mapeie a estrutura do painel e do app: stack, módulo de mapas (se já existe algum), modelo de dados das coletas e das coordenadas, a busca atual de dados secundários (de onde vêm os dados, como são cacheados) e o fluxo de sincronização offline.
+2. **Apresente um plano curto antes de implementar**, com:
+   - mudanças de modelo de dados e migrações (ex.: entidade "ponto/comunidade" ligada ao município pelo código IBGE e às coletas);
+   - endpoints novos ou alterados;
+   - biblioteca de mapa escolhida (reaproveite a que o projeto já usa; se não houver nenhuma, justifique a escolha);
+   - fonte das malhas municipais (ex.: API de malhas do IBGE) e dos indicadores por tema, com uma estratégia de cache;
+   - o que entra no painel, o que entra no app e o que fica para uma fase 2.
+   **Espere minha aprovação antes de seguir.**
+3. Implemente em incrementos pequenos e revisáveis: primeiro backend/modelo, depois o painel, depois o app.
+
+## 7.4 Regras
+- Siga os padrões, a arquitetura e as convenções que já existem no projeto. Não introduza frameworks novos sem necessidade.
+- Faça mudanças de escopo mínimo e não refatore o que não for necessário para a feature.
+- Reaproveite a busca de dados secundários atual em vez de reescrevê-la.
+- Não quebre a exportação Excel/KMZ nem a sincronização offline existentes. Se fizer sentido, inclua os novos pontos na exportação KMZ.
+- Associe o ponto ao município pelo código IBGE. Quando o ponto tiver coordenadas, valide se ele cai dentro do polígono do município e avise se não cair.
+- Na tela, mostre sempre a fonte e o ano de referência de cada indicador.
+- Mensagens e textos da interface em português.
+
+## 7.5 Critérios de aceite
+- [ ] No painel, buscar "Monte do Carmo" centraliza o mapa no município e destaca o contorno.
+- [ ] Filtrar pelo tema "Saúde" ou "Demografia" mostra os indicadores com valor, ano e fonte.
+- [ ] Um ponto criado offline no app aparece no mapa do painel depois da sincronização, dentro do município certo.
+- [ ] Clicar no ponto mostra os dados primários ligados a ele (respostas, fotos, data, coletor).
+- [ ] A sincronização e as exportações que já existem continuam funcionando.
+- [ ] Há testes para as regras novas (associação ponto–município, filtro por tema) e eles passam.
+
+## 7.6 Entrega
+Ao final, liste os arquivos alterados, as migrações, os endpoints novos, como testar manualmente (passo a passo no painel e no app) e as pendências da fase 2.
+
+## 7.7 Pontos de partida no código atual
+
+Levantados em outubro/2026. Servem para encurtar a exploração do passo 1, não para substituí-la: confira cada um antes de usar.
+
+**Repositórios**
+- Painel: `leoharley/sxdata` (CodeIgniter 3 + PostgreSQL). O `main` é publicado pelo Git do cPanel em `https://painel.sxdata.com.br`.
+- App: `leoharley/sxdata-app` (Flutter, Android e versão web/PWA). A API usada é `https://painel.sxdata.com.br/api`.
+- **Atenção:** o app do SXData compartilha a base de código com o app de outro cliente (Instituto Alves Lima). Ao copiar algo de lá, não traga URL, nomes, logos, pacote (o do SXData é `com.example.sxdata`) nem as cores do outro cliente.
+
+**Mapas**
+- Painel: **Leaflet 1.9.4** já carregado em todas as telas (`application/views/admin/footer.php`, junto com `leaflet.heat`). É usado no mapa de calor de `application/views/admin/reports/index.php`.
+- App: **flutter_map 6.1** + `latlong2`, com tiles do OpenStreetMap, em `lib/screens/applicators_map_screen.dart`.
+
+**Coordenadas e coletas**
+- Cada coleta é uma linha em `form_responses` (`latitude`, `longitude`, `location_name`, `photo_path`, `photo_path_2`, `audio_path`, `applied_by`, `completed_at`). As respostas ficam em `question_responses`.
+- A captura de GPS no app fica em `lib/services/location_service.dart`. **Edições nunca alteram as coordenadas de uma coleta**, regra garantida no app e no servidor (`application/controllers/api/Forms.php`). Mantenha isso.
+- Coletas por QR Code (`origin = 'qrcode'`) não têm aplicador nem coordenadas.
+
+**Dados secundários**
+- Hoje estão em dois lugares: a sua página IBGE Panorama, fora do painel, e o módulo **Relatórios Automatizados**, depois da Tarefa 1.
+- No módulo, os indicadores ficam em `report_indicators`, **por relatório**, não por município. Não há cache por município independente de um relatório. Decida no plano se o mapa lê do relatório mais recente do município ou de um cache novo por código IBGE.
+- Os eixos de `application/config/relatorio_catalogo.php` (Território e população, Economia, Educação, Saúde...) são candidatos naturais aos "temas" do filtro. Cada indicador já tem fonte, unidade e formato.
+
+**Sincronização offline (app)**
+- A fila de envio fica em `lib/providers/form_provider.dart`. Cada coleta tem um `client_id` (UUID gerado no aparelho) que o servidor usa para não duplicar reenvios (`api/forms/submit`, coluna `form_responses.client_id`). Um "ponto/comunidade" criado offline deve seguir o mesmo padrão.
+- A coleta só sai da fila quando o servidor devolve o id gravado (`FormResponse.extractServerId`).
+
+**API e permissões**
+- Os endpoints do app autenticam com `application/libraries/Api_token.php` (token assinado, 28 dias). Use-a em endpoints novos.
+- Telas novas do painel restritas à equipe: siga o padrão `equipe()` de `application/controllers/Relatorios_municipais.php`. Os controllers antigos só verificam o login, sem checar o perfil.
+
+**KMZ**
+- `application/libraries/Kmz_generator.php` monta o arquivo em memória; os dados vêm de `Response_model::get_with_location()`.
+
+**Testes**
+- App: `flutter test` (93 testes passando em outubro/2026). Para gerar o APK, use o JDK 17: o Gradle 8.12 não funciona com o JDK 25.
+- Painel: não há suíte de testes em uso; o PHPUnit está em `require-dev` do `composer.json`. A associação ponto–município (ponto dentro do polígono) pode ser escrita como uma classe PHP sem banco, testável isoladamente.
