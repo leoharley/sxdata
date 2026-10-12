@@ -256,6 +256,14 @@
                     Relatórios e Análises
                 </a>
             </li>
+            <?php if (in_array($user_role, ['administrador', 'supervisor'], true)): ?>
+            <li class="nav-item">
+                <a class="nav-link <?= $this->uri->segment(1) == 'relatorios-automatizados' ? 'active' : '' ?>" href="<?= base_url('relatorios-automatizados') ?>">
+                    <i class="fas fa-globe-americas"></i>
+                    Relatórios Automatizados
+                </a>
+            </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a class="nav-link <?= $this->uri->segment(1) == 'ai' ? 'active' : '' ?>" href="<?= base_url('ai') ?>">
                     <i class="fas fa-brain"></i>

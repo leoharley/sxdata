@@ -142,3 +142,7 @@ $route['api/ai/approved-suggestions'] = 'api/ai/approved_suggestions';
 // Coleta pública por QR Code (sem login)
 $route['responder/([a-f0-9]{32})/obrigado'] = 'responder/obrigado/$1';
 $route['responder/([a-f0-9]{32})'] = 'responder/index/$1';
+
+// Relatórios municipais automatizados
+$route['relatorios-automatizados'] = 'relatorios_municipais/index';
+$route['relatorios-automatizados/(.+)'] = 'relatorios_municipais/$1';

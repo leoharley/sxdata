@@ -122,6 +122,42 @@
     </div>
 </div>
 
+<?php if (!empty($relatorios_municipais)): ?>
+    <h5 class="mb-3" style="color: var(--secondary-color);">
+        <i class="fas fa-globe-americas me-2"></i>Diagnósticos municipais
+    </h5>
+    <div class="row mb-4">
+        <?php foreach ($relatorios_municipais as $rm): ?>
+            <div class="col-md-6 col-lg-4">
+                <a href="<?= base_url('relatorios-automatizados/documento/' . (int) $rm->id . '/' . (int) $rm->versao_atual) ?>"
+                   target="_blank" rel="noopener" class="text-decoration-none">
+                    <div class="analysis-card">
+                        <div class="card-top">
+                            <div class="d-flex align-items-start">
+                                <div class="type-icon me-3" style="background: linear-gradient(135deg, #8fae5d, #5a7536);">
+                                    <i class="fas fa-file-alt"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1" style="color: var(--secondary-color);">
+                                        <?= html_escape($rm->municipio_nome) ?> - <?= html_escape($rm->uf) ?>
+                                    </h6>
+                                    <span class="badge" style="background: #8fae5d; color: white;">Diagnóstico <?= html_escape($rm->periodo_referencia) ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-bottom d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i><?= $rm->publicado_em ? date('d/m/Y', strtotime($rm->publicado_em)) : '' ?>
+                            </small>
+                            <small class="text-muted">Versão <?= (int) $rm->versao_atual ?>.0 · PDF</small>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
 <?php
 // ============================================================
 // BLOCO 1 - Estatisticas automaticas (sem IA, direto do banco)

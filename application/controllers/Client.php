@@ -30,6 +30,13 @@ class Client extends CI_Controller {
         // E o conteudo principal do painel: acompanha a coleta em tempo real.
         $data['live'] = $this->_build_live_analytics($role, $project_ids);
 
+        // Diagnósticos municipais aprovados para os projetos do cliente
+        $data['relatorios_municipais'] = [];
+        if ($role === 'cliente' && $this->db->table_exists('municipal_reports')) {
+            $this->load->model('Relatorio_municipal_model');
+            $data['relatorios_municipais'] = $this->Relatorio_municipal_model->publicados_dos_projetos($project_ids);
+        }
+
         $this->load->view('admin/header', $data);
         $this->load->view('client/dashboard', $data);
         $this->load->view('admin/footer');
