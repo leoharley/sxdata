@@ -23,8 +23,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
             $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
@@ -86,14 +84,12 @@ class Response_model extends CI_Model {
     public function count_all() {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         return $this->db->count_all_results();
     }
 
     public function count_today() {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('DATE(fr.created_at)', date('Y-m-d'));
         return $this->db->count_all_results();
     }
@@ -101,7 +97,6 @@ class Response_model extends CI_Model {
     public function count_pending_sync() {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('fr.sync_status', 'pending');
         return $this->db->count_all_results();
     }
@@ -111,7 +106,6 @@ class Response_model extends CI_Model {
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->order_by('fr.created_at', 'DESC');
         $this->db->limit($limit);
         return $this->db->get()->result();
@@ -121,7 +115,6 @@ class Response_model extends CI_Model {
         $this->db->select('DATE(fr.created_at) as date, COUNT(*) as count');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('fr.created_at >=', date('Y-m-d', strtotime("-{$days} days")));
         $this->db->group_by('DATE(fr.created_at)');
         $this->db->order_by('date', 'ASC');
@@ -133,8 +126,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
             $this->db->where('fr.questionnaire_id', $filters['questionnaire_id']);
@@ -165,8 +156,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar os mesmos filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
@@ -357,8 +346,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar os mesmos filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
@@ -393,8 +380,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar os mesmos filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
@@ -430,8 +415,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar os mesmos filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
@@ -465,8 +448,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar os mesmos filtros novamente
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
@@ -504,8 +485,6 @@ class Response_model extends CI_Model {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Filtro base de período (últimos X dias)
         $this->db->where('fr.created_at >=', date('Y-m-d', strtotime("-{$days} days")));
@@ -549,8 +528,6 @@ class Response_model extends CI_Model {
         $this->db->join('users u', 'fr.applied_by = u.id', 'inner'); // INNER JOIN para garantir usuário válido
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
@@ -634,7 +611,6 @@ class Response_model extends CI_Model {
         $this->db->where('fr.questionnaire_id IS NOT NULL');
         $this->db->where('q.title IS NOT NULL');
         $this->db->where("q.title != ''");
-        $this->db->where('q.status', 'active'); // Apenas questionários ativos
         
         // Incluir todas as colunas não agregadas no GROUP BY
         $this->db->group_by('q.id, q.title');
@@ -670,7 +646,6 @@ class Response_model extends CI_Model {
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
         
         // Aplicar filtros
-        $this->db->where('q.status', 'active'); // Apenas questionários ativos
         
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
             $this->db->where('q.id', $filters['questionnaire_id']);
@@ -738,7 +713,6 @@ class Response_model extends CI_Model {
         $this->db->select('fr.sync_status, COUNT(*) as count');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->group_by('fr.sync_status');
         return $this->db->get()->result();
     }
@@ -1010,7 +984,6 @@ class Response_model extends CI_Model {
         $this->db->select('fr.location_name, COUNT(*) as count');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('fr.applied_by', $applicator_id);
         $this->db->where('fr.location_name IS NOT NULL');
         $this->db->where("fr.location_name != ''");
@@ -1029,7 +1002,6 @@ class Response_model extends CI_Model {
         $this->db->select('COUNT(DISTINCT DATE(fr.completed_at)) as active_days');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('fr.applied_by', $user_id);
         $this->db->where('fr.completed_at IS NOT NULL');
         $this->db->where('fr.completed_at >=', date('Y-m-d', strtotime("-{$days} days")));
@@ -1051,7 +1023,6 @@ class Response_model extends CI_Model {
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('fr.applied_by', $user_id);
         $this->db->where('fr.completed_at IS NOT NULL');
         $this->db->order_by('fr.completed_at', 'DESC');
@@ -1096,7 +1067,6 @@ class Response_model extends CI_Model {
         ');
         $this->db->from('form_responses fr');
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
-        $this->db->where('q.status', 'active');
         $this->db->where('fr.applied_by', $user_id);
         $this->db->where('fr.completed_at IS NOT NULL');
 
@@ -1201,7 +1171,6 @@ private function analyze_text_responses($question_id, $filters, $total_responses
     $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1455,7 +1424,9 @@ public function get_question_analysis($filters = array()) {
         $this->db->where('q.questionnaire_id', $filters['questionnaire_id']);
     }
     
-    $this->db->where('quest.status', 'active');
+    // Ativos, ou pausados/inativos que já têm respostas: pausar tira o
+    // questionário do app, não da análise
+    $this->db->where("(quest.status = 'active' OR EXISTS (SELECT 1 FROM form_responses frx WHERE frx.questionnaire_id = quest.id))", NULL, FALSE);
     $this->db->order_by('quest.title, q.order_index');
     
     $questions = $this->db->get()->result();
@@ -1499,7 +1470,6 @@ public function get_question_statistics($question_id, $filters = array()) {
     $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros de data se fornecidos
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1582,7 +1552,6 @@ private function analyze_option_responses($question_id, $filters, $total_respons
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
     $this->db->where('qr.selected_options IS NOT NULL');
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1700,7 +1669,6 @@ private function count_checkbox_option($question_id, $option_value, $filters) {
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
     $this->db->where('qr.selected_options IS NOT NULL');
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1756,7 +1724,6 @@ private function analyze_number_responses($question_id, $filters, $total_respons
     $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1817,7 +1784,6 @@ private function analyze_date_responses($question_id, $filters, $total_responses
     $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1873,7 +1839,6 @@ private function analyze_generic_responses($question_id, $filters, $total_respon
     $this->db->join('questions q', 'qr.question_id = q.id', 'inner');
     $this->db->join('questionnaires quest', 'q.questionnaire_id = quest.id', 'inner');
     $this->db->where('qr.question_id', $question_id);
-    $this->db->where('quest.status', 'active');
 
     // Aplicar filtros
     if (isset($filters['date_from']) && $filters['date_from']) {
@@ -1935,7 +1900,6 @@ public function get_top_answered_questions($filters = array(), $limit = 5) {
         $this->db->where('fr.applied_by', $filters['applied_by']);
     }
     
-    $this->db->where('quest.status', 'active');
     $this->db->group_by('q.id, q.question_text, q.question_type, quest.title');
     $this->db->order_by('total_responses', 'DESC');
     $this->db->limit($limit);
@@ -2181,8 +2145,6 @@ public function validate_export_filters($filters) {
         $this->db->join('questionnaires q', 'fr.questionnaire_id = q.id', 'left');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
 
-        // Filtrar apenas questionários ativos
-        $this->db->where('q.status', 'active');
 
         // Aplicar filtros
         if (isset($filters['questionnaire_id']) && $filters['questionnaire_id']) {
