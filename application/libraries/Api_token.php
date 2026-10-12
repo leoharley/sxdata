@@ -105,6 +105,15 @@ class Api_token {
         return $this->verify(substr($header, 7));
     }
 
+    /**
+     * Assinatura HMAC de um texto qualquer, com o mesmo segredo dos tokens.
+     * Usada pelo formulário público para garantir que o envio veio da
+     * página gerada pelo servidor.
+     */
+    public function signature($data) {
+        return $this->b64url_encode($this->sign((string) $data));
+    }
+
     // ------------------------------------------------------------
     // Internos
     // ------------------------------------------------------------

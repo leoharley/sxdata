@@ -122,12 +122,17 @@ class Client_analytics_model extends CI_Model {
      * Cobertura por aplicador.
      */
     public function get_coverage_by_applicator($questionnaire_id, $limit = 15) {
-        $this->db->select('COALESCE(u.full_name, \'Nao identificado\') as rotulo, COUNT(fr.id) as total', FALSE);
+        // Coletas por QR Code não têm aplicador: aparecem agrupadas com nome próprio
+        $rotulo = $this->db->field_exists('origin', 'form_responses')
+            ? "CASE WHEN fr.origin = 'qrcode' THEN 'Coleta pública (QR Code)' ELSE COALESCE(u.full_name, 'Não identificado') END"
+            : "COALESCE(u.full_name, 'Não identificado')";
+
+        $this->db->select($rotulo . ' as rotulo, COUNT(fr.id) as total', FALSE);
         $this->db->from('form_responses fr');
         $this->db->join('users u', 'fr.applied_by = u.id', 'left');
         $this->db->where('fr.questionnaire_id', (int) $questionnaire_id);
         $this->db->where('fr.completed_at IS NOT NULL', NULL, FALSE);
-        $this->db->group_by('u.full_name');
+        $this->db->group_by($rotulo, FALSE);
         $this->db->order_by('total', 'DESC');
         $this->db->limit((int) $limit);
 

@@ -1719,6 +1719,94 @@ class Questionnaires extends CI_Controller {
         return $grouped;
     }
 
+    // ============================================================
+    // COLETA PÚBLICA POR QR CODE
+    // ============================================================
+
+    /**
+     * Links públicos (QR Codes) de um questionário.
+     */
+    public function qrcode($id) {
+        $this->require_team();
+
+        $questionnaire = $this->Questionnaire_model->get_by_id($id);
+        if (!$questionnaire) {
+            show_404();
+            return;
+        }
+
+        $this->load->model('Public_link_model');
+
+        $data['title'] = 'QR Code - ' . $questionnaire->title . ' - SXData';
+        $data['questionnaire'] = $questionnaire;
+        $data['links'] = $this->Public_link_model->get_for_questionnaire($id);
+
+        $this->load->view('admin/header', $data);
+        $this->load->view('admin/questionnaires/qrcode', $data);
+        $this->load->view('admin/footer');
+    }
+
+    public function qrcode_criar($id) {
+        $this->require_team();
+
+        if ($this->input->method() !== 'post' || !$this->Questionnaire_model->get_by_id($id)) {
+            redirect('questionnaires');
+            return;
+        }
+
+        $this->load->model('Public_link_model');
+
+        $label = trim((string) $this->input->post('label'));
+        $expires = trim((string) $this->input->post('expires_at'));
+        $expires_at = null;
+        if ($expires !== '') {
+            $d = DateTime::createFromFormat('Y-m-d', $expires);
+            // Vale até o fim do dia escolhido
+            $expires_at = $d ? $d->format('Y-m-d') . ' 23:59:59' : null;
+        }
+
+        if ($this->Public_link_model->create($id, mb_substr($label, 0, 200), $expires_at, $this->session->userdata('admin_id'))) {
+            $this->session->set_flashdata('success', 'QR Code criado. Ele já pode ser impresso ou compartilhado.');
+        } else {
+            $this->session->set_flashdata('error', 'Não foi possível criar o QR Code.');
+        }
+
+        redirect('questionnaires/qrcode/' . (int) $id);
+    }
+
+    /**
+     * Ativa ou desativa um link. Desativado, o QR Code impresso passa a
+     * mostrar "pesquisa encerrada"; as respostas já recebidas continuam.
+     */
+    public function qrcode_status($link_id) {
+        $this->require_team();
+
+        $this->load->model('Public_link_model');
+        $link = $this->Public_link_model->get_by_id($link_id);
+
+        if ($this->input->method() !== 'post' || !$link) {
+            redirect('questionnaires');
+            return;
+        }
+
+        $ativar = $this->input->post('ativar') === '1';
+        $this->Public_link_model->set_active($link_id, $ativar);
+        $this->session->set_flashdata('success', $ativar ? 'QR Code reativado.' : 'QR Code desativado: ele não aceita mais respostas.');
+
+        redirect('questionnaires/qrcode/' . (int) $link->questionnaire_id);
+    }
+
+    /**
+     * Ações que só a equipe (administrador e supervisor) pode executar.
+     */
+    private function require_team() {
+        if (!in_array($this->session->userdata('admin_role'), ['administrador', 'supervisor'], true)) {
+            $this->session->set_flashdata('error', 'Acesso restrito à equipe do SXData.');
+            redirect('dashboard');
+            exit;
+        }
+    }
+
     private function check_auth() {
         if (!$this->session->userdata('admin_logged_in')) {
             redirect('auth/login');

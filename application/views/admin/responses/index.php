@@ -335,7 +335,15 @@ function get_location_name_cached($latitude, $longitude)
                                 <span class="text-muted">Não informado</span>
                             <?php endif; ?>
                         </td>
-                        <td><?= $response->applied_by_name ?></td>
+                        <td>
+                            <?php if (isset($response->origin) && $response->origin === 'qrcode'): ?>
+                                <span class="badge bg-light text-dark border" title="Respondida pelo próprio participante, sem aplicador">
+                                    <i class="fas fa-qrcode me-1"></i>Coleta pública (QR Code)
+                                </span>
+                            <?php else: ?>
+                                <?= html_escape($response->applied_by_name) ?>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php if ($response->latitude && $response->longitude): ?>
                                 <div class="location-info" data-lat="<?= $response->latitude ?>" data-lng="<?= $response->longitude ?>">

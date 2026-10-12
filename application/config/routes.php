@@ -139,3 +139,6 @@ $route['api/ai/generate-report'] = 'api/ai/generate_report';
 $route['api/ai/audit-log'] = 'api/ai/audit_log';
 $route['api/ai/audit-log/batch'] = 'api/ai/audit_log_batch';
 $route['api/ai/approved-suggestions'] = 'api/ai/approved_suggestions';
+// Coleta pública por QR Code (sem login)
+$route['responder/([a-f0-9]{32})/obrigado'] = 'responder/obrigado/$1';
+$route['responder/([a-f0-9]{32})'] = 'responder/index/$1';

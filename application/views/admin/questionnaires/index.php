@@ -186,9 +186,13 @@
                                    class="btn btn-sm btn-outline-secondary" title="Duplicar">
                                     <i class="fas fa-copy"></i>
                                 </a>
-                                <a href="<?= base_url('responses?questionnaire_id=' . $questionnaire->id) ?>" 
+                                <a href="<?= base_url('responses?questionnaire_id=' . $questionnaire->id) ?>"
                                    class="btn btn-sm btn-outline-success" title="Ver Respostas">
                                     <i class="fas fa-chart-bar"></i>
+                                </a>
+                                <a href="<?= base_url('questionnaires/qrcode/' . $questionnaire->id) ?>"
+                                   class="btn btn-sm btn-outline-dark" title="Coleta pública por QR Code">
+                                    <i class="fas fa-qrcode"></i>
                                 </a>
                                 <?php if ($questionnaire->project_id): ?>
                                     <a href="<?= base_url('projects/view/' . $questionnaire->project_id) ?>" 

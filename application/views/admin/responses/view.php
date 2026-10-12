@@ -122,7 +122,11 @@ function format_location_name($data)
                     </div>
                     <div class="col-md-6">
                         <strong>Aplicador:</strong><br>
-                        <?= $applied_by->full_name ?>
+                        <?php if (isset($response->origin) && $response->origin === 'qrcode'): ?>
+                            <i class="fas fa-qrcode me-1"></i>Coleta pública (QR Code) - respondida pelo próprio participante
+                        <?php else: ?>
+                            <?= $applied_by ? html_escape($applied_by->full_name) : '<span class="text-muted">Não identificado</span>' ?>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <hr>
