@@ -12,10 +12,10 @@
  *       rotulo: 'IBGE - População',            // aparece na tela
  *       eixos: ['territorio_populacao'],       // só roda se o relatório incluir um deles
  *       executar: async function (ctx) {
- *           // ctx.codigoIbge  '1503606' (7 dígitos)
- *           // ctx.codigoUf    '15'
- *           // ctx.uf          'PA'
- *           // ctx.municipio   'Itupiranga'
+ *           // ctx.codigoIbge  '5300108' (7 dígitos)
+ *           // ctx.codigoUf    '53'
+ *           // ctx.uf          'DF'
+ *           // ctx.municipio   'Brasília'
  *           // ctx.periodo     '2026'
  *           // ctx.eixos       ['territorio_populacao', ...]
  *           const serie = await getEvolucaoPopulacional(ctx.codigoIbge, ctx.codigoUf);
