@@ -6,6 +6,7 @@ class Questionnaires extends CI_Controller {
     public function __construct() {
         parent::__construct();
         $this->load->model('Questionnaire_model');
+        $this->load->library('api_token');
         header('Content-Type: application/json');
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -72,20 +73,6 @@ class Questionnaires extends CI_Controller {
     }
 
     private function verify_token($token) {
-        try {
-            $payload = json_decode(base64_decode($token), true);
-            
-            if (!$payload || !isset($payload['user_id']) || !isset($payload['expires_at'])) {
-                return false;
-            }
-            
-            if (time() > $payload['expires_at']) {
-                return false;
-            }
-            
-            return $payload['user_id'];
-        } catch (Exception $e) {
-            return false;
-        }
+        return $this->api_token->verify($token);
     }
 }

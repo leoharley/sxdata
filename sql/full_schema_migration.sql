@@ -133,8 +133,13 @@ CREATE TABLE IF NOT EXISTS form_responses (
     sync_status      VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending | synced | error
     started_at       TIMESTAMP,
     completed_at     TIMESTAMP,
+    client_id        VARCHAR(64),  -- chave da coleta gerada pelo app (ver form_responses_sync_migration.sql)
+    edited_at        TIMESTAMP,
+    audio_path       VARCHAR(500),
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_form_responses_client_id ON form_responses(client_id);
+CREATE INDEX IF NOT EXISTS idx_form_responses_identity ON form_responses(questionnaire_id, applied_by, started_at);
 CREATE INDEX IF NOT EXISTS idx_form_responses_questionnaire ON form_responses(questionnaire_id);
 CREATE INDEX IF NOT EXISTS idx_form_responses_applied_by    ON form_responses(applied_by);
 CREATE INDEX IF NOT EXISTS idx_form_responses_sync_status   ON form_responses(sync_status);

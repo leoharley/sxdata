@@ -1238,22 +1238,16 @@ class Ai extends CI_Controller {
             return false;
         }
 
-        $token = substr($auth_header, 7);
-        $decoded = json_decode(base64_decode($token), true);
+        $this->load->library('api_token');
+        $user_id = $this->api_token->verify(substr($auth_header, 7));
 
-        if (!$decoded || !isset($decoded['user_id']) || !isset($decoded['expires_at'])) {
+        if (!$user_id) {
             $this->output->set_status_header(401);
             echo json_encode(array('success' => false, 'message' => 'Invalid token'));
             return false;
         }
 
-        if ($decoded['expires_at'] < time()) {
-            $this->output->set_status_header(401);
-            echo json_encode(array('success' => false, 'message' => 'Token expired'));
-            return false;
-        }
-
-        return $decoded['user_id'];
+        return $user_id;
     }
 
     private function get_json_input($key) {

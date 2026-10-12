@@ -75,6 +75,7 @@ $route['api/auth/verify'] = 'api/auth/verify';
 $route['api/questionnaires'] = 'api/questionnaires/index';
 $route['api/forms/submit'] = 'api/forms/submit';
 $route['api/photos/upload'] = 'api/photos/upload';
+$route['api/audios/upload'] = 'api/audios/upload';
 
 // Rotas para API de Estatísticas
 $route['api/stats/user/(:num)'] = 'api/stats/user/$1';

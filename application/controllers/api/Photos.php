@@ -64,14 +64,16 @@ class Photos extends CI_Controller {
     }
 
     private function verify_auth() {
-        $headers = $this->input->request_headers();
-        
-        if (!isset($headers['Authorization'])) {
+        // Antes bastava existir um cabecalho Authorization com qualquer valor
+        $this->load->library('api_token');
+        $user_id = $this->api_token->user_id_from_request();
+
+        if (!$user_id) {
             $this->output->set_status_header(401);
-            echo json_encode(['success' => false, 'message' => 'Authorization required']);
+            echo json_encode(['success' => false, 'message' => 'Invalid token']);
             return false;
         }
 
-        return true; // Simplified for this example
+        return $user_id;
     }
 }

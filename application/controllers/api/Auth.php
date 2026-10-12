@@ -7,7 +7,7 @@ class Auth extends CI_Controller {
     public function __construct() {
         parent::__construct();
         $this->load->model('User_model');
-        $this->load->library('encryption');
+        $this->load->library('api_token');
         header('Content-Type: application/json');
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -39,8 +39,7 @@ class Auth extends CI_Controller {
         $user = $this->User_model->authenticate($username, $password);
 
         if ($user) {
-            // Gerar token JWT ou session token
-            $token = $this->generate_token($user->id);
+            $token = $this->api_token->issue($user->id);
             
             // Log da atividade
             $this->log_activity($user->id, 'login', 'auth', null, [
@@ -67,30 +66,19 @@ class Auth extends CI_Controller {
     }
 
     public function verify() {
-        $headers = $this->input->request_headers();
-        $token = null;
+        // Valida assinatura, prazo e se o usuario continua ativo
+        $user_id = $this->api_token->user_id_from_request();
 
-        if (isset($headers['Authorization'])) {
-            $auth_header = $headers['Authorization'];
-            if (strpos($auth_header, 'Bearer ') === 0) {
-                $token = substr($auth_header, 7);
-            }
-        }
-
-        if (!$token) {
-            $this->output->set_status_header(401);
-            echo json_encode(['success' => false, 'message' => 'Token required']);
-            return;
-        }
-
-        $user_id = $this->verify_token($token);
-        
         if ($user_id) {
             $user = $this->User_model->get_by_id($user_id);
-            
-            if ($user && $user->is_active) {
+
+            if ($user) {
                 echo json_encode([
                     'success' => true,
+                    // Renovacao deslizante: token novo com prazo cheio. O app
+                    // grava por cima do atual, entao quem abre o app ao menos
+                    // uma vez a cada 28 dias nunca tem a sessao vencida.
+                    'token' => $this->api_token->issue($user->id),
                     'user' => [
                         'id' => $user->id,
                         'username' => $user->username,
@@ -107,34 +95,6 @@ class Auth extends CI_Controller {
         } else {
             $this->output->set_status_header(401);
             echo json_encode(['success' => false, 'message' => 'Invalid token']);
-        }
-    }
-
-    private function generate_token($user_id) {
-        $payload = [
-            'user_id' => $user_id,
-            'issued_at' => time(),
-            'expires_at' => time() + (24 * 60 * 60) // 24 horas
-        ];
-        
-        return base64_encode(json_encode($payload));
-    }
-
-    private function verify_token($token) {
-        try {
-            $payload = json_decode(base64_decode($token), true);
-            
-            if (!$payload || !isset($payload['user_id']) || !isset($payload['expires_at'])) {
-                return false;
-            }
-            
-            if (time() > $payload['expires_at']) {
-                return false;
-            }
-            
-            return $payload['user_id'];
-        } catch (Exception $e) {
-            return false;
         }
     }
 

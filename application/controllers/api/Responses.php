@@ -94,57 +94,16 @@ class Responses extends CI_Controller {
     }
 
     /**
-     * Verificar token (implementar de acordo com seu sistema)
+     * Verificar token emitido em api/auth/login.
+     *
+     * Antes consultava a tabela user_tokens, onde nada era gravado: todo
+     * token do app era recusado nestas rotas.
      */
     private function _verify_token($token) {
-        try {
-            // Se você estiver usando JWT, descomente e ajuste este código:
-            /*
-            $this->load->library('jwt');
-            $decoded = $this->jwt->decode($token, $this->config->item('jwt_secret'));
-            
-            if (!$decoded || !isset($decoded->user_id)) {
-                return false;
-            }
-            
-            $user = $this->User_model->get_by_id($decoded->user_id);
-            return $user && $user->is_active ? $user : false;
-            */
-            
-            // Para implementação simples com sessão/banco:
-            // Verificar se o token existe na tabela de tokens (se você tiver uma)
-            $this->db->where('token', $token);
-            $this->db->where('expires_at >', date('Y-m-d H:i:s'));
-            $token_record = $this->db->get('user_tokens')->row(); // Assumindo que você tem esta tabela
-            
-            if (!$token_record) {
-                // Fallback: verificar se é um token de sessão válido
-                $this->db->where('session_id', $token);
-                $session_record = $this->db->get('ci_sessions')->row();
-                
-                if ($session_record) {
-                    $session_data = $session_record->data ?? '';
-                    if (strpos($session_data, 'admin_logged_in') !== false) {
-                        // Extrair user_id da sessão
-                        preg_match('/user_id.*?i:(\d+)/', $session_data, $matches);
-                        $user_id = isset($matches[1]) ? (int)$matches[1] : null;
-                        
-                        if ($user_id) {
-                            return $this->User_model->get_by_id($user_id);
-                        }
-                    }
-                }
-                return false;
-            }
-            
-            // Buscar dados do usuário
-            $user = $this->User_model->get_by_id($token_record->user_id);
-            return $user && $user->is_active ? $user : false;
-            
-        } catch (Exception $e) {
-            log_message('error', 'Erro na verificação do token: ' . $e->getMessage());
-            return false;
-        }
+        $this->load->library('api_token');
+        $user_id = $this->api_token->verify($token);
+
+        return $user_id ? $this->User_model->get_by_id($user_id) : false;
     }
 
     /**
