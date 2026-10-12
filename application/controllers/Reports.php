@@ -714,10 +714,18 @@ class Reports extends CI_Controller {
         $title = 'Localizações SXData';
         if (isset($filters['questionnaire_id'])) {
             $questionnaire = $this->Questionnaire_model->get_by_id($filters['questionnaire_id']);
-            $title = 'Localizações - ' . $questionnaire->title;
+            if ($questionnaire) {
+                $title = 'Localizações - ' . $questionnaire->title;
+            }
         }
-        
-        $this->kmz_generator->generate($responses, $title);
+
+        try {
+            $this->kmz_generator->generate($responses, $title);
+        } catch (Throwable $e) {
+            log_message('error', 'Erro na geração de KMZ: ' . $e->getMessage());
+            $this->session->set_flashdata('error', 'Erro ao gerar arquivo KMZ: ' . $e->getMessage());
+            redirect('reports');
+        }
     }
 
     /**
@@ -1728,8 +1736,10 @@ public function generate_kmz_filtered() {
         
         // Gerar arquivo KMZ
         $this->kmz_generator->generate($responses, $title, $filename, $options);
-        
-    } catch (Exception $e) {
+
+    } catch (Throwable $e) {
+        // Throwable, nao Exception: erros fatais do PHP (classe ausente,
+        // tipo invalido) nao sao Exception e deixavam uma pagina em branco
         log_message('error', 'Erro na geração de KMZ filtrado: ' . $e->getMessage());
         $this->session->set_flashdata('error', 'Erro ao gerar arquivo KMZ: ' . $e->getMessage());
         redirect('reports');

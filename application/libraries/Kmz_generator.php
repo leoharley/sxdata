@@ -15,63 +15,78 @@ class KMZ_Generator {
             ];
             
             $options = array_merge($default_options, $options);
-            
-            // Criar KML content
-            $kml_content = $this->create_kml_content($responses, $title, $options);
-            
-            // Se não há dados, retornar erro
+
             if (empty($responses)) {
                 throw new Exception('Nenhuma localização encontrada para gerar o arquivo KMZ.');
             }
-            
-            // Criar arquivo temporário
-            $temp_dir = sys_get_temp_dir() . '/' . uniqid('kmz_', true);
-            if (!mkdir($temp_dir, 0755, true)) {
-                throw new Exception('Não foi possível criar diretório temporário.');
-            }
-            
-            // Salvar KML
-            $kml_file = $temp_dir . '/doc.kml';
-            if (file_put_contents($kml_file, $kml_content) === false) {
-                throw new Exception('Não foi possível criar arquivo KML.');
-            }
-            
-            // Criar arquivo KMZ (ZIP)
+
+            $kml_content = $this->create_kml_content($responses, $title, $options);
+
+            // O KMZ e montado em memoria. A versao anterior dependia da
+            // extensao ZipArchive e de gravar em sys_get_temp_dir(); se a
+            // hospedagem nao oferece uma ou bloqueia a outra (open_basedir),
+            // o PHP parava com erro fatal e nenhum arquivo era gerado.
+            $kmz_content = $this->build_zip('doc.kml', $kml_content);
+
             $kmz_filename = $filename . '_' . date('Y-m-d') . '.kmz';
-            $kmz_path = $temp_dir . '/' . $kmz_filename;
-            
-            $zip = new ZipArchive();
-            if ($zip->open($kmz_path, ZipArchive::CREATE) !== TRUE) {
-                throw new Exception('Não foi possível criar arquivo KMZ.');
-            }
-            
-            $zip->addFile($kml_file, 'doc.kml');
-            $zip->close();
-            
-            // Verificar se arquivo foi criado
-            if (!file_exists($kmz_path)) {
-                throw new Exception('Arquivo KMZ não foi gerado corretamente.');
-            }
-            
-            // Log da operação
-            log_message('info', 'KMZ gerado com sucesso: ' . $kmz_filename . ' - ' . count($responses) . ' localizações');
-            
-            // Fazer download
-            $this->download_file($kmz_path, $kmz_filename);
-            
-            // Limpar arquivos temporários
-            $this->cleanup_temp_files($temp_dir);
-            
+
+            log_message('info', 'KMZ gerado: ' . $kmz_filename . ' - ' . count($responses) . ' localizações');
+
+            $this->send_download($kmz_content, $kmz_filename);
+
         } catch (Exception $e) {
             log_message('error', 'Erro na geração de KMZ: ' . $e->getMessage());
-            
-            // Tentar limpar arquivos temporários
-            if (isset($temp_dir) && is_dir($temp_dir)) {
-                $this->cleanup_temp_files($temp_dir);
-            }
-            
             throw $e;
         }
+    }
+
+    /**
+     * Monta um arquivo ZIP com um unico arquivo dentro.
+     *
+     * Usa DEFLATE quando a zlib esta disponivel (praticamente sempre) e
+     * cai para armazenamento sem compressao caso contrario. O resultado e
+     * um ZIP padrao, aberto normalmente pelo Google Earth.
+     */
+    private function build_zip($entry_name, $data) {
+        $crc = crc32($data);
+        $size = strlen($data);
+
+        $compressed = function_exists('gzdeflate') ? gzdeflate($data, 9) : false;
+        if ($compressed !== false) {
+            $method = 8;
+        } else {
+            $compressed = $data;
+            $method = 0;
+        }
+        $compressed_size = strlen($compressed);
+
+        // Data/hora no formato MS-DOS exigido pelo ZIP
+        $t = getdate();
+        $dos_time = ($t['hours'] << 11) | ($t['minutes'] << 5) | (int) floor($t['seconds'] / 2);
+        $dos_date = (max($t['year'] - 1980, 0) << 9) | ($t['mon'] << 5) | $t['mday'];
+
+        $name_len = strlen($entry_name);
+
+        // Bit 11: nome em UTF-8
+        $flags = 0x0800;
+
+        $local_header = pack('VvvvvvVVVvv',
+            0x04034b50, 20, $flags, $method, $dos_time, $dos_date,
+            $crc, $compressed_size, $size, $name_len, 0
+        ) . $entry_name;
+
+        $central_header = pack('VvvvvvvVVVvvvvvVV',
+            0x02014b50, 20, 20, $flags, $method, $dos_time, $dos_date,
+            $crc, $compressed_size, $size, $name_len, 0, 0, 0, 0, 0x20, 0
+        ) . $entry_name;
+
+        $central_offset = strlen($local_header) + $compressed_size;
+
+        $end_record = pack('VvvvvVVv',
+            0x06054b50, 0, 0, 1, 1, strlen($central_header), $central_offset, 0
+        );
+
+        return $local_header . $compressed . $central_header . $end_record;
     }
     
     /**
@@ -256,9 +271,12 @@ class KMZ_Generator {
         
         // Duração se disponível
         if (!empty($response->duration_minutes)) {
-            $duration_text = $response->duration_minutes < 60 ? 
-                round($response->duration_minutes) . ' min' : 
-                floor($response->duration_minutes / 60) . 'h ' . round($response->duration_minutes % 60) . 'min';
+            // fmod: o operador % com float gera aviso no PHP 8.1+, que vazava
+            // para dentro do arquivo
+            $minutes = (float) $response->duration_minutes;
+            $duration_text = $minutes < 60 ?
+                round($minutes) . ' min' :
+                floor($minutes / 60) . 'h ' . round(fmod($minutes, 60)) . 'min';
             $html .= '<tr><td style="padding: 3px; font-weight: bold;">Duração:</td><td style="padding: 3px;">' . $duration_text . '</td></tr>';
         }
         
@@ -287,48 +305,26 @@ class KMZ_Generator {
     }
     
     /**
-     * Fazer download do arquivo
+     * Envia o arquivo para download.
      */
-    private function download_file($file_path, $filename) {
-        if (!file_exists($file_path)) {
-            throw new Exception('Arquivo não encontrado para download.');
+    private function send_download($content, $filename) {
+        // Descarta TODOS os niveis de buffer: um aviso do PHP impresso antes
+        // corromperia o arquivo ou impediria o envio dos cabecalhos
+        while (ob_get_level() > 0) {
+            ob_end_clean();
         }
-        
-        // Limpar qualquer output anterior
-        if (ob_get_level()) {
-            ob_clean();
+
+        if (headers_sent($file, $line)) {
+            throw new Exception("Saída iniciada antes do download ({$file}:{$line}).");
         }
-        
-        // Headers para download
+
         header('Content-Type: application/vnd.google-earth.kmz');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Content-Length: ' . filesize($file_path));
+        header('Content-Length: ' . strlen($content));
         header('Cache-Control: no-cache, must-revalidate');
         header('Expires: 0');
-        
-        // Enviar arquivo
-        readfile($file_path);
+
+        echo $content;
         exit;
-    }
-    
-    /**
-     * Limpar arquivos temporários
-     */
-    private function cleanup_temp_files($temp_dir) {
-        if (!is_dir($temp_dir)) {
-            return;
-        }
-        
-        try {
-            $files = glob($temp_dir . '/*');
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
-                }
-            }
-            rmdir($temp_dir);
-        } catch (Exception $e) {
-            log_message('warning', 'Não foi possível limpar arquivos temporários: ' . $e->getMessage());
-        }
     }
 }

@@ -2863,14 +2863,12 @@ function toggleHeatmapIntensity() {
 
 
 function initializeKMZForm() {
-    // Configurar datas padrão (últimos 30 dias)
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    
-    document.getElementById('kmz_date_from').value = thirtyDaysAgo.toISOString().split('T')[0];
-    document.getElementById('kmz_date_to').value = today.toISOString().split('T')[0];
-    
+    // Sem período pré-definido: o KMZ inclui todas as datas. Antes vinham
+    // preenchidos os últimos 30 dias, o que zerava a prévia de qualquer
+    // pesquisa encerrada há mais tempo e desabilitava o botão "Gerar KMZ".
+    document.getElementById('kmz_date_from').value = '';
+    document.getElementById('kmz_date_to').value = '';
+
     // Event listeners
     document.getElementById('kmz_questionnaires').addEventListener('change', updateSelectedQuestionnaires);
     document.getElementById('kmz_date_from').addEventListener('change', updateKMZDateRangeInfo);
