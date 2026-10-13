@@ -1067,6 +1067,9 @@ class Responses extends CI_Controller {
         if (!$this->session->userdata('admin_logged_in')) {
             redirect('auth/login');
         }
+
+        // Cliente não acessa telas administrativas, nem pela URL
+        exigir_equipe();
     }
     
 }

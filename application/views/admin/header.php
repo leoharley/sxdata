@@ -270,12 +270,14 @@
                     Inteligência Artificial
                 </a>
             </li>
+            <?php if ($user_role === 'administrador'): ?>
             <li class="nav-item">
                 <a class="nav-link <?= $this->uri->segment(1) == 'settings' ? 'active' : '' ?>" href="<?= base_url('settings') ?>">
                     <i class="fas fa-cog"></i>
                     Configurações
                 </a>
             </li>
+            <?php endif; ?>
             <?php endif; ?>
             <li class="nav-item mt-auto">
                 <a class="nav-link" href="<?= base_url('auth/logout') ?>">
@@ -303,7 +305,9 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li style="display:none"><a class="dropdown-item" href="<?= base_url('profile') ?>">Perfil</a></li>
+                            <?php if ($this->session->userdata('admin_role') === 'administrador'): ?>
                             <li><a class="dropdown-item" href="<?= base_url('settings') ?>">Configurações</a></li>
+                            <?php endif; ?>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="<?= base_url('auth/logout') ?>">Sair</a></li>
                         </ul>
