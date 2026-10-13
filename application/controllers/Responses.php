@@ -62,10 +62,58 @@ class Responses extends CI_Controller {
         $data['questions'] = $this->Question_model->get_by_questionnaire($response->questionnaire_id);
         $data['answers'] = $this->Response_model->get_answers($id);
         $data['applied_by'] = $this->User_model->get_by_id($response->applied_by);
-        
+        $data['audios'] = $this->arquivos_de_audio(isset($response->audio_path) ? $response->audio_path : null);
+
         $this->load->view('admin/header', $data);
         $this->load->view('admin/responses/view', $data);
         $this->load->view('admin/footer');
+    }
+
+    /**
+     * Áudios da entrevista em uploads/audios/.
+     *
+     * O app no Android grava um arquivo único. A versão web grava em
+     * segmentos (audio_web_<sessão>_p<n>.<ext>), um por período de tela
+     * ativa, e só o primeiro fica em audio_path: os demais são achados pelo
+     * nome da sessão.
+     *
+     * @return array ['registrado' => bool, 'arquivos' => [['nome', 'url', 'tamanho']]]
+     */
+    private function arquivos_de_audio($audio_path) {
+        $resultado = ['registrado' => false, 'arquivos' => []];
+        $nome = basename((string) $audio_path);
+        if ($nome === '') {
+            return $resultado;
+        }
+        $resultado['registrado'] = true;
+
+        $pasta = FCPATH . 'uploads/audios/';
+        $nomes = [$nome];
+
+        if (preg_match('/^(audio_web_[A-Za-z0-9\-]+)_p\d+\.([a-z0-9]+)$/i', $nome, $m)) {
+            $segmentos = glob($pasta . $m[1] . '_p*.' . $m[2]) ?: [];
+            if (!empty($segmentos)) {
+                $nomes = array_map('basename', $segmentos);
+                // Ordem de gravação: p1, p2, ..., p10 (não alfabética)
+                usort($nomes, function ($a, $b) {
+                    preg_match('/_p(\d+)\./', $a, $x);
+                    preg_match('/_p(\d+)\./', $b, $y);
+                    return (int) $x[1] <=> (int) $y[1];
+                });
+            }
+        }
+
+        foreach ($nomes as $arquivo) {
+            if (is_file($pasta . $arquivo)) {
+                $resultado['arquivos'][] = [
+                    'nome'    => $arquivo,
+                    'url'     => base_url('uploads/audios/' . rawurlencode($arquivo)),
+                    'tamanho' => filesize($pasta . $arquivo),
+                ];
+            }
+        }
+
+        return $resultado;
     }
 
     /**

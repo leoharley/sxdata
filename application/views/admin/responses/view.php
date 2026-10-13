@@ -359,7 +359,43 @@ function format_location_name($data)
             </div>
         </div>
         <?php endif; ?>
-        
+
+        <!-- Áudio da entrevista -->
+        <?php if (!empty($audios['registrado'])): ?>
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-microphone me-2"></i>
+                    Áudio da Entrevista
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php if (empty($audios['arquivos'])): ?>
+                    <div class="text-muted small">
+                        <i class="fas fa-hourglass-half me-1"></i>
+                        O áudio foi gravado, mas o arquivo ainda não chegou ao servidor.
+                        Ele é enviado na próxima sincronização do aparelho.
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($audios['arquivos'] as $i => $audio): ?>
+                        <?php if (count($audios['arquivos']) > 1): ?>
+                            <div class="small text-muted mb-1">Parte <?= $i + 1 ?> de <?= count($audios['arquivos']) ?></div>
+                        <?php endif; ?>
+                        <audio controls preload="none" class="w-100 mb-2" src="<?= html_escape($audio['url']) ?>">
+                            Seu navegador não reproduz este formato. Use o botão de download.
+                        </audio>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <small class="text-muted"><?= number_format($audio['tamanho'] / 1048576, 1, ',', '.') ?> MB</small>
+                            <a href="<?= html_escape($audio['url']) ?>" download class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-download me-1"></i>Baixar
+                            </a>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Metadados -->
         <div class="card">
             <div class="card-header">
