@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS questionnaires (
     id                SERIAL PRIMARY KEY,
     title             VARCHAR(300) NOT NULL,
     description       TEXT,
-    status            VARCHAR(20)  NOT NULL DEFAULT 'active', -- active | inactive
+    status            VARCHAR(20)  NOT NULL DEFAULT 'active', -- active | paused | inactive
     version           INTEGER      NOT NULL DEFAULT 1,
     requires_consent  BOOLEAN      DEFAULT FALSE,
     requires_location BOOLEAN      DEFAULT FALSE,
