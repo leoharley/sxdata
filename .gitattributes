@@ -2,3 +2,8 @@
 # Sem isto, o core.autocrlf do Windows grava CRLF e o deploy falha
 # com "A valid .cpanel.yml file exists".
 .cpanel.yml text eol=lf
+
+# Build da versao web do app (Flutter), publicado em /app/ pelo deploy do git.
+# Binario: o git nao pode converter final de linha, senao os arquivos deixam
+# de bater com os hashes que o service worker usa para o cache offline.
+app/** -text -diff
