@@ -36,3 +36,10 @@ user_guide_src/cilexer/pycilexer.egg-info/*
 
 # Uploads gerados em runtime (fotos e audios dos aplicadores)
 uploads/
+
+# Versao web do app (build do Flutter), publicada a mao em /app/.
+# Nao versionar: ~27 MB por build, e o git pull do deploy nao apaga pasta nao rastreada.
+/app/
+
+# Dump do banco nunca vai para o repositorio
+docs/*dump*.sql
