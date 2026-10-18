@@ -3,16 +3,19 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"assets/AssetManifest.bin": "a186e382a201077edce2752ce2012bbb",
-"assets/AssetManifest.bin.json": "aeef1a37359ac77e971d1c8e040b5e26",
-"assets/AssetManifest.json": "f3b0cfcbac9a11e4a218c2b0e5079976",
+const RESOURCES = {"assets/AssetManifest.bin": "57b5ce96996a64da1755b37968bd7641",
+"assets/AssetManifest.bin.json": "ab027b7699d33e7af97f197d89325c8c",
+"assets/AssetManifest.json": "175e9c7597d1dc50c68b467b90d061ef",
+"assets/assets/fonts/Roboto-Bold.ttf": "ee7b96fa85d8fdb8c126409326ac2d2b",
+"assets/assets/fonts/Roboto-Medium.ttf": "d08840599e05db7345652d3d417574a9",
+"assets/assets/fonts/Roboto-Regular.ttf": "3e1af3ef546b9e6ecef9f3ba197bf7d2",
 "assets/assets/images/icone_socialx.png": "748e0a88c694478b08f2c7219c32994b",
 "assets/assets/images/icone_socialx_foreground.png": "79c41c572c6bb16767d45e71ab8fd6c0",
 "assets/assets/images/logo_socialx.png": "300a7b0e17b13eb1855a477d81fd8ed3",
 "assets/assets/images/Logo_verde2.png": "fc67a0e17ee76b49f20a160566a2f70e",
 "assets/assets/images/X.png": "bdfb217e27e4a16014124f1308d2cf42",
 "assets/assets/images/X_negativo.png": "9ac85fb3d582ca82ca94eb4d96c87476",
-"assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
+"assets/FontManifest.json": "4f98c153db1e7acf8e51da5cda1effc0",
 "assets/fonts/MaterialIcons-Regular.otf": "1391e89269578aeb625d123ab39c23f7",
 "assets/NOTICES": "ed3b26068e4afecb2768d29326c11b4f",
 "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf": "33b7d9392238c04c131b6ce224e13711",
@@ -32,14 +35,14 @@ const RESOURCES = {"assets/AssetManifest.bin": "a186e382a201077edce2752ce2012bbb
 "canvaskit/skwasm.wasm": "39dd80367a4e71582d234948adc521c0",
 "favicon.png": "e0924fa2568064586ccb3467028d42a2",
 "flutter.js": "83d881c1dbb6d6bcd6b42e274605b69c",
-"flutter_bootstrap.js": "656d9dc3f8a63f5bb6300647b523b6b5",
+"flutter_bootstrap.js": "af5eb84559dd50fdb1fe1318f31ac2c3",
 "icons/Icon-192.png": "a62f59dada275159e16f9ac2330eaab6",
 "icons/Icon-512.png": "91a7df9dec88023bfbd3c6ad36d70591",
 "icons/Icon-maskable-192.png": "a62f59dada275159e16f9ac2330eaab6",
 "icons/Icon-maskable-512.png": "91a7df9dec88023bfbd3c6ad36d70591",
-"index.html": "08b782bc22630a0be689c4f20fc63ce7",
-"/": "08b782bc22630a0be689c4f20fc63ce7",
-"main.dart.js": "c757ad9b95eeabe59a22e587c27ad7fa",
+"index.html": "9c50c8df6e0b225867894b59228fca5e",
+"/": "9c50c8df6e0b225867894b59228fca5e",
+"main.dart.js": "e0eb436a0ea61a86b1ac1f915b92644c",
 "manifest.json": "1dda81c846eba856cf5c60e3e70bc0bb",
 "version.json": "09417c1877393c896ae23555efacec09"};
 // The application shell files that are downloaded before a service worker can
@@ -88,7 +91,7 @@ self.addEventListener("activate", function(event) {
       var oldManifest = await manifest.json();
       var origin = self.location.origin;
       for (var request of await contentCache.keys()) {
-        var key = request.url.substring(origin.length + 1);
+        var key = sxChave(request.url);
         if (key == "") {
           key = "/";
         }
@@ -124,33 +127,65 @@ self.addEventListener("activate", function(event) {
 // worker cache.
 // SXDATA_OFFLINE_SUBDIR_FIX
 // -----------------------------------------------------------------------
-// Fazer o app funcionar offline quando publicado em um SUBDIRETÓRIO.
-//
-// O handler do Flutter calcula a chave do cache a partir do ORIGIN:
-//
-//     key = url.substring(origin.length + 1)
-//
-// Em /painel/app/ isso produz "painel/app/main.dart.js", enquanto
-// RESOURCES guarda "main.dart.js" (caminhos relativos ao escopo). Nada
-// bate, o worker devolve tudo ao navegador e, sem internet:
-//   - a navegação dava a tela "Você está off-line" do navegador;
-//   - com a navegação corrigida, os assets continuavam falhando e a
-//     página ficava EM BRANCO.
-//
-// Este handler recalcula a chave relativa ao ESCOPO do worker e serve
-// tudo do cache. Vem antes do handler do Flutter: o primeiro a chamar
-// respondWith vence.
+// Fazer o app abrir OFFLINE quando publicado em um SUBDIRETÓRIO (/app/).
+// Explicação completa em tool/patch_service_worker.dart, no sxdata-app.
 // -----------------------------------------------------------------------
-(function () {
-  // Escopo do worker: ".../painel/app/". A chave de cada recurso é a URL
-  // menos esse prefixo.
-  const SCOPE = new URL(self.registration ? self.registration.scope : './', self.location).pathname;
 
-  function chaveDoEscopo(url) {
-    const u = new URL(url);
-    if (u.origin !== self.location.origin) return null;
-    if (!u.pathname.startsWith(SCOPE)) return null;
-    return u.pathname.substring(SCOPE.length);
+// Chave de um recurso relativa ao ESCOPO do worker ("main.dart.js"), não ao
+// origin ("app/main.dart.js"). Declaração de função: é içada, então vale
+// também no activate e no downloadOffline do Flutter, onde o patch a usa.
+function sxChave(url) {
+  var escopo = new URL(self.registration.scope).pathname;
+  var u = new URL(url);
+  if (u.origin !== self.location.origin || u.pathname.indexOf(escopo) !== 0) {
+    return u.href;   // fora do app: nunca casa com RESOURCES
+  }
+  var chave = u.pathname.substring(escopo.length);
+  return chave === '' ? '/' : chave;
+}
+
+(function () {
+  // Rede com prazo: sinal fraco não pode segurar a abertura do app
+  const PRAZO_REDE_MS = 4000;
+
+  function comPrazo(promessa, ms) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('prazo')), ms);
+      promessa.then(
+        (valor) => { clearTimeout(timer); resolve(valor); },
+        (erro) => { clearTimeout(timer); reject(erro); }
+      );
+    });
+  }
+
+  // Rede primeiro, com prazo; se falhar, demorar ou responder com erro
+  // (servidor em manutenção, 5xx), a cópia guardada em "chaveCache". Uma
+  // resposta boa da rede atualiza a cópia, mesmo se chegar depois do prazo.
+  function redeComPrazo(request, chaveCache, semCache) {
+    const rede = fetch(request).then((response) => {
+      if (response && response.ok) {
+        const copia = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(chaveCache, copia));
+      }
+      return response;
+    });
+    rede.catch(() => {});   // falha depois do prazo: já respondemos do cache
+
+    const guardado = () => caches.open(CACHE_NAME)
+      .then((cache) => cache.match(chaveCache, { ignoreVary: true }));
+
+    return comPrazo(rede, PRAZO_REDE_MS).then(
+      // A rede respondeu: com erro, prefere a cópia; sem cópia, o próprio erro
+      (response) => (response && response.ok)
+        ? response
+        : guardado().then((copia) => copia || response),
+      // Sem rede ou estourou o prazo
+      () => guardado().then((copia) => {
+        if (copia) return copia;
+        if (semCache) return semCache();
+        return rede;   // nada guardado: espera a rede, sem prazo
+      })
+    );
   }
 
   self.addEventListener('fetch', (event) => {
@@ -159,60 +194,79 @@ self.addEventListener("activate", function(event) {
     // --- Navegação: sempre o index.html ---------------------------------
     if (event.request.mode === 'navigate') {
       event.respondWith(
-        fetch(event.request)
-          .then((response) => {
-            if (response && response.ok) {
-              const copia = response.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put('index.html', copia);
-              });
-            }
-            return response;
-          })
-          .catch(() => {
-            return caches.open(CACHE_NAME).then((cache) => {
-              return cache.match('index.html').then((cached) => {
-                if (cached) return cached;
-                return cache.match('/').then((raiz) => {
-                  if (raiz) return raiz;
-                  return new Response(
-                    '<h1>App indisponível offline</h1>' +
-                    '<p>Abra o aplicativo uma vez com internet para que ele ' +
-                    'fique disponível sem conexão.</p>',
-                    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-                  );
-                });
-              });
-            });
-          })
+        redeComPrazo(event.request, 'index.html', () => {
+          return new Response(
+            '<h1>App indisponível offline</h1>' +
+            '<p>Abra o aplicativo uma vez com internet para que ele ' +
+            'fique disponível sem conexão.</p>',
+            { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          );
+        })
       );
       return;
     }
 
-    // --- Demais recursos: cache primeiro, chave relativa ao escopo ------
-    let key = chaveDoEscopo(event.request.url);
-    if (key === null) return;                 // outro domínio: não é nosso
-    if (key.indexOf('?v=') !== -1) key = key.split('?v=')[0];
-    if (key === '') key = '/';
+    let key = sxChave(event.request.url);
     if (!RESOURCES[key]) return;              // não é recurso do app
 
-    // O Flutter cacheia com contentCache.addAll(caminhos relativos), que o
-    // navegador resolve contra o escopo — o cache guarda a URL completa.
-    // Então casar pela própria Request funciona; o que faltava era não
-    // desistir antes disso por causa da chave calculada pelo origin.
+    // --- version.json (vem com ?cachebuster=): rede com prazo -----------
+    if (key === 'version.json') {
+      event.respondWith(redeComPrazo(event.request, 'version.json'));
+      return;
+    }
+
+    // --- Demais recursos: cache primeiro --------------------------------
+    // Casa pela própria Request e, se não achar, pela chave sem a query
+    // string (é assim que a pré-carga abaixo guarda).
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) => {
-        return cache.match(event.request).then((cached) => {
-          if (cached) return cached;
-          return fetch(event.request).then((response) => {
-            if (response && response.ok) {
-              cache.put(event.request, response.clone());
-            }
-            return response;
+        return cache.match(event.request, { ignoreVary: true })
+          .then((cached) => cached || cache.match(key, { ignoreVary: true }))
+          .then((cached) => {
+            if (cached) return cached;
+            return fetch(event.request).then((response) => {
+              if (response && response.ok) {
+                cache.put(event.request, response.clone());
+              }
+              return response;
+            });
           });
-        });
       })
     );
+  });
+
+  // --- Pré-carga do app inteiro ------------------------------------------
+  // Os mapas de depuração (.symbols), o motor skwasm (só usado em build
+  // --wasm) e as licenças não são necessários para abrir o app.
+  const DISPENSAVEIS = /(\.symbols$|^canvaskit\/skwasm|^assets\/NOTICES$)/;
+
+  async function sxPrecache() {
+    const cache = await caches.open(CACHE_NAME);
+    const faltando = [];
+    for (const chave of Object.keys(RESOURCES)) {
+      if (chave === '/' || DISPENSAVEIS.test(chave)) continue;
+      if (await cache.match(chave, { ignoreVary: true })) continue;
+      faltando.push(chave);
+    }
+
+    // Três downloads por vez; o que falhar fica para a próxima abertura
+    let i = 0;
+    async function proximo() {
+      while (i < faltando.length) {
+        const chave = faltando[i++];
+        try {
+          const response = await fetch(new Request(chave, { cache: 'reload' }));
+          if (response && response.ok) await cache.put(chave, response);
+        } catch (e) { /* sem rede agora */ }
+      }
+    }
+    await Promise.all([proximo(), proximo(), proximo()]);
+  }
+
+  self.addEventListener('message', (event) => {
+    if (event.data === 'sxdataPrecache') {
+      event.waitUntil(sxPrecache());
+    }
   });
 })();
 
@@ -272,7 +326,7 @@ async function downloadOffline() {
   var contentCache = await caches.open(CACHE_NAME);
   var currentContent = {};
   for (var request of await contentCache.keys()) {
-    var key = request.url.substring(origin.length + 1);
+    var key = sxChave(request.url);
     if (key == "") {
       key = "/";
     }
